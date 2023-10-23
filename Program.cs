@@ -1,4 +1,4 @@
-﻿using System.CommandLine;
+using System.CommandLine;
 using System.CommandLine.NamingConventionBinder;
 using System.Numerics;
 using Compunet.YoloV8;
@@ -146,12 +146,18 @@ static class Program
                     }
                 }
 
+                const float xCenter = 640f / 2;
+                const float yCenter = 360f / 2;
+                const float scale = 1.6f / 300f;
+
                 List<Point> leadPoints = tallestBox.Keypoints.Select(kp => kp.Point).ToList();
-                List<Vector3> leadPoints3d = leadPoints.Select(p => new Vector3(p.X, p.Y, 0)).ToList();
+                List<Vector3> leadPoints3d =
+                    leadPoints.Select(p => new Vector3(p.X - xCenter, -p.Y + yCenter, 0) * scale).ToList();
                 leadForCam.PosesByFrame.Add(leadPoints3d);
 
                 List<Point> followPoints = secondTallestBox.Keypoints.Select(kp => kp.Point).ToList();
-                List<Vector3> followPoints3d = followPoints.Select(p => new Vector3(p.X, p.Y, 0)).ToList();
+                List<Vector3> followPoints3d =
+                    followPoints.Select(p => new Vector3(p.X - xCenter, -p.Y + yCenter, 0) * scale).ToList();
                 followForCam.PosesByFrame.Add(followPoints3d);
             }
 
@@ -208,30 +214,16 @@ static class Program
     {
         // Translate keypoints to the camera center
         Vector3 cameraCenter = cam.Position;
-        List<Vector3> adjustedKeypoints = keypoints.Select(t => t - cameraCenter).ToList();
+        List<Vector3> adjustedKeypoints = keypoints.Select(t => cameraCenter + t).ToList();
 
         // Rotate keypoints around the camera center by the camera's rotation quaternion
         Quaternion rotation = cam.Rotation;
         for (int i = 0; i < adjustedKeypoints.Count; i++)
         {
-            adjustedKeypoints[i] = RotatePointAroundCameraCenter(adjustedKeypoints[i], cameraCenter, rotation);
+            adjustedKeypoints[i] = Vector3.Transform(adjustedKeypoints[i] - cameraCenter, rotation) + cameraCenter;
         }
 
         return adjustedKeypoints;
-    }
-
-    static Vector3 RotatePointAroundCameraCenter(Vector3 point0, Vector3 point1, Quaternion q)
-    {
-        // Translate point0 to be relative to point1
-        Vector3 relativePoint0 = point0 - point1;
-
-        // Rotate the relative point using the quaternion
-        Vector3 rotatedRelativePoint0 = Vector3.Transform(relativePoint0, q);
-
-        // Translate the rotated relative point back to its original position
-        Vector3 rotatedPoint0 = rotatedRelativePoint0 + point1;
-
-        return rotatedPoint0;
     }
 
     static List<Vector3> TriangulatedPose(
