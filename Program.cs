@@ -54,12 +54,15 @@ static class Program
     {
         public Vector3 Position;
         public Quaternion Rotation;
+        public Vector3 Forward => Vector3.Transform(
+            new Vector3(0f, 0f, 1f),
+            Rotation);
     }
 
     static void Parse(Args args)
     {
         Dictionary<string, PositionAndRotation> positionAndRotationByCam = Newtonsoft.Json.JsonConvert
-            .DeserializeObject<Dictionary<string, PositionAndRotation>>(File.ReadAllText(args.CameraPositions));
+            .DeserializeObject<Dictionary<string, PositionAndRotation>>(File.ReadAllText(args.CameraPositions))!;
 
         List<Camera> cameras = positionAndRotationByCam.Values.Select(positionAndRotation =>
             new Camera
@@ -95,7 +98,7 @@ static class Program
         {
             Console.WriteLine("CAMERA " + camCounter);
             camCounter++;
-            
+
             int fileCount = Directory.EnumerateFiles(directory).Count();
             if (fileCount > frameCount)
             {
@@ -117,7 +120,7 @@ static class Program
             {
                 frameCounter++;
                 Console.WriteLine("pose for frame " + frameCounter);
-                
+
                 ImageSelector imageSelector = new ImageSelector(filePath);
                 IPoseResult result = yolo.Pose(imageSelector);
 
@@ -151,46 +154,48 @@ static class Program
                 List<Vector3> followPoints3d = followPoints.Select(p => new Vector3(p.X, p.Y, 0)).ToList();
                 followForCam.PosesByFrame.Add(followPoints3d);
             }
-            
+
             dancersByCamera.Add(new Tuple<Dancer, Dancer>(leadForCam, followForCam));
         }
 
-        Camera cam0 = cameras[0];
-        Vector3 forward0 = Vector3.Transform(
-            new Vector3(0f, 0f, 1f), // vector forward
-            cam0.Rotation); // quaternion
-
-        Dancer cam0Lead = dancersByCamera[0].Item1;
-        Dancer cam0Follow = dancersByCamera[0].Item2;
-
-        Camera cam1 = cameras[1];
-        Vector3 forward1 = Vector3.Transform(
-            new Vector3(0f, 0f, 1f), // vector forward
-            cam1.Rotation); // quaternion
-
-        Dancer cam1Lead = dancersByCamera[1].Item1;
-        Dancer cam1Follow = dancersByCamera[1].Item2;
-
-        for (int j = 0; j < frameCount ; j++)
+        // TODO iterate through each camera, and merge with the next camera
+        for (int k = 0; k < camCounter - 1; k++)
         {
-            Console.WriteLine("triangulating frame " + j);
-            List<Vector3> leadPose0 = cam0Lead.PosesByFrame[j];
-            List<Vector3> followPose0 = cam0Follow.PosesByFrame[j];
+            Dancer cam0Lead = dancersByCamera[k].Item1;
+            Dancer cam0Follow = dancersByCamera[k].Item2;
 
-            leadPose0 = Adjusted(leadPose0, cam0);
-            followPose0 = Adjusted(followPose0, cam0);
+            Dancer cam1Lead = dancersByCamera[k + 1].Item1;
+            Dancer cam1Follow = dancersByCamera[k + 1].Item2;
 
-            List<Vector3> leadPose1 = cam1Lead.PosesByFrame[j];
-            List<Vector3> followPose1 = cam1Follow.PosesByFrame[j];
+            for (int j = 0; j < frameCount; j++)
+            {
+                Console.WriteLine("triangulating frame " + j);
+                List<Vector3> leadPose0 = cam0Lead.PosesByFrame[j];
+                List<Vector3> followPose0 = cam0Follow.PosesByFrame[j];
 
-            leadPose1 = Adjusted(leadPose1, cam1);
-            followPose1 = Adjusted(followPose1, cam1);
+                leadPose0 = Adjusted(leadPose0, cameras[k]);
+                followPose0 = Adjusted(followPose0, cameras[k]);
 
-            List<Vector3> lead3DPosition = TriangulatedPose(leadPose0, leadPose1, forward0, forward1);
-            lead.PosesByFrame.Add(lead3DPosition);
+                List<Vector3> leadPose1 = cam1Lead.PosesByFrame[j];
+                List<Vector3> followPose1 = cam1Follow.PosesByFrame[j];
 
-            List<Vector3> follow3DPosition = TriangulatedPose(followPose0, followPose1, forward0, forward1);
-            follow.PosesByFrame.Add(follow3DPosition);
+                leadPose1 = Adjusted(leadPose1, cameras[k + 1]);
+                followPose1 = Adjusted(followPose1, cameras[k + 1]);
+
+                List<Vector3> lead3DPosition = TriangulatedPose(
+                    leadPose0,
+                    leadPose1,
+                    cameras[k].Forward,
+                    cameras[k + 1].Forward);
+                lead.PosesByFrame.Add(lead3DPosition);
+
+                List<Vector3> follow3DPosition = TriangulatedPose(
+                    followPose0,
+                    followPose1,
+                    cameras[k].Forward,
+                    cameras[k + 1].Forward);
+                follow.PosesByFrame.Add(follow3DPosition);
+            }
         }
 
         SqliteOutput sqliteOutput = new(args.OutputDb, frameCount);
@@ -199,7 +204,7 @@ static class Program
         Console.WriteLine("wrote to " + args.OutputDb);
     }
 
-    static List<Vector3> Adjusted(IReadOnlyCollection<Vector3> keypoints, Camera cam)
+    static List<Vector3> Adjusted(IEnumerable<Vector3> keypoints, Camera cam)
     {
         // Translate keypoints to the camera center
         Vector3 cameraCenter = cam.Position;
@@ -230,70 +235,43 @@ static class Program
     }
 
     static List<Vector3> TriangulatedPose(
-        IReadOnlyList<Vector3> pose0, 
-        IReadOnlyList<Vector3> pose1, 
+        IReadOnlyList<Vector3> pose0,
+        IReadOnlyList<Vector3> pose1,
         Vector3 cam0Forward,
         Vector3 cam1Forward)
     {
-        // Define your threshold distance D
-        const float thresholdDistance = 0.001f; // You can adjust this value
-
         // Create a list to store the resulting 3D pose
         List<Vector3> triangulatedPose = new List<Vector3>();
 
         // Iterate over each keypoint in pose0 and pose1
         for (int i = 0; i < pose0.Count; i++)
         {
-            Console.WriteLine("triangulating keypoint " + i + " of " + pose0.Count);
             Vector3 point0 = pose0[i];
             Vector3 point1 = pose1[i];
 
-            // Initialize step size, direction, and previous distance
-            float stepSize = 1f; // Initial step size (you can adjust this)
-            int direction = 1; // Initial direction
-            float prevDistance = Vector3.Distance(point0, point1);
-
-            int iterationCounter = 0;
-            while (true)
-            {
-                iterationCounter++;
-                
-                // Calculate the 3D positions based on the current step
-                point0 = CalculateProjectedPosition(cam0Forward, point0, stepSize * direction);
-                point1 = CalculateProjectedPosition(cam1Forward, point1, stepSize * direction);
-
-                // Calculate the distance between projected0 and projected1
-                float distance = Vector3.Distance(point0, point1);
-                
-                if (iterationCounter > 1000 || distance < thresholdDistance)
-                {
-                    triangulatedPose.Add(Midpoint(point0, point1));
-                    break;
-                }
-
-                if (distance > prevDistance)
-                {
-                    // flip and reduce
-                    direction *= -1;
-                    stepSize *= 0.5f;
-                }
-
-                // Update the previous distance
-                prevDistance = distance;
-            }
+            triangulatedPose.Add(MinimumMidpoint(point0, cam0Forward, point1, cam1Forward));
         }
 
         return triangulatedPose;
     }
 
-    static Vector3 CalculateProjectedPosition(Vector3 forward, Vector3 point, float stepSize)
+    static Vector3 MinimumMidpoint(Vector3 P1, Vector3 D1, Vector3 P2, Vector3 D2)
     {
-        // Calculate the projected position based on forward vector and step size
-        return point + (forward * stepSize);
-    }
-    
-    static Vector3 Midpoint(Vector3 point0, Vector3 point1)
-    {
-        return (point0 + point1) / 2f;
+        Vector3 w0 = P1 - P2;
+        float a = Vector3.Dot(D1, D1);
+        float b = Vector3.Dot(D1, D2);
+        float c = Vector3.Dot(D2, D2);
+        float d = Vector3.Dot(D1, w0);
+        float e = Vector3.Dot(D2, w0);
+
+        float denom = a * c - b * b;
+
+        float t = (b * e - c * d) / denom;
+        float s = (a * e - b * d) / denom;
+
+        Vector3 pointOnRay1 = P1 + t * D1;
+        Vector3 pointOnRay2 = P2 + s * D2;
+
+        return 0.5f * (pointOnRay1 + pointOnRay2);
     }
 }
