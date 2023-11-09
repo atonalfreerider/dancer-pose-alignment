@@ -24,10 +24,11 @@ static class Program
 
             new Argument<string>("OutputDb"),
 
-            new Argument<string>("CameraPositions", "colmap format")
+            new Argument<string>("CameraPositions", "Vector3 and Quaternion format")
         };
 
-        rootCommand.Description = "take yolov8 2d poses and project them into space to make 3D model. requires yolo8x-pose.onnx";
+        rootCommand.Description =
+            "take yolov8 2d poses and project them into space to make 3D model. requires yolo8x-pose.onnx";
 
         // Note that the parameters of the handler method are matched according to the names of the options 
         rootCommand.Handler = CommandHandler.Create<Args>(Parse);
@@ -54,6 +55,7 @@ static class Program
     {
         public Vector3 Position;
         public Quaternion Rotation;
+
         public Vector3 Forward => Vector3.Transform(
             new Vector3(0f, 0f, 1f),
             Rotation);
@@ -164,44 +166,31 @@ static class Program
             dancersByCamera.Add(new Tuple<Dancer, Dancer>(leadForCam, followForCam));
         }
 
-        // TODO iterate through each camera, and merge with the next camera
-        for (int k = 0; k < camCounter - 1; k++)
+        List<Vector3> cameraForwards = new();
+        for (int i = 0; i < dancersByCamera.Count; i++)
         {
-            Dancer cam0Lead = dancersByCamera[k].Item1;
-            Dancer cam0Follow = dancersByCamera[k].Item2;
+            cameraForwards.Add(cameras[i].Forward);
+        }
 
-            Dancer cam1Lead = dancersByCamera[k + 1].Item1;
-            Dancer cam1Follow = dancersByCamera[k + 1].Item2;
-
-            for (int j = 0; j < frameCount; j++)
+        for (int j = 0; j < frameCount; j++)
+        {
+            int camCount = 0;
+            List<List<Vector3>> lead2DPoses = new();
+            List<List<Vector3>> follow2DPoses = new();
+         
+            foreach (Tuple<Dancer,Dancer> leadAndFollow in dancersByCamera)
             {
-                Console.WriteLine("triangulating frame " + j);
-                List<Vector3> leadPose0 = cam0Lead.PosesByFrame[j];
-                List<Vector3> followPose0 = cam0Follow.PosesByFrame[j];
-
-                leadPose0 = Adjusted(leadPose0, cameras[k]);
-                followPose0 = Adjusted(followPose0, cameras[k]);
-
-                List<Vector3> leadPose1 = cam1Lead.PosesByFrame[j];
-                List<Vector3> followPose1 = cam1Follow.PosesByFrame[j];
-
-                leadPose1 = Adjusted(leadPose1, cameras[k + 1]);
-                followPose1 = Adjusted(followPose1, cameras[k + 1]);
-
-                List<Vector3> lead3DPosition = TriangulatedPose(
-                    leadPose0,
-                    leadPose1,
-                    cameras[k].Forward,
-                    cameras[k + 1].Forward);
-                lead.PosesByFrame.Add(lead3DPosition);
-
-                List<Vector3> follow3DPosition = TriangulatedPose(
-                    followPose0,
-                    followPose1,
-                    cameras[k].Forward,
-                    cameras[k + 1].Forward);
-                follow.PosesByFrame.Add(follow3DPosition);
+                List<Vector3> leadPose = Adjusted(leadAndFollow.Item1.PosesByFrame[j], cameras[camCount]);
+                List<Vector3> followPose = Adjusted(leadAndFollow.Item2.PosesByFrame[j], cameras[camCount]);
+                
+                lead2DPoses.Add(leadPose);
+                follow2DPoses.Add(followPose);
+                camCount++;
             }
+            
+            
+            lead.PosesByFrame.Add(RayMidpointFinder.Merged3DPose(lead2DPoses, cameraForwards));
+            follow.PosesByFrame.Add(RayMidpointFinder.Merged3DPose(follow2DPoses, cameraForwards));
         }
 
         SqliteOutput sqliteOutput = new(args.OutputDb, frameCount);
@@ -224,46 +213,122 @@ static class Program
         }
 
         return adjustedKeypoints;
-    }
+    } 
 
-    static List<Vector3> TriangulatedPose(
-        IReadOnlyList<Vector3> pose0,
-        IReadOnlyList<Vector3> pose1,
-        Vector3 cam0Forward,
-        Vector3 cam1Forward)
+    static class RayMidpointFinder
     {
-        // Create a list to store the resulting 3D pose
-        List<Vector3> triangulatedPose = new List<Vector3>();
-
-        // Iterate over each keypoint in pose0 and pose1
-        for (int i = 0; i < pose0.Count; i++)
+        struct Ray
         {
-            Vector3 point0 = pose0[i];
-            Vector3 point1 = pose1[i];
+            public readonly Vector3 Origin;
+            public readonly Vector3 Direction;
 
-            triangulatedPose.Add(MinimumMidpoint(point0, cam0Forward, point1, cam1Forward));
+            public Ray(Vector3 origin, Vector3 direction)
+            {
+                Origin = origin;
+                Direction = direction;
+            }
+        }
+        
+        const float Tolerance = 0.0001f;
+        const int MaxIterations = 1000;
+
+        public static List<Vector3> Merged3DPose(List<List<Vector3>> Poses2D, IReadOnlyList<Vector3> CameraForwards)
+        {
+            List<Vector3> pose = new();
+            
+            int poseCount = Poses2D[0].Count;
+            for (int i = 0; i < poseCount; i++)
+            {
+                List<Ray> rays = new();
+                int camCounter = 0;
+                foreach (List<Vector3> pose2D in Poses2D)
+                {
+                    Vector3 origin = pose2D[i];
+                    Vector3 direction = CameraForwards[camCounter];
+                    rays.Add(new Ray(origin, direction));
+                    camCounter++;
+                }
+
+                Vector3 midpoint = FindMinimumMidpoint(rays);
+                pose.Add(midpoint);
+            }
+
+
+            return pose;
         }
 
-        return triangulatedPose;
-    }
+        static Vector3 FindMinimumMidpoint(List<Ray> rays)
+        {
+            Vector3 startPoint = AverageOrigins(rays);
+            return Optimize(startPoint, rays);
+        }
 
-    static Vector3 MinimumMidpoint(Vector3 P1, Vector3 D1, Vector3 P2, Vector3 D2)
-    {
-        Vector3 w0 = P1 - P2;
-        float a = Vector3.Dot(D1, D1);
-        float b = Vector3.Dot(D1, D2);
-        float c = Vector3.Dot(D2, D2);
-        float d = Vector3.Dot(D1, w0);
-        float e = Vector3.Dot(D2, w0);
+        static Vector3 Optimize(Vector3 startPoint, List<Ray> rays)
+        {
+            Vector3 currentPoint = startPoint;
+            const float stepSize = 1.0f;
 
-        float denom = a * c - b * b;
+            for (int i = 0; i < MaxIterations; i++)
+            {
+                Vector3 gradient = ComputeGradient(currentPoint, rays);
+                Vector3 nextPoint = currentPoint - stepSize * gradient;
 
-        float t = (b * e - c * d) / denom;
-        float s = (a * e - b * d) / denom;
+                // Check if the objective function value has converged
+                if (Math.Abs(ObjectiveFunction(nextPoint, rays) - ObjectiveFunction(currentPoint, rays)) < Tolerance)
+                    break;
 
-        Vector3 pointOnRay1 = P1 + t * D1;
-        Vector3 pointOnRay2 = P2 + s * D2;
+                currentPoint = nextPoint;
+            }
 
-        return 0.5f * (pointOnRay1 + pointOnRay2);
+            return currentPoint;
+        }
+
+        static Vector3 ComputeGradient(Vector3 point, List<Ray> rays)
+        {
+            Vector3 gradient = new Vector3(0, 0, 0);
+
+            foreach (Ray ray in rays)
+            {
+                Vector3 w = point - ray.Origin;
+                float dotProduct = Vector3.Dot(w, ray.Direction);
+                Vector3 projection = dotProduct * ray.Direction;
+                Vector3 diff = w - projection;
+
+                // Calculate the gradient of the squared distance
+                Vector3 grad = 2 * (diff - Vector3.Dot(diff, ray.Direction) * ray.Direction);
+
+                // Add the gradient for this ray to the total gradient
+                gradient += grad;
+            }
+
+            return gradient;
+        }
+
+        static float ObjectiveFunction(Vector3 point, IEnumerable<Ray> rays)
+        {
+            return rays.Select(ray => DistanceFromPointToRay(point, ray))
+                .Select(distance => distance * distance)
+                .Sum();
+        }
+
+        static float DistanceFromPointToRay(Vector3 point, Ray ray)
+        {
+            // Calculate the shortest distance from 'point' to 'ray'
+            Vector3 w0 = point - ray.Origin;
+            float c1 = Vector3.Dot(w0, ray.Direction);
+            float c2 = Vector3.Dot(ray.Direction, ray.Direction);
+            float b = c1 / c2;
+
+            Vector3 pb = ray.Origin + b * ray.Direction;
+            return Vector3.Distance(point, pb);
+        }
+
+        static Vector3 AverageOrigins(IReadOnlyCollection<Ray> rays)
+        {
+            Vector3 sum = new Vector3(0, 0, 0);
+            sum = rays.Aggregate(sum, (current, ray) => current + ray.Origin);
+
+            return sum / rays.Count;
+        }
     }
 }
