@@ -1,9 +1,6 @@
 using System.CommandLine;
 using System.CommandLine.NamingConventionBinder;
 using System.Numerics;
-using Compunet.YoloV8;
-using Compunet.YoloV8.Data;
-using SixLabors.ImageSharp;
 
 namespace dancer_pose_alignment;
 
@@ -24,10 +21,11 @@ static class Program
 
             new Argument<string>("OutputDb"),
 
-            new Argument<string>("CameraPositions", "colmap format")
+            new Argument<string>("CameraPositions", "Vector3 and Quaternion format")
         };
 
-        rootCommand.Description = "take yolov8 2d poses and project them into space to make 3D model. requires yolo8x-pose.onnx";
+        rootCommand.Description =
+            "take yolov8 2d poses and project them into space to make 3D model. requires yolo8x-pose.onnx";
 
         // Note that the parameters of the handler method are matched according to the names of the options 
         rootCommand.Handler = CommandHandler.Create<Args>(Parse);
@@ -54,6 +52,7 @@ static class Program
     {
         public Vector3 Position;
         public Quaternion Rotation;
+
         public Vector3 Forward => Vector3.Transform(
             new Vector3(0f, 0f, 1f),
             Rotation);
@@ -78,8 +77,6 @@ static class Program
                     positionAndRotation.rotationW)
             }).ToList();
 
-        ModelSelector modelSelector = new ModelSelector("yolov8x-pose.onnx");
-        YoloV8 yolo = new(modelSelector);
 
         int frameCount = 0;
         Dancer lead = new Dancer()
@@ -91,122 +88,63 @@ static class Program
             Role = Role.Follow
         };
 
-        int camCounter = 0;
-
         List<Tuple<Dancer, Dancer>> dancersByCamera = new();
-        foreach (string directory in Directory.EnumerateDirectories(args.InputPath))
+
+        
+        SqliteOutput sqliteOutput = null;
+
+        if (File.Exists(args.OutputDb))
         {
-            Console.WriteLine("CAMERA " + camCounter);
-            camCounter++;
-
-            int fileCount = Directory.EnumerateFiles(directory).Count();
-            if (fileCount > frameCount)
-            {
-                frameCount = fileCount;
-            }
-
-            Dancer leadForCam = new Dancer()
-            {
-                Role = Role.Lead
-            };
-            Dancer followForCam = new Dancer()
-            {
-                Role = Role.Follow
-            };
-
-            // iterate through camera frames
-            int frameCounter = 0;
-            foreach (string filePath in Directory.EnumerateFiles(directory))
-            {
-                frameCounter++;
-                Console.WriteLine("pose for frame " + frameCounter);
-
-                ImageSelector imageSelector = new ImageSelector(filePath);
-                IPoseResult result = yolo.Pose(imageSelector);
-
-                int tallest = 0;
-                IPoseBoundingBox tallestBox = null;
-                int secondTallest = 0;
-                IPoseBoundingBox secondTallestBox = null;
-
-                foreach (IPoseBoundingBox poseBoundingBox in result.Boxes)
-                {
-                    int height = poseBoundingBox.Bounds.Height;
-                    if (height > tallest)
-                    {
-                        secondTallest = tallest;
-                        secondTallestBox = tallestBox;
-                        tallest = height;
-                        tallestBox = poseBoundingBox;
-                    }
-                    else if (height > secondTallest)
-                    {
-                        secondTallest = height;
-                        secondTallestBox = poseBoundingBox;
-                    }
-                }
-
-                const float xCenter = 640f / 2;
-                const float yCenter = 360f / 2;
-                const float scale = 1.6f / 300f;
-
-                List<Point> leadPoints = tallestBox.Keypoints.Select(kp => kp.Point).ToList();
-                List<Vector3> leadPoints3d =
-                    leadPoints.Select(p => new Vector3(p.X - xCenter, -p.Y + yCenter, 0) * scale).ToList();
-                leadForCam.PosesByFrame.Add(leadPoints3d);
-
-                List<Point> followPoints = secondTallestBox.Keypoints.Select(kp => kp.Point).ToList();
-                List<Vector3> followPoints3d =
-                    followPoints.Select(p => new Vector3(p.X - xCenter, -p.Y + yCenter, 0) * scale).ToList();
-                followForCam.PosesByFrame.Add(followPoints3d);
-            }
-
-            dancersByCamera.Add(new Tuple<Dancer, Dancer>(leadForCam, followForCam));
+            // read the cached yolo 2d poses
+            dancersByCamera = SqliteInput.ReadFrameFromDb(args.OutputDb);
+            frameCount = SqliteInput.FRAME_MAX;
+            Console.WriteLine("read from " + args.OutputDb + " with " + frameCount + " frames");
+            
+            // prepare to write the merged 3d poses
+            sqliteOutput = new SqliteOutput(args.OutputDb, frameCount);
+        }
+        else
+        {
+            // calculate yolo 2d poses and cahce them
+            dancersByCamera = Yolo.CalculatePosesFromImages(args.InputPath);
+            frameCount = Yolo.frameCount;
+            
+            // cache the yolo 2d poses and prepare to write the merged 3d poses
+            sqliteOutput = new SqliteOutput(args.OutputDb, frameCount);
+            sqliteOutput.Serialize(dancersByCamera);
+            Console.WriteLine("cached to " + args.OutputDb);
         }
 
-        // TODO iterate through each camera, and merge with the next camera
-        for (int k = 0; k < camCounter - 1; k++)
+        // merge into 3D poses
+        List<Vector3> cameraForwards = new();
+        for (int i = 0; i < dancersByCamera.Count; i++)
         {
-            Dancer cam0Lead = dancersByCamera[k].Item1;
-            Dancer cam0Follow = dancersByCamera[k].Item2;
-
-            Dancer cam1Lead = dancersByCamera[k + 1].Item1;
-            Dancer cam1Follow = dancersByCamera[k + 1].Item2;
-
-            for (int j = 0; j < frameCount; j++)
-            {
-                Console.WriteLine("triangulating frame " + j);
-                List<Vector3> leadPose0 = cam0Lead.PosesByFrame[j];
-                List<Vector3> followPose0 = cam0Follow.PosesByFrame[j];
-
-                leadPose0 = Adjusted(leadPose0, cameras[k]);
-                followPose0 = Adjusted(followPose0, cameras[k]);
-
-                List<Vector3> leadPose1 = cam1Lead.PosesByFrame[j];
-                List<Vector3> followPose1 = cam1Follow.PosesByFrame[j];
-
-                leadPose1 = Adjusted(leadPose1, cameras[k + 1]);
-                followPose1 = Adjusted(followPose1, cameras[k + 1]);
-
-                List<Vector3> lead3DPosition = TriangulatedPose(
-                    leadPose0,
-                    leadPose1,
-                    cameras[k].Forward,
-                    cameras[k + 1].Forward);
-                lead.PosesByFrame.Add(lead3DPosition);
-
-                List<Vector3> follow3DPosition = TriangulatedPose(
-                    followPose0,
-                    followPose1,
-                    cameras[k].Forward,
-                    cameras[k + 1].Forward);
-                follow.PosesByFrame.Add(follow3DPosition);
-            }
+            cameraForwards.Add(cameras[i].Forward);
         }
 
-        SqliteOutput sqliteOutput = new(args.OutputDb, frameCount);
-        sqliteOutput.Serialize(new Tuple<Dancer, Dancer>(lead, follow));
+        for (int j = 0; j < frameCount; j++)
+        {
+            int camCount = 0;
+            List<List<Vector3>> lead2DPoses = new();
+            List<List<Vector3>> follow2DPoses = new();
 
+            foreach (Tuple<Dancer, Dancer> leadAndFollow in dancersByCamera)
+            {
+                List<Vector3> leadPose = Adjusted(leadAndFollow.Item1.PosesByFrame[j], cameras[camCount]);
+                List<Vector3> followPose = Adjusted(leadAndFollow.Item2.PosesByFrame[j], cameras[camCount]);
+
+                lead2DPoses.Add(leadPose);
+                follow2DPoses.Add(followPose);
+                camCount++;
+            }
+
+
+            lead.PosesByFrame.Add(RayMidpointFinder.Merged3DPose(lead2DPoses, cameraForwards));
+            follow.PosesByFrame.Add(RayMidpointFinder.Merged3DPose(follow2DPoses, cameraForwards));
+        }
+
+
+        sqliteOutput.Serialize(new List<Tuple<Dancer, Dancer>> { new(lead, follow) });
         Console.WriteLine("wrote to " + args.OutputDb);
     }
 
@@ -224,46 +162,5 @@ static class Program
         }
 
         return adjustedKeypoints;
-    }
-
-    static List<Vector3> TriangulatedPose(
-        IReadOnlyList<Vector3> pose0,
-        IReadOnlyList<Vector3> pose1,
-        Vector3 cam0Forward,
-        Vector3 cam1Forward)
-    {
-        // Create a list to store the resulting 3D pose
-        List<Vector3> triangulatedPose = new List<Vector3>();
-
-        // Iterate over each keypoint in pose0 and pose1
-        for (int i = 0; i < pose0.Count; i++)
-        {
-            Vector3 point0 = pose0[i];
-            Vector3 point1 = pose1[i];
-
-            triangulatedPose.Add(MinimumMidpoint(point0, cam0Forward, point1, cam1Forward));
-        }
-
-        return triangulatedPose;
-    }
-
-    static Vector3 MinimumMidpoint(Vector3 P1, Vector3 D1, Vector3 P2, Vector3 D2)
-    {
-        Vector3 w0 = P1 - P2;
-        float a = Vector3.Dot(D1, D1);
-        float b = Vector3.Dot(D1, D2);
-        float c = Vector3.Dot(D2, D2);
-        float d = Vector3.Dot(D1, w0);
-        float e = Vector3.Dot(D2, w0);
-
-        float denom = a * c - b * b;
-
-        float t = (b * e - c * d) / denom;
-        float s = (a * e - b * d) / denom;
-
-        Vector3 pointOnRay1 = P1 + t * D1;
-        Vector3 pointOnRay2 = P2 + s * D2;
-
-        return 0.5f * (pointOnRay1 + pointOnRay2);
     }
 }
