@@ -8,7 +8,7 @@ public static class SqliteInput
 {
     public static int FRAME_MAX = -1;
     
-       public static List<Tuple<Dancer, Dancer>> ReadFrameFromDb(string dbPath)
+    public static List<Tuple<Dancer, Dancer>> ReadFrameFromDb(string dbPath)
     {
         List<Tuple<Dancer, Dancer>> dancersByCamera = new();
         
@@ -65,6 +65,9 @@ public static class SqliteInput
                 };
                             
                 dancersByCamera.Add(new Tuple<Dancer, Dancer>(currentLead, currentFollower));
+                
+                currentLeadPoses = new List<Vector3>();
+                currentFollowPoses = new List<Vector3>();
             }
 
             if (dancerId == 0)
