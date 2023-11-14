@@ -38,10 +38,10 @@ static class Program
     static void Parse(Args args)
     {
         // calculate yolo 2d poses and cahce them
-        List<List<List<List<Vector2>>>> dancersByCamera = Yolo.CalculatePosesFromImages(args.InputPath);
+        List<Tuple<Dancer, Dancer>> dancersByCamera = Yolo.CalculatePosesFromImages(args.InputPath);
 
         // cache the yolo 2d poses and prepare to write the merged 3d poses
-        SqliteOutput sqliteOutput = new SqliteOutput(args.OutputDb);
+        SqliteOutput sqliteOutput = new SqliteOutput(args.OutputDb, dancersByCamera.FirstOrDefault().Item1.PosesByFrame.Count);
         sqliteOutput.Serialize(dancersByCamera);
         Console.WriteLine("cached to " + args.OutputDb);
     }
