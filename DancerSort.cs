@@ -2,9 +2,11 @@
 
 namespace dancer_pose_alignment;
 
-public static class DancerSort
+public class DancerSort
 {
-    public static List<Tuple<Dancer, Dancer>> SortDancersFromFrames(List<List<Frame>> posesByFrameByCamera)
+    int[,] heatMap = new int[640, 360];
+    
+    public List<Tuple<Dancer, Dancer>> SortDancersFromFrames(List<List<Frame>> posesByFrameByCamera)
     {
         List<Tuple<Dancer, Dancer>> dancersByCamera = new();
 
@@ -17,15 +19,12 @@ public static class DancerSort
             Dancer lead = new Dancer(Role.Lead);
             Dancer follow = new Dancer(Role.Follow);
 
-            // iterate through camera frames
-            int frameCounter = 0;
-            
             foreach (Frame frame in posesByFrame)
             {
-                // TODO
-                // TODO
-                
-                frameCounter++;
+                foreach (Rectangle rectangle in frame.BoundingBoxes)
+                {
+                    heatMap[rectangle.X, rectangle.Y]++;
+                }
             }
 
             dancersByCamera.Add(new Tuple<Dancer, Dancer>(lead, follow));

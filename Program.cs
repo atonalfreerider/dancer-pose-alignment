@@ -50,7 +50,8 @@ static class Program
             Console.WriteLine("cached to " + args.OutputDb);
         }
 
-        List<Tuple<Dancer, Dancer>> dancersByCamera = DancerSort.SortDancersFromFrames(framesByCamera);
+        DancerSort dancerSort = new DancerSort();
+        List<Tuple<Dancer, Dancer>> dancersByCamera = dancerSort.SortDancersFromFrames(framesByCamera);
 
         sqliteOutput.InsertDancers(dancersByCamera);
         Console.WriteLine("wrote dancers to " + args.OutputDb);
