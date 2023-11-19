@@ -1,6 +1,5 @@
 using System.CommandLine;
 using System.CommandLine.NamingConventionBinder;
-using SixLabors.ImageSharp;
 
 namespace dancer_pose_alignment;
 
@@ -33,23 +32,25 @@ static class Program
 
     static void Parse(Args args)
     {
-        List<List<List<List<Point>>>> posesByFrameByCamera;
+        List<List<Frame>> framesByCamera;
         SqliteOutput sqliteOutput = new SqliteOutput(args.OutputDb);
-        if (sqliteOutput.TableExists("cache"))
+        if (sqliteOutput.TableExists("cache_poses"))
         {
             // read the cached yolo 2d poses
-            posesByFrameByCamera = SqliteInput.ReadPosesByFrameByCameraFromDb(args.OutputDb);
+            framesByCamera = SqliteInput.ReadPosesByFrameByCameraFromDb(args.OutputDb);
+            framesByCamera = SqliteInput.ReadBoxesByFrameByCameraFromDb(args.OutputDb, framesByCamera);
             Console.WriteLine("read from " + args.OutputDb + " with " + SqliteInput.FRAME_MAX + 1 + " frames");
         }
         else
         {
             // calculate yolo 2d poses and cahce them
-            posesByFrameByCamera = Yolo.CalculatePosesFromImages(args.InputPath);
-            sqliteOutput.Cache(posesByFrameByCamera);
+            framesByCamera = Yolo.CalculatePosesFromImages(args.InputPath);
+            sqliteOutput.CachePoses(framesByCamera);
+            sqliteOutput.CacheBoxes(framesByCamera);
             Console.WriteLine("cached to " + args.OutputDb);
         }
 
-        List<Tuple<Dancer, Dancer>> dancersByCamera = DancerSort.CalculatePosesFromImages(posesByFrameByCamera);
+        List<Tuple<Dancer, Dancer>> dancersByCamera = DancerSort.SortDancersFromFrames(framesByCamera);
 
         sqliteOutput.InsertDancers(dancersByCamera);
         Console.WriteLine("wrote dancers to " + args.OutputDb);

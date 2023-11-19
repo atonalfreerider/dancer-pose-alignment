@@ -8,16 +8,16 @@ public static class SqliteInput
 {
     public static int FRAME_MAX = -1;
 
-    public static List<List<List<List<Point>>>> ReadPosesByFrameByCameraFromDb(string dbPath)
+    public static List<List<Frame>> ReadPosesByFrameByCameraFromDb(string dbPath)
     {
-        List<List<List<List<Point>>>> posesByFrameByCamera = new();
+        List<List<Frame>> posesByFrameByCamera = new();
 
         string connectionString = "URI=file:" + dbPath;
 
         int lastCameraId = 0;
-        int lastLeadFrameId = 0;
-        List<List<List<Point>>> currentCamera = new();
-        List<List<Point>> currentFrame = new();
+        int lastFrameId = 0;
+        List<Frame> currentCamera = new();
+        Frame currentFrame = new(0);
         List<Point> currentPose = new();
 
         using IDbConnection conn = new SQLiteConnection(connectionString);
@@ -29,7 +29,7 @@ public static class SqliteInput
         };
 
         using IDbCommand cmd = conn.CreateCommand();
-        cmd.CommandText = CommandString(columnNames);
+        cmd.CommandText = CommandString(columnNames, "cache_poses");
 
         using IDataReader reader = cmd.ExecuteReader();
         Dictionary<string, int> indexes = ColumnIndexes(reader, columnNames);
@@ -55,22 +55,22 @@ public static class SqliteInput
             {
                 lastCameraId = cameraId;
 
-                currentCamera = new List<List<List<Point>>>();
+                currentCamera = new List<Frame>();
                 posesByFrameByCamera.Add(currentCamera);
             }
 
-            if (frameId != lastLeadFrameId)
+            if (frameId != lastFrameId)
             {
-                currentFrame = new List<List<Point>>();
+                currentFrame = new Frame(frameId);
                 currentCamera.Add(currentFrame);
 
-                lastLeadFrameId = frameId;
+                lastFrameId = frameId;
             }
             
             if (poseCount % 17 == 0)
             {
                 currentPose = new List<Point>();
-                currentFrame.Add(currentPose);
+                currentFrame.Poses.Add(currentPose);
             }
             
             currentPose.Add(position);
@@ -81,7 +81,61 @@ public static class SqliteInput
         return posesByFrameByCamera;
     }
 
-    static string CommandString(IEnumerable<string> columnNames)
+    public static List<List<Frame>> ReadBoxesByFrameByCameraFromDb(
+        string dbPath,
+        List<List<Frame>> posesByFrameByCamera)
+    {
+        string connectionString = "URI=file:" + dbPath;
+
+        int lastCameraId = 0;
+        int lastFrameId = 0;
+        List<Frame> currentCamera = posesByFrameByCamera[lastCameraId];
+        Frame currentFrame = currentCamera[lastFrameId];
+
+        using IDbConnection conn = new SQLiteConnection(connectionString);
+        conn.Open();
+
+        List<string> columnNames = new List<string>
+        {
+            "id", "camera_id", "frame_id", "position_x", "position_y", "width", "height"
+        };
+
+        using IDbCommand cmd = conn.CreateCommand();
+        cmd.CommandText = CommandString(columnNames, "cache_boxes");
+
+        using IDataReader reader = cmd.ExecuteReader();
+        Dictionary<string, int> indexes = ColumnIndexes(reader, columnNames);
+        
+        while (reader.Read())
+        {
+            int frameId = reader.GetInt32(indexes["frame_id"]);
+            int cameraId = reader.GetInt32(indexes["camera_id"]);
+
+            int centerX = reader.GetInt32(indexes["position_x"]);
+            int centerY = reader.GetInt32(indexes["position_y"]);
+            int width = reader.GetInt32(indexes["width"]);
+            int height = reader.GetInt32(indexes["height"]);
+
+            if (cameraId > lastCameraId)
+            {
+                lastCameraId = cameraId;
+
+                currentCamera = posesByFrameByCamera[cameraId];
+            }
+
+            if (frameId != lastFrameId)
+            {
+                currentFrame = currentCamera[frameId];
+                lastFrameId = frameId;
+            }
+            
+            currentFrame.BoundingBoxes.Add(new Rectangle(centerX, centerY, width, height));
+        }
+
+        return posesByFrameByCamera;
+    }
+
+    static string CommandString(IEnumerable<string> columnNames, string tableName)
     {
         string cmd = columnNames.Aggregate(
             "SELECT ",
@@ -89,7 +143,7 @@ public static class SqliteInput
 
         // remove last comma 
         cmd = cmd.Substring(0, cmd.Length - 2) + " ";
-        cmd += $"FROM cache";
+        cmd += $"FROM {tableName}";
 
         return cmd;
     }

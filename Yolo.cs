@@ -6,9 +6,9 @@ namespace dancer_pose_alignment;
 
 public static class Yolo
 {
-    public static List<List<List<List<Point>>>> CalculatePosesFromImages(string inputPath)
+    public static List<List<Frame>> CalculatePosesFromImages(string inputPath)
     {
-        List<List<List<List<Point>>>> posesByFrameByCamera = new();
+        List<List<Frame>> posesByFrameByCamera = new();
 
         ModelSelector modelSelector = new ModelSelector("yolov8x-pose.onnx");
         YoloV8 yolo = new(modelSelector);
@@ -24,7 +24,7 @@ public static class Yolo
             // iterate through camera frames
             int frameCounter = 0;
             
-            List<List<List<Point>>> lastLeadPose = new();
+            List<Frame> lastLeadPose = new();
             foreach (string filePath in Directory.EnumerateFiles(directory))
             {
                 if(Path.GetExtension(filePath) != ".jpg") continue;
@@ -33,14 +33,15 @@ public static class Yolo
                 ImageSelector imageSelector = new ImageSelector(filePath);
                 IPoseResult result = yolo.Pose(imageSelector);
 
-                List<List<Point>> posesFromFrame = new();
+                Frame posesFromFrame = new(frameCounter);
                 foreach (IPoseBoundingBox poseBoundingBox in result.Boxes)
                 {
                     List<Point> pose = poseBoundingBox.Keypoints
                         .Select(kp => new Point(kp.Point.X - imgCenter.X, kp.Point.Y - imgCenter.Y))
                         .ToList();
 
-                    posesFromFrame.Add(pose);
+                    posesFromFrame.Poses.Add(pose);
+                    posesFromFrame.BoundingBoxes.Add(poseBoundingBox.Bounds);
 
                 }
                 

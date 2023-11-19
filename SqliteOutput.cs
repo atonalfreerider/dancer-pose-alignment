@@ -71,7 +71,7 @@ public class SqliteOutput
         cmd.ExecuteNonQuery();
     }
 
-    public void Cache(List<List<List<List<Point>>>> allCameras)
+    public void CachePoses(List<List<Frame>> allCameras)
     {
         string cs = $"URI=file:{DbPath}";
         using SQLiteConnection conn = new(cs);
@@ -81,7 +81,7 @@ public class SqliteOutput
 
         cmd.CommandText =
             """
-            CREATE TABLE cache (
+            CREATE TABLE cache_poses (
              id INTEGER PRIMARY KEY ASC,
              camera_id INTEGER NOT NULL,
              frame_id INTEGER NOT NULL,
@@ -95,7 +95,7 @@ public class SqliteOutput
         using IDbTransaction transaction = conn.BeginTransaction();
         cmd.CommandText =
             """
-            INSERT INTO cache
+            INSERT INTO cache_poses
              (
                  camera_id,
                  frame_id,
@@ -110,12 +110,12 @@ public class SqliteOutput
             """;
 
         int camCount = 0;
-        foreach (List<List<List<Point>>> camera in allCameras)
+        foreach (List<Frame> camera in allCameras)
         {
             int frameCount = 0;
-            foreach (List<List<Point>> frame in camera)
+            foreach (Frame frame in camera)
             {
-                foreach (List<Point> pose in frame)
+                foreach (List<Point> pose in frame.Poses)
                 {
                     foreach (Point position in pose)
                     {
@@ -159,6 +159,112 @@ public class SqliteOutput
 
         transaction.Commit();
     }
+
+    public void CacheBoxes(List<List<Frame>> allCameras)
+    {
+        string cs = $"URI=file:{DbPath}";
+        using SQLiteConnection conn = new(cs);
+        conn.Open();
+
+        using IDbCommand cmd = conn.CreateCommand();
+
+        cmd.CommandText =
+            """
+            CREATE TABLE cache_boxes (
+             id INTEGER PRIMARY KEY ASC,
+             camera_id INTEGER NOT NULL,
+             frame_id INTEGER NOT NULL,
+             position_x INTEGER NOT NULL,
+             position_y INTEGER NOT NULL,
+             width INTEGER NOT NULL,
+             height INTEGER NOT NULL
+            )
+            """;
+        cmd.ExecuteNonQuery();
+
+        using IDbTransaction transaction = conn.BeginTransaction();
+        cmd.CommandText =
+            """
+            INSERT INTO cache_boxes
+             (
+                 camera_id,
+                 frame_id,
+                 position_x,
+                 position_y,
+                 width,
+                 height
+             ) VALUES (
+                 @CameraId,
+                 @FrameId,
+                 @PositionX,
+                 @PositionY,
+                 @Width,
+                 @Height
+             )
+            """;
+
+        int camCount = 0;
+        foreach (List<Frame> camera in allCameras)
+        {
+            int frameCount = 0;
+            foreach (Frame frame in camera)
+            {
+                foreach (Rectangle box in frame.BoundingBoxes)
+                {
+                    IDbDataParameter cameraIdParameter =
+                        cmd.CreateParameter();
+                    cameraIdParameter.DbType = DbType.Int32;
+                    cameraIdParameter.ParameterName = "@CameraId";
+                    cameraIdParameter.Value = camCount;
+                    cmd.Parameters.Add(cameraIdParameter);
+
+                    IDbDataParameter frameIdParameter =
+                        cmd.CreateParameter();
+                    frameIdParameter.DbType = DbType.Int32;
+                    frameIdParameter.ParameterName = "@FrameId";
+                    frameIdParameter.Value = frameCount;
+                    cmd.Parameters.Add(frameIdParameter);
+
+                    IDbDataParameter positionXParameter =
+                        cmd.CreateParameter();
+                    positionXParameter.DbType = DbType.Double;
+                    positionXParameter.ParameterName = "@PositionX";
+                    positionXParameter.Value = box.X;
+                    cmd.Parameters.Add(positionXParameter);
+
+                    IDbDataParameter positionYParameter =
+                        cmd.CreateParameter();
+                    positionYParameter.DbType = DbType.Double;
+                    positionYParameter.ParameterName = "@PositionY";
+                    positionYParameter.Value = box.Y;
+                    cmd.Parameters.Add(positionYParameter);
+                    
+                    IDbDataParameter widthParameter =
+                        cmd.CreateParameter();
+                    widthParameter.DbType = DbType.Double;
+                    widthParameter.ParameterName = "@Width";
+                    widthParameter.Value = box.Width;
+                    cmd.Parameters.Add(widthParameter);
+
+                    IDbDataParameter heightParameter =
+                        cmd.CreateParameter();
+                    heightParameter.DbType = DbType.Double;
+                    heightParameter.ParameterName = "@Height";
+                    heightParameter.Value = box.Height;
+                    cmd.Parameters.Add(heightParameter);
+
+                    cmd.ExecuteNonQuery();
+                }
+
+                frameCount++;
+            }
+
+            camCount++;
+        }
+
+        transaction.Commit();
+    }
+
 
     static void InsertDancer(
         IDbConnection conn,
