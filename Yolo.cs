@@ -20,14 +20,14 @@ public static class Yolo
         {
             Console.WriteLine("CAMERA " + camCounter);
             camCounter++;
-            
+
             // iterate through camera frames
             int frameCounter = 0;
-            
+
             List<Frame> lastLeadPose = new();
             foreach (string filePath in Directory.EnumerateFiles(directory))
             {
-                if(Path.GetExtension(filePath) != ".jpg") continue;
+                if (Path.GetExtension(filePath) != ".jpg") continue;
                 Console.WriteLine("pose for frame " + frameCounter);
 
                 ImageSelector imageSelector = new ImageSelector(filePath);
@@ -42,9 +42,8 @@ public static class Yolo
 
                     posesFromFrame.Poses.Add(pose);
                     posesFromFrame.BoundingBoxes.Add(poseBoundingBox.Bounds);
-
                 }
-                
+
                 lastLeadPose.Add(posesFromFrame);
 
                 frameCounter++;

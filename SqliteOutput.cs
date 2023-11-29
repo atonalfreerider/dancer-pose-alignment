@@ -289,9 +289,9 @@ public class SqliteOutput
             )
             """;
 
-        for (int i = 0; i < dancer.PosesByFrame.Count; i++)
+        for (int i = 0; i < dancer.PoseCount; i++)
         {
-            List<Point>? pose = dancer.PosesByFrame[i];
+            List<Point>? pose = dancer.GetPoseAt(i);
 
             if (pose == null)
             {
