@@ -1,0 +1,23 @@
+﻿<Window xmlns="https://github.com/avaloniaui"
+        xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+        xmlns:d="http://schemas.microsoft.com/expression/blend/2008"
+        xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"
+        mc:Ignorable="d" d:DesignWidth="1000" d:DesignHeight="1200" Width="1000" Height="1200"
+        x:Class="GUI.MainWindow"
+        Title="Layout">
+
+  <TabControl>
+    <!-- Controls / Settings Tab -->
+    <TabItem>      
+      <!-- START Controls Stack Panel -->
+        <StackPanel Orientation="Vertical">
+           <TextBox Name="CodebaseInputPath" Watermark="Path to codebase..." Width="300" Margin="5" />
+           <TextBox Name="Interval" Watermark="100" Width="300" Margin="5" />
+           <Button Name="LayoutButton" Margin="20" >Do Layout</Button>
+           <Image Name="PreviewImage" Width="1000" Height="1000" />
+        </StackPanel>
+      
+    </TabItem>
+    <!-- END Controls / Settings Tab -->
+  </TabControl>
+</Window>
