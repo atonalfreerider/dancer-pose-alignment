@@ -12,6 +12,8 @@
     <PackageReference Include="Avalonia.Desktop" Version="11.0.5" />
     <PackageReference Include="Avalonia.ReactiveUI" Version="11.0.5" />
     <PackageReference Include="Avalonia.Themes.Simple" Version="11.0.5" />
+    <PackageReference Include="OpenCvSharp4" Version="4.8.0.20230708" />
+    <PackageReference Include="OpenCvSharp4.runtime.win" Version="4.8.0.20230708" />
   </ItemGroup>
   
     <ItemGroup>
@@ -21,7 +23,7 @@
   </ItemGroup>
   
     <ItemGroup>
-      <ProjectReference Include="..\dancer-pose-alignment.csproj" />
+      <ProjectReference Include="..\dancer-pose-alignment\dancer-pose-alignment.csproj" />
     </ItemGroup>
 
 </Project>

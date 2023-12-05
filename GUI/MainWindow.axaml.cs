@@ -1,6 +1,7 @@
 using Avalonia.Controls;
 using Avalonia.Markup.Xaml;
 using Avalonia.Media;
+using Avalonia.Media.Imaging;
 using Avalonia.Threading;
 using Image = Avalonia.Controls.Image;
 
@@ -14,15 +15,15 @@ public partial class MainWindow : Window
     {
         AvaloniaXamlLoader.Load(this);
 
-        TextBox inputTextBox = this.Find<TextBox>("CodebaseInputPath");
-        TextBox intervalBox = this.Find<TextBox>("Interval");
+        TextBox videoInputPath = this.Find<TextBox>("VideoInputPath");
+        TextBox alphaPoseJsonPath = this.Find<TextBox>("AlphaPoseJsonPath");
 
-        Button layoutButton = this.Find<Button>("LayoutButton");
-        
-        layoutButton.Click += delegate
+        Button nextFrameButton = this.Find<Button>("NextFrameButton");
+
+        nextFrameButton.Click += delegate
         {
-            interval = Convert.ToInt32(intervalBox.Text);
-            Program.Layout(new Program.Args {InputPath = inputTextBox.Text});
+            Program.RenderFrame(new Program.Args
+                { VideoPath = videoInputPath.Text, AlphaPoseJsonPath = alphaPoseJsonPath.Text });
         };
 
         previewImage = this.Find<Image>("PreviewImage");
@@ -36,26 +37,21 @@ public partial class MainWindow : Window
         previewDrawer = new PreviewDrawer();
         updatePreview = SetPreview;
     }
-        
-    static int intervalCount = 0;
-    static int interval = 100;
-        
-    public delegate void UpdatePreview();
 
-    static void SetPreview()
+    static int frameCount = 0;
+
+    public delegate void UpdatePreview(Bitmap frame);
+
+    static void SetPreview(Bitmap frame)
     {
-        intervalCount++;
-        if (intervalCount >= interval)
+        frameCount++;
+        
+        Dispatcher.UIThread.Post(() =>
         {
-            intervalCount = 0;
-            Dispatcher.UIThread.Post(() =>
-            {
-                DrawingImage drawingImage = previewDrawer.DrawGeometry();
-                previewImage.Source = drawingImage;
-                    
-            }, DispatcherPriority.Render);
-                
-            Dispatcher.UIThread.RunJobs();
-        }
+            DrawingImage drawingImage = previewDrawer.DrawGeometry();
+            previewImage.Source = frame;
+        }, DispatcherPriority.Render);
+
+        Dispatcher.UIThread.RunJobs();
     }
 }

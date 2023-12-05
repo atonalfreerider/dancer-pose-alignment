@@ -11,9 +11,9 @@
     <TabItem>      
       <!-- START Controls Stack Panel -->
         <StackPanel Orientation="Vertical">
-           <TextBox Name="CodebaseInputPath" Watermark="Path to codebase..." Width="300" Margin="5" />
-           <TextBox Name="Interval" Watermark="100" Width="300" Margin="5" />
-           <Button Name="LayoutButton" Margin="20" >Do Layout</Button>
+           <TextBox Name="VideoInputPath" Watermark="Path to video..." Width="300" Margin="5" />
+           <TextBox Name="AlphaPoseJsonPath" Watermark="Path to AlphaPose json" Width="300" Margin="5" />
+           <Button Name="NextFrameButton" Margin="20" >Next Frame</Button>
            <Image Name="PreviewImage" Width="1000" Height="1000" />
         </StackPanel>
       

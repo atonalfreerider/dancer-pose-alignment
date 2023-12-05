@@ -1,6 +1,8 @@
 using Avalonia;
 using Avalonia.Controls;
+using Avalonia.Media.Imaging;
 using Avalonia.ReactiveUI;
+using OpenCvSharp;
 
 namespace GUI;
 
@@ -8,7 +10,9 @@ static class Program
 {
     public class Args
     {
-        public string InputPath { get; init; }
+        public string VideoPath { get; init; }
+        
+        public string AlphaPoseJsonPath { get; init; }
     }
 
     // This method is needed for IDE previewer infrastructure
@@ -39,13 +43,15 @@ static class Program
         app.Run(cts.Token);
     }
 
-    public static void Layout(Args args)
+    public static void RenderFrame(Args args)
     {
-        MainWindow.updatePreview.Invoke();
-    }
-
-    static void DrawUpdatesHandler()
-    {
-        MainWindow.updatePreview.Invoke();
+        FrameSource frameSource = Cv2.CreateFrameSource_Video(args.VideoPath);
+        OutputArray outputArray = new Mat();
+        frameSource.NextFrame(outputArray);
+        
+        Mat frameMat = outputArray.GetMat();
+        Bitmap frame = Bitmap.DecodeToWidth(frameMat.ToMemoryStream(), 1000);
+        
+        MainWindow.updatePreview.Invoke(frame);
     }
 }
