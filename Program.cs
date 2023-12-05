@@ -96,8 +96,6 @@ static class Program
         if (File.Exists(args.OutputDb))
         {
             // read the cached yolo 2d poses
-            dancersByCamera = SqliteInput.ReadFrameFromDb(args.OutputDb);
-            frameCount = SqliteInput.FRAME_MAX;
             Console.WriteLine("read from " + args.OutputDb + " with " + frameCount + " frames");
             
             // prepare to write the merged 3d poses
@@ -106,8 +104,6 @@ static class Program
         else
         {
             // calculate yolo 2d poses and cahce them
-            dancersByCamera = Yolo.CalculatePosesFromImages(args.InputPath);
-            frameCount = Yolo.frameCount;
             
             // cache the yolo 2d poses and prepare to write the merged 3d poses
             sqliteOutput = new SqliteOutput(args.OutputDb, frameCount);
