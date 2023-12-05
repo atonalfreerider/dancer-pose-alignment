@@ -10,28 +10,26 @@ static class Program
     {
         public string InputPath { get; set; }
         public string OutputDb { get; set; }
-        public string CameraPositions { get; set; }
     }
 
     static void Main(string[] args)
     {
         RootCommand rootCommand = new()
         {
-            new Argument<string>("InputPath", "Path to directory containing images by camera"),
+            new Argument<string>(
+                "InputPath",
+                "Path to directory containing AlphaPose outputs and camera positions json in root"),
 
-            new Argument<string>("OutputDb"),
-
-            new Argument<string>("CameraPositions", "Vector3 and Quaternion format")
+            new Argument<string>(
+                "OutputDb",
+                "Path to output sqlite database")
         };
 
         rootCommand.Description =
-            "take yolov8 2d poses and project them into space to make 3D model. requires yolo8x-pose.onnx";
+            "Converts AlphaPose output to 3D poses, after refining each sequence and identifying lead and follow. ";
 
-        // Note that the parameters of the handler method are matched according to the names of the options 
         rootCommand.Handler = CommandHandler.Create<Args>(Parse);
-
         rootCommand.Invoke(args);
-
         Environment.Exit(0);
     }
 
@@ -48,6 +46,20 @@ static class Program
         public float rotationW;
     }
 
+    /// <summary>
+    /// AlphaPose: one pose of several per frame. This pose should persist across frames
+    /// </summary>
+    [Serializable]
+    public class SinglePose
+    {
+        public string image_id; // name of the image eg 0.jpg, 1.jpg, 2.jpg
+        public int category_id; // unknown
+        public List<float> keypoints; // X, Y, confidence, X, Y, confidence, ... x 136 since it is HAPLE
+        public float score; // confidence of the pose
+        public List<float> box; // x1, y1, x2, y2
+        public int idx; // alphapose's attempt to track the same person across frames
+    }
+
     class Camera
     {
         public Vector3 Position;
@@ -61,7 +73,8 @@ static class Program
     static void Parse(Args args)
     {
         Dictionary<string, PositionAndRotation> positionAndRotationByCam = Newtonsoft.Json.JsonConvert
-            .DeserializeObject<Dictionary<string, PositionAndRotation>>(File.ReadAllText(args.CameraPositions))!;
+            .DeserializeObject<Dictionary<string, PositionAndRotation>>(
+                File.ReadAllText(Path.Combine(args.InputPath, "positions.json")));
 
         List<Camera> cameras = positionAndRotationByCam.Values.Select(positionAndRotation =>
             new Camera
@@ -77,6 +90,66 @@ static class Program
                     positionAndRotation.rotationW)
             }).ToList();
 
+        List<Tuple<Dancer, Dancer>> dancersByCamera = new();
+        foreach (string dirPath in Directory.EnumerateDirectories(args.InputPath))
+        {
+            string file = Path.Combine(dirPath, "alphapose-results.json");
+            List<SinglePose> singlePoses = Newtonsoft.Json.JsonConvert
+                .DeserializeObject<List<SinglePose>>(File.ReadAllText(file));
+            
+            Dictionary<int, Dictionary<int, List<Vector3>>> posesByFrameByPerson = new();
+            foreach (SinglePose singlePose in singlePoses)
+            {
+                int frameId = int.Parse(Path.GetFileNameWithoutExtension(singlePose.image_id));
+                int personId = singlePose.idx;
+
+                if (!posesByFrameByPerson.ContainsKey(personId))
+                {
+                    posesByFrameByPerson.Add(personId, new Dictionary<int, List<Vector3>>());
+                }
+
+                if (!posesByFrameByPerson[personId].ContainsKey(frameId))
+                {
+                    posesByFrameByPerson[personId].Add(frameId, new List<Vector3>());
+                }
+
+                for (int i = 0; i < singlePose.keypoints.Count; i += 3)
+                {
+                    posesByFrameByPerson[personId][frameId].Add(new Vector3(
+                        singlePose.keypoints[i], // x
+                        singlePose.keypoints[i + 1], // y
+                        singlePose.keypoints[i + 2])); // confidence
+                }
+            }
+
+            foreach ((int personId, Dictionary<int, List<Vector3>> posesByFrame) in posesByFrameByPerson)
+            {
+                // TODO sort and consolidate
+            }
+
+
+            // TODO
+            // identify lead and follow as the largest figures moving the most
+
+
+            // TODO
+            // identify the lead as the taller figure
+
+
+            Dancer leadForCamera = new Dancer()
+            {
+                Role = Role.Lead
+            };
+            leadForCamera.PosesByFrame.Add(new List<Vector3>()); // TODO
+
+            Dancer followForCamera = new Dancer()
+            {
+                Role = Role.Follow
+            };
+            followForCamera.PosesByFrame.Add(new List<Vector3>()); // TODO
+
+            dancersByCamera.Add(new Tuple<Dancer, Dancer>(leadForCamera, followForCamera));
+        }
 
         int frameCount = 0;
         Dancer lead = new Dancer()
@@ -88,28 +161,7 @@ static class Program
             Role = Role.Follow
         };
 
-        List<Tuple<Dancer, Dancer>> dancersByCamera = new();
-
-        
-        SqliteOutput sqliteOutput = null;
-
-        if (File.Exists(args.OutputDb))
-        {
-            // read the cached yolo 2d poses
-            Console.WriteLine("read from " + args.OutputDb + " with " + frameCount + " frames");
-            
-            // prepare to write the merged 3d poses
-            sqliteOutput = new SqliteOutput(args.OutputDb, frameCount);
-        }
-        else
-        {
-            // calculate yolo 2d poses and cahce them
-            
-            // cache the yolo 2d poses and prepare to write the merged 3d poses
-            sqliteOutput = new SqliteOutput(args.OutputDb, frameCount);
-            sqliteOutput.Serialize(dancersByCamera);
-            Console.WriteLine("cached to " + args.OutputDb);
-        }
+        SqliteOutput sqliteOutput = new SqliteOutput(args.OutputDb, frameCount);
 
         // merge into 3D poses
         List<Vector3> cameraForwards = new();
