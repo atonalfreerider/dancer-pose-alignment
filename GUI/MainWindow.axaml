@@ -2,19 +2,26 @@
         xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
         xmlns:d="http://schemas.microsoft.com/expression/blend/2008"
         xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"
-        mc:Ignorable="d" d:DesignWidth="1000" d:DesignHeight="1200" Width="1000" Height="1200"
+        mc:Ignorable="d" d:DesignWidth="1000" d:DesignHeight="1080" Width="1000" Height="1080"
         x:Class="GUI.MainWindow"
         Title="Layout">
 
   <TabControl>
     <!-- Controls / Settings Tab -->
-    <TabItem>      
+    <TabItem>
+      <TabItem.Header>
+        <TextBlock VerticalAlignment="Center" Text="Video"></TextBlock>
+      </TabItem.Header>
+      
       <!-- START Controls Stack Panel -->
         <StackPanel Orientation="Vertical">
            <TextBox Name="VideoInputPath" Watermark="Path to video..." Width="300" Margin="5" />
            <TextBox Name="AlphaPoseJsonPath" Watermark="Path to AlphaPose json" Width="300" Margin="5" />
-           <Button Name="NextFrameButton" Margin="20" >Next Frame</Button>
-           <Image Name="PreviewImage" Width="1000" Height="1000" />
+           <Button Name="NextFrameButton" Margin="0" >Next Frame</Button>
+           <Canvas Name="Canvas" Width="1000" Height="1000">
+             <Image Name="PreviewImage" Width="1000" Height="1000" Stretch="None" Canvas.Left="0" Canvas.Top="0" Canvas.Bottom="0" Canvas.Right="0"/>
+             <Image Name="PoseImage" Width="1000" Height="1000" Stretch="None" Canvas.Left="0" Canvas.Top="0" Canvas.Bottom="0" Canvas.Right="0"/>
+           </Canvas>
         </StackPanel>
       
     </TabItem>

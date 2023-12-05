@@ -1,3 +1,4 @@
+using System.Numerics;
 using Avalonia.Controls;
 using Avalonia.Markup.Xaml;
 using Avalonia.Media;
@@ -10,6 +11,7 @@ namespace GUI;
 public partial class MainWindow : Window
 {
     static Image previewImage;
+    static Image poseImage;
 
     public MainWindow()
     {
@@ -27,29 +29,26 @@ public partial class MainWindow : Window
         };
 
         previewImage = this.Find<Image>("PreviewImage");
+        poseImage = this.Find<Image>("PoseImage");
     }
-
-    static PreviewDrawer previewDrawer;
+    
     internal static UpdatePreview updatePreview;
 
     public static void SetupPreview()
     {
-        previewDrawer = new PreviewDrawer();
         updatePreview = SetPreview;
     }
 
-    static int frameCount = 0;
+    public delegate void UpdatePreview(Bitmap frame, Dictionary<int, List<Vector3>> posesByPersonAtFrame);
 
-    public delegate void UpdatePreview(Bitmap frame);
-
-    static void SetPreview(Bitmap frame)
+    static void SetPreview(Bitmap frame, Dictionary<int, List<Vector3>> posesByPersonAtFrame)
     {
-        frameCount++;
-        
         Dispatcher.UIThread.Post(() =>
         {
-            DrawingImage drawingImage = previewDrawer.DrawGeometry();
+            DrawingImage drawingImage = PreviewDrawer.DrawGeometry(posesByPersonAtFrame, frame.Size);
+
             previewImage.Source = frame;
+            poseImage.Source = drawingImage;
         }, DispatcherPriority.Render);
 
         Dispatcher.UIThread.RunJobs();
