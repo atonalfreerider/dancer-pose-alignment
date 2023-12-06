@@ -15,92 +15,82 @@ public static class PreviewDrawer
     {
         DrawingImage drawingImage = new DrawingImage();
         DrawingGroup drawingGroup = new DrawingGroup();
-        
-        Pen unknownPen = new Pen(new SolidColorBrush(Colors.Gray))
-        {
-            Thickness = 4
-        };
-        
-        Pen leadPen = new Pen(new SolidColorBrush(Colors.Red))
-        {
-            Thickness = 4
-        };
-        
-        Pen followPen = new Pen(new SolidColorBrush(Colors.Magenta))
-        {
-            Thickness = 4
-        };
 
-        Pen pen = unknownPen;
-        
         // HACK: add small dots to the corners of the image to force the overlay to not resize
-        GeometryDrawing lineGeometryDrawingTopCorner = DrawPoint(Vector2.Zero, pen);
+        SolidColorBrush dotBrush = new SolidColorBrush(Colors.Gray);
+        Pen dotPen = new Pen(dotBrush)
+        {
+            Thickness = .1
+        };
+        GeometryDrawing lineGeometryDrawingTopCorner = DrawPoint(Vector2.Zero, dotPen);
         drawingGroup.Children.Add(lineGeometryDrawingTopCorner);
         
-        GeometryDrawing lineGeometryDrawingBottomCorner = DrawPoint(new Vector2((float) imgSize.Width,(float) imgSize.Height), pen);
+        GeometryDrawing lineGeometryDrawingBottomCorner = DrawPoint(new Vector2((float) imgSize.Width,(float) imgSize.Height), dotPen);
         drawingGroup.Children.Add(lineGeometryDrawingBottomCorner);
 
         foreach ((int personIdx, List<Vector3> pose) in posesByPersonAtFrame)
         {
+            int role = -1;
             if (currentLeadIndex > -1 && personIdx == currentLeadIndex)
             {
-                pen = leadPen;
+                role = 0;
             }
             else if (currentFollowIndex > -1 && personIdx == currentFollowIndex)
             {
-                pen = followPen;
-            }
-            else
-            {
-                pen = unknownPen;
+                role = 1;
             }
             
             foreach (Vector3 joint in pose)
             {
+                SolidColorBrush brush = new SolidColorBrush(ColorForConfidence(joint.Z, role));
+                Pen pen = new Pen(brush)
+                {
+                    Thickness = 4
+                };
                 GeometryDrawing poseGeometry = DrawPoint(new Vector2(joint.X, joint.Y), pen);
                 drawingGroup.Children.Add(poseGeometry);
             }
             
-            GeometryDrawing leftCalf = DrawLine(pose[(int)Halpe.LAnkle], pose[(int)Halpe.LKnee], pen);
+            GeometryDrawing leftCalf = DrawLine(pose[(int)Halpe.LAnkle], pose[(int)Halpe.LKnee], role);
             drawingGroup.Children.Add(leftCalf);
             
-            GeometryDrawing leftThigh = DrawLine(pose[(int)Halpe.LKnee], pose[(int)Halpe.LHip], pen);
+            GeometryDrawing leftThigh = DrawLine(pose[(int)Halpe.LKnee], pose[(int)Halpe.LHip], role);
             drawingGroup.Children.Add(leftThigh);
             
-            GeometryDrawing rightCalf = DrawLine(pose[(int)Halpe.RAnkle], pose[(int)Halpe.RKnee], pen);
+            GeometryDrawing rightCalf = DrawLine(pose[(int)Halpe.RAnkle], pose[(int)Halpe.RKnee], role);
             drawingGroup.Children.Add(rightCalf);
             
-            GeometryDrawing rightThigh = DrawLine(pose[(int)Halpe.RKnee], pose[(int)Halpe.RHip], pen);
+            GeometryDrawing rightThigh = DrawLine(pose[(int)Halpe.RKnee], pose[(int)Halpe.RHip], role);
             drawingGroup.Children.Add(rightThigh);
             
-            GeometryDrawing leftUpperArm = DrawLine(pose[(int)Halpe.LShoulder], pose[(int)Halpe.LElbow], pen);
+            GeometryDrawing leftUpperArm = DrawLine(pose[(int)Halpe.LShoulder], pose[(int)Halpe.LElbow], role);
             drawingGroup.Children.Add(leftUpperArm);
             
-            GeometryDrawing leftForearm = DrawLine(pose[(int)Halpe.LElbow], pose[(int)Halpe.LWrist], pen);
+            GeometryDrawing leftForearm = DrawLine(pose[(int)Halpe.LElbow], pose[(int)Halpe.LWrist], role);
             drawingGroup.Children.Add(leftForearm);
             
-            GeometryDrawing rightUpperArm = DrawLine(pose[(int)Halpe.RShoulder], pose[(int)Halpe.RElbow], pen);
+            GeometryDrawing rightUpperArm = DrawLine(pose[(int)Halpe.RShoulder], pose[(int)Halpe.RElbow], role);
             drawingGroup.Children.Add(rightUpperArm);
             
-            GeometryDrawing rightForearm = DrawLine(pose[(int)Halpe.RElbow], pose[(int)Halpe.RWrist], pen);
+            GeometryDrawing rightForearm = DrawLine(pose[(int)Halpe.RElbow], pose[(int)Halpe.RWrist], role);
             drawingGroup.Children.Add(rightForearm);
             
-            GeometryDrawing spine = DrawLine(pose[(int)Halpe.Neck], pose[(int)Halpe.Hip], pen);
+            GeometryDrawing spine = DrawLine(pose[(int)Halpe.Neck], pose[(int)Halpe.Hip], role);
             drawingGroup.Children.Add(spine);
             
-            GeometryDrawing neck = DrawLine(pose[(int)Halpe.Head], pose[(int)Halpe.Neck], pen);
+            GeometryDrawing neck = DrawLine(pose[(int)Halpe.Head], pose[(int)Halpe.Neck], role);
             drawingGroup.Children.Add(neck);
             
-            GeometryDrawing lHip = DrawLine(pose[(int)Halpe.Hip], pose[(int)Halpe.LHip], pen);
+            GeometryDrawing lHip = DrawLine(pose[(int)Halpe.Hip], pose[(int)Halpe.LHip], role);
             drawingGroup.Children.Add(lHip);
             
-            GeometryDrawing rHip = DrawLine(pose[(int)Halpe.Hip], pose[(int)Halpe.RHip], pen);
+            GeometryDrawing rHip = DrawLine(pose[(int)Halpe.Hip], pose[(int)Halpe.RHip], role);
             drawingGroup.Children.Add(rHip);
             
-            GeometryDrawing lShoulder = DrawLine(pose[(int)Halpe.Neck], pose[(int)Halpe.LShoulder], pen);
+            GeometryDrawing lShoulder = DrawLine(pose[(int)Halpe.Neck], pose[(int)Halpe.LShoulder], role);
             drawingGroup.Children.Add(lShoulder);
             
-            GeometryDrawing rShoulder = DrawLine(pose[(int)Halpe.Neck], pose[(int)Halpe.RShoulder], pen);
+            GeometryDrawing rShoulder = DrawLine(pose[(int)Halpe.Neck], pose[(int)Halpe.RShoulder], role);
             drawingGroup.Children.Add(rShoulder);
         }
 
@@ -109,22 +99,61 @@ public static class PreviewDrawer
         return drawingImage;
     }
     
-    static GeometryDrawing DrawLine(Vector3 start, Vector3 end, Pen pen)
+    static GeometryDrawing DrawLine(Vector3 start, Vector3 end, int role)
     {
+        LinearGradientBrush linearGradientBrush = new LinearGradientBrush
+        {
+            StartPoint = new RelativePoint(new Point(start.X, start.Y), RelativeUnit.Absolute),
+            EndPoint = new RelativePoint(new Point(end.X, end.Y), RelativeUnit.Absolute)
+        };
+        linearGradientBrush.GradientStops.Add(new GradientStop(ColorForConfidence(start.Z, role), 0));
+        linearGradientBrush.GradientStops.Add(new GradientStop(ColorForConfidence(end.Z, role), 1));
+        Pen linePen = new Pen(linearGradientBrush)
+        {
+            Thickness = 4
+        };
         GeometryDrawing poseGeometry = new GeometryDrawing
         {
-            Pen = pen
+            Pen = linePen
         };
 
         LineGeometry lineGeometry = new LineGeometry
         {
-            StartPoint = new Avalonia.Point(start.X, start.Y),
-            EndPoint = new Avalonia.Point(end.X, end.Y)
+            StartPoint = new Point(start.X, start.Y),
+            EndPoint = new Point(end.X, end.Y)
             
         };
         poseGeometry.Geometry = lineGeometry;
 
         return poseGeometry;
+    }
+
+    static Color ColorForConfidence(float confidence, int role)
+    {
+        byte Avalue = (byte)(255 * confidence);
+        byte Rvalue = 0;
+        byte Gvalue = 0;
+        byte Bvalue = 0;
+        switch (role)
+        {
+            case -1:
+                Rvalue = 100;
+                Gvalue = 100;
+                Bvalue = 100;
+                break;
+            case 0:
+                Rvalue = 255;
+                Gvalue = 0;
+                Bvalue = 0;
+                break;
+            case 1:
+                Rvalue = 255;
+                Gvalue = 0;
+                Bvalue = 255;
+                break;
+        }
+
+        return new Color(Avalue, Rvalue, Gvalue, Bvalue);
     }
     
     static GeometryDrawing DrawPoint(Vector2 point, Pen pen)

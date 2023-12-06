@@ -53,6 +53,16 @@ public partial class MainWindow : Window
 
     void RenderFrame(string videoPath, string alphaPoseJsonPath)
     {
+        if (string.IsNullOrEmpty(videoPath))
+        {
+            videoPath = @"C:\Users\john\Desktop\Larissa-Kadu-Recap\output\00-Recap-Ali.mp4";
+        }
+
+        if (string.IsNullOrEmpty(alphaPoseJsonPath))
+        {
+            alphaPoseJsonPath = @"D:\larissa-kadu-recap\0\alphapose-results.json";
+        }
+
         if (!hasBeenInitialized)
         {
             frameSource = Cv2.CreateFrameSource_Video(videoPath);
