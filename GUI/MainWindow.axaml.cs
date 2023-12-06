@@ -25,42 +25,30 @@ public partial class MainWindow : Window
     int frameCount = 0;
     Dictionary<int, List<Vector3>> posesByPersonAtFrame = new();
 
-    delegate void UpdatePreview(Bitmap frame);
-
-    UpdatePreview updatePreview;
-
     public MainWindow()
     {
         AvaloniaXamlLoader.Load(this);
 
-        TextBox videoInputPath = this.Find<TextBox>("VideoInputPath");
-        TextBox alphaPoseJsonPath = this.Find<TextBox>("AlphaPoseJsonPath");
+        TextBox videoInputPath = this.Find<TextBox>("VideoInputPath")!;
+        TextBox alphaPoseJsonPath = this.Find<TextBox>("AlphaPoseJsonPath")!;
 
-        Button nextFrameButton = this.Find<Button>("NextFrameButton");
+        Button nextFrameButton = this.Find<Button>("NextFrameButton")!;
 
-        nextFrameButton.Click += delegate
-        {
-            RenderFrame(videoInputPath.Text, alphaPoseJsonPath.Text);
-        };
-        
-        Button runUntilNextButton = this.Find<Button>("RunUntilNext");
-        
+        nextFrameButton.Click += delegate { RenderFrame(videoInputPath.Text, alphaPoseJsonPath.Text); };
+
+        Button runUntilNextButton = this.Find<Button>("RunUntilNext")!;
+
         runUntilNextButton.Click += delegate
         {
-            while(posesByPersonAtFrame.ContainsKey(currentLeadIndex) && 
-                  posesByPersonAtFrame.ContainsKey(currentFollowIndex))
+            while (posesByPersonAtFrame.ContainsKey(currentLeadIndex) &&
+                   posesByPersonAtFrame.ContainsKey(currentFollowIndex))
             {
                 RenderFrame(videoInputPath.Text, alphaPoseJsonPath.Text);
             }
         };
 
-        previewImage = this.Find<Image>("PreviewImage");
-        poseImage = this.Find<Image>("PoseImage");
-    }
-
-    public void SetupPreview()
-    {
-        updatePreview = SetPreview;
+        previewImage = this.Find<Image>("PreviewImage")!;
+        poseImage = this.Find<Image>("PoseImage")!;
     }
 
     void RenderFrame(string videoPath, string alphaPoseJsonPath)
@@ -87,17 +75,17 @@ public partial class MainWindow : Window
             }
         }
 
-        updatePreview.Invoke(frame);
+        SetPreview(frame);
+        RedrawPoses();
 
         frameCount++;
     }
 
-    void SetPreview(Bitmap frame)
+    void SetPreview(IImage frame)
     {
         Dispatcher.UIThread.Post(() =>
         {
             previewImage.Source = frame;
-            RedrawPoses();
         }, DispatcherPriority.Render);
 
         Dispatcher.UIThread.RunJobs();

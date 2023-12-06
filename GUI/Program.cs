@@ -6,13 +6,6 @@ namespace GUI;
 
 static class Program
 {
-    public class Args
-    {
-        public string VideoPath { get; init; }
-        
-        public string AlphaPoseJsonPath { get; init; }
-    }
-
     // This method is needed for IDE previewer infrastructure
     static AppBuilder BuildAvaloniaApp() => AppBuilder.Configure<App>()
         .UsePlatformDetect()
@@ -34,7 +27,6 @@ static class Program
         // Do you startup code here
         mainWindow = new MainWindow();
         mainWindow.Show();
-        mainWindow.SetupPreview();
 
         // Start the main loop
         app.Run(cts.Token);

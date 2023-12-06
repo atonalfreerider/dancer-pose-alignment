@@ -4,34 +4,30 @@ namespace dancer_pose_alignment;
 
 static class RayMidpointFinder
 {
-    struct Ray
+    struct Ray(Vector3 origin, Vector3 direction)
     {
-        public readonly Vector3 Origin;
-        public readonly Vector3 Direction;
-
-        public Ray(Vector3 origin, Vector3 direction)
-        {
-            Origin = origin;
-            Direction = direction;
-        }
+        public readonly Vector3 Origin = origin;
+        public readonly Vector3 Direction = direction;
     }
 
     const float Tolerance = 0.0001f;
     const int MaxIterations = 1000;
 
-    public static List<Vector3> Merged3DPose(List<List<Vector3>> Poses2D, IReadOnlyList<Vector3> CameraForwards)
+    public static List<Vector3> Merged3DPose(
+        List<List<Vector3>> planeProjectedPoses,
+        IReadOnlyList<Vector3> cameraForwards)
     {
         List<Vector3> pose = new();
 
-        int poseCount = Poses2D[0].Count;
+        int poseCount = planeProjectedPoses[0].Count;
         for (int i = 0; i < poseCount; i++)
         {
             List<Ray> rays = new();
             int camCounter = 0;
-            foreach (List<Vector3> pose2D in Poses2D)
+            foreach (List<Vector3> pose2D in planeProjectedPoses)
             {
                 Vector3 origin = pose2D[i];
-                Vector3 direction = CameraForwards[camCounter];
+                Vector3 direction = cameraForwards[camCounter];
                 rays.Add(new Ray(origin, direction));
                 camCounter++;
             }
@@ -40,14 +36,19 @@ static class RayMidpointFinder
             pose.Add(midpoint);
         }
 
-
         return pose;
     }
 
     static Vector3 FindMinimumMidpoint(List<Ray> rays)
     {
         Vector3 startPoint = AverageOrigins(rays);
-        return Optimize(startPoint, rays);
+        Vector3 optimize = Optimize(startPoint, rays);
+        if (float.IsNaN(optimize.X) || float.IsNaN(optimize.Y) || float.IsNaN(optimize.Z))
+        {
+            return Vector3.Zero;
+        }
+
+        return optimize;
     }
 
     static Vector3 Optimize(Vector3 startPoint, List<Ray> rays)
