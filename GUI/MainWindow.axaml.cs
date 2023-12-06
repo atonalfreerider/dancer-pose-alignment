@@ -38,7 +38,21 @@ public partial class MainWindow : Window
 
         Button nextFrameButton = this.Find<Button>("NextFrameButton");
 
-        nextFrameButton.Click += delegate { RenderFrame(videoInputPath.Text, alphaPoseJsonPath.Text); };
+        nextFrameButton.Click += delegate
+        {
+            RenderFrame(videoInputPath.Text, alphaPoseJsonPath.Text);
+        };
+        
+        Button runUntilNextButton = this.Find<Button>("RunUntilNext");
+        
+        runUntilNextButton.Click += delegate
+        {
+            while(posesByPersonAtFrame.ContainsKey(currentLeadIndex) && 
+                  posesByPersonAtFrame.ContainsKey(currentFollowIndex))
+            {
+                RenderFrame(videoInputPath.Text, alphaPoseJsonPath.Text);
+            }
+        };
 
         previewImage = this.Find<Image>("PreviewImage");
         poseImage = this.Find<Image>("PoseImage");
@@ -94,9 +108,9 @@ public partial class MainWindow : Window
         Dispatcher.UIThread.Post(() =>
         {
             DrawingImage drawingImage = PreviewDrawer.DrawGeometry(
-                posesByPersonAtFrame, 
+                posesByPersonAtFrame,
                 previewImage.Bounds.Size,
-                currentLeadIndex, 
+                currentLeadIndex,
                 currentFollowIndex);
             poseImage.Source = drawingImage;
         }, DispatcherPriority.Render);
@@ -110,9 +124,9 @@ public partial class MainWindow : Window
         float closestDistance = float.MaxValue;
         foreach ((int personIndex, List<Vector3> pose) in posesByPersonAtFrame)
         {
-            foreach(Vector3 joint in pose)
+            foreach (Vector3 joint in pose)
             {
-                if(Vector2.Distance(position, new Vector2(joint.X, joint.Y)) < closestDistance)
+                if (Vector2.Distance(position, new Vector2(joint.X, joint.Y)) < closestDistance)
                 {
                     closestIndex = personIndex;
                     closestDistance = Vector2.Distance(position, new Vector2(joint.X, joint.Y));
@@ -133,20 +147,20 @@ public partial class MainWindow : Window
             currentLeadIndex = closestIndex;
             currentFollowIndex = -1;
         }
-        
+
         RedrawPoses();
     }
 
     void PointerPressedHandler(object sender, PointerPressedEventArgs args)
     {
         PointerPoint point = args.GetCurrentPoint(sender as Control);
-        
+
         double x = point.Position.X;
         double y = point.Position.Y;
 
         if (point.Properties.IsLeftButtonPressed)
         {
-            SetDancer(new Vector2((float) x, (float) y));
+            SetDancer(new Vector2((float)x, (float)y));
         }
     }
 }
