@@ -7,16 +7,31 @@ namespace GUI;
 
 public static class PreviewDrawer
 {
-    public static DrawingImage DrawGeometry(Dictionary<int, List<Vector3>> posesByPersonAtFrame, Size imgSize)
+    public static DrawingImage DrawGeometry(
+        Dictionary<int, List<Vector3>> posesByPersonAtFrame, 
+        Size imgSize,
+        int currentLeadIndex,
+        int currentFollowIndex)
     {
         DrawingImage drawingImage = new DrawingImage();
         DrawingGroup drawingGroup = new DrawingGroup();
-
-        Color penColor = Colors.Red;
-        Pen pen = new Pen(new SolidColorBrush(penColor))
+        
+        Pen unknownPen = new Pen(new SolidColorBrush(Colors.Gray))
         {
-            Thickness = 1
+            Thickness = 4
         };
+        
+        Pen leadPen = new Pen(new SolidColorBrush(Colors.Red))
+        {
+            Thickness = 4
+        };
+        
+        Pen followPen = new Pen(new SolidColorBrush(Colors.Magenta))
+        {
+            Thickness = 4
+        };
+
+        Pen pen = unknownPen;
         
         // HACK: add small dots to the corners of the image to force the overlay to not resize
         GeometryDrawing lineGeometryDrawingTopCorner = DrawPoint(Vector2.Zero, pen);
@@ -27,6 +42,19 @@ public static class PreviewDrawer
 
         foreach ((int personIdx, List<Vector3> pose) in posesByPersonAtFrame)
         {
+            if (currentLeadIndex > -1 && personIdx == currentLeadIndex)
+            {
+                pen = leadPen;
+            }
+            else if (currentFollowIndex > -1 && personIdx == currentFollowIndex)
+            {
+                pen = followPen;
+            }
+            else
+            {
+                pen = unknownPen;
+            }
+            
             foreach (Vector3 joint in pose)
             {
                 GeometryDrawing poseGeometry = DrawPoint(new Vector2(joint.X, joint.Y), pen);

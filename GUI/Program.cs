@@ -1,10 +1,6 @@
-using System.Numerics;
 using Avalonia;
 using Avalonia.Controls;
-using Avalonia.Media.Imaging;
 using Avalonia.ReactiveUI;
-using dancer_pose_alignment;
-using OpenCvSharp;
 
 namespace GUI;
 
@@ -38,46 +34,9 @@ static class Program
         // Do you startup code here
         mainWindow = new MainWindow();
         mainWindow.Show();
-        
-        MainWindow.SetupPreview();
+        mainWindow.SetupPreview();
 
         // Start the main loop
         app.Run(cts.Token);
-    }
-    
-    static bool hasBeenInitialized = false; 
-    static FrameSource frameSource;
-    static Dictionary<int, Dictionary<int, List<Vector3>>> PosesByFrameByPerson;
-    static int frameCount = 0;
-    
-    public static void RenderFrame(Args args)
-    {
-        string videoPath = args.VideoPath;
-        string alphaPoseJsonPath = args.AlphaPoseJsonPath;
-        if (!hasBeenInitialized)
-        {
-            frameSource = Cv2.CreateFrameSource_Video(videoPath);
-            PosesByFrameByPerson = AlphaPose.PosesByFrameByPerson(alphaPoseJsonPath);
-            hasBeenInitialized = true;
-        }
-
-        OutputArray outputArray = new Mat();
-        frameSource.NextFrame(outputArray);
-        
-        Mat frameMat = outputArray.GetMat();
-        Bitmap frame = Bitmap.DecodeToWidth(frameMat.ToMemoryStream(), frameMat.Width);
-
-        Dictionary<int, List<Vector3>> posesByPersonAtFrame = new();
-        foreach ((int personId, Dictionary<int, List<Vector3>> posesByFrame) in PosesByFrameByPerson)
-        {
-            if (posesByFrame.ContainsKey(frameCount))
-            {
-                posesByPersonAtFrame.Add(personId, posesByFrame[frameCount]);
-            }
-        }
-        
-        MainWindow.updatePreview.Invoke(frame, posesByPersonAtFrame);
-
-        frameCount++;
     }
 }

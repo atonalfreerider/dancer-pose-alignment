@@ -18,9 +18,9 @@
            <TextBox Name="VideoInputPath" Watermark="Path to video..." Width="300" Margin="5" />
            <TextBox Name="AlphaPoseJsonPath" Watermark="Path to AlphaPose json" Width="300" Margin="5" />
            <Button Name="NextFrameButton" Margin="0" >Next Frame</Button>
-           <Canvas Name="Canvas" Width="1000" Height="1000">
-             <Image Name="PreviewImage" Width="1000" Height="1000" Stretch="None" Canvas.Left="0" Canvas.Top="0" Canvas.Bottom="0" Canvas.Right="0"/>
-             <Image Name="PoseImage" Width="1000" Height="1000" Stretch="None" Canvas.Left="0" Canvas.Top="0" Canvas.Bottom="0" Canvas.Right="0"/>
+           <Canvas Name="Canvas" Width="1000" Height="1000" >
+             <Image Name="PreviewImage" Width="1000" Height="1000" Stretch="None" Canvas.Left="0" Canvas.Top="0" Canvas.Bottom="0" Canvas.Right="0" />
+             <Image Name="PoseImage" Width="1000" Height="1000" Stretch="None" Canvas.Left="0" Canvas.Top="0" Canvas.Bottom="0" Canvas.Right="0" PointerPressed="PointerPressedHandler" />
            </Canvas>
         </StackPanel>
       
