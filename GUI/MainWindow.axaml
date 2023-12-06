@@ -2,7 +2,7 @@
         xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
         xmlns:d="http://schemas.microsoft.com/expression/blend/2008"
         xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"
-        mc:Ignorable="d" d:DesignWidth="1000" d:DesignHeight="1080" Width="1000" Height="1080"
+        mc:Ignorable="d" d:DesignWidth="1000" d:DesignHeight="1000" Width="1000" Height="1000"
         x:Class="GUI.MainWindow"
         Title="Layout">
 
@@ -10,7 +10,7 @@
     <!-- Controls / Settings Tab -->
     <TabItem>
       <TabItem.Header>
-        <TextBlock VerticalAlignment="Center" Text="Video"></TextBlock>
+        <TextBlock VerticalAlignment="Center">Pose Refinement</TextBlock>
       </TabItem.Header>
       
       <!-- START Controls Stack Panel -->
@@ -18,16 +18,17 @@
            <TextBox Name="VideoInputPath" Watermark="Path to video..." Width="300" Margin="5" />
            <TextBox Name="AlphaPoseJsonPath" Watermark="Path to AlphaPose json" Width="300" Margin="5" />
            <StackPanel Orientation="Horizontal" HorizontalAlignment="Center">
+             <Button Name="ClearDancersButton" Height="30" Margin="5">Clear Dancers</Button>
              <Button Name="NextFrameButton" Height="30" Margin="5" >Next Frame</Button>
              <TextBox Name="FrameNumberText" Height="30" Width="100" Margin="5" Watermark="Progress..."/>
              <Button Name="RunUntilNext" Height="30" >Run Until Next</Button>
+             <Button Name="SaveButton" Height="30" >Save</Button>
            </StackPanel>
-           <Canvas Name="Canvas" Width="1000" Height="1000" >
-             <Image Name="PreviewImage" Width="1000" Height="1000" Stretch="None" Canvas.Left="0" Canvas.Top="0" Canvas.Bottom="0" Canvas.Right="0" />
-             <Image Name="PoseImage" Width="1000" Height="1000" Stretch="None" Canvas.Left="0" Canvas.Top="0" Canvas.Bottom="0" Canvas.Right="0" PointerPressed="PointerPressedHandler" />
+           <Canvas Name="Canvas">
+             <Image Name="PreviewImage" Stretch="None" Canvas.Left="0" Canvas.Top="0" Canvas.Bottom="0" Canvas.Right="0" />
+             <Image Name="PoseImage" Stretch="None" Canvas.Left="0" Canvas.Top="0" Canvas.Bottom="0" Canvas.Right="0" PointerPressed="PointerPressedHandler" />
            </Canvas>
         </StackPanel>
-      
     </TabItem>
     <!-- END Controls / Settings Tab -->
   </TabControl>

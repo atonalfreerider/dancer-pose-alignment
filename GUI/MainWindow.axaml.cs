@@ -6,6 +6,7 @@ using Avalonia.Media;
 using Avalonia.Media.Imaging;
 using Avalonia.Threading;
 using dancer_pose_alignment;
+using Newtonsoft.Json;
 using OpenCvSharp;
 using Image = Avalonia.Controls.Image;
 using Window = Avalonia.Controls.Window;
@@ -17,6 +18,7 @@ public partial class MainWindow : Window
     readonly Image previewImage;
     readonly Image poseImage;
     readonly TextBox frameNumberText;
+    readonly Canvas canvas;
 
     bool hasBeenInitialized = false;
     FrameSource frameSource;
@@ -27,6 +29,8 @@ public partial class MainWindow : Window
     Dictionary<int, List<Vector3>> posesByPersonAtFrame = new();
     int totalFrameCount = 0;
 
+    readonly List<Tuple<int, int>> finalIndexListLeadAndFollow = new();
+
     public MainWindow()
     {
         AvaloniaXamlLoader.Load(this);
@@ -34,6 +38,17 @@ public partial class MainWindow : Window
         TextBox videoInputPath = this.Find<TextBox>("VideoInputPath")!;
         TextBox alphaPoseJsonPath = this.Find<TextBox>("AlphaPoseJsonPath")!;
         frameNumberText = this.Find<TextBox>("FrameNumberText")!;
+        
+        canvas = this.Find<Canvas>("Canvas")!;
+
+        Button clearDancersButton = this.Find<Button>("ClearDancersButton")!;
+
+        clearDancersButton.Click += delegate
+        {
+            currentLeadIndex = -1;
+            currentFollowIndex = -1;
+            RedrawPoses();
+        };
 
         Button nextFrameButton = this.Find<Button>("NextFrameButton")!;
 
@@ -43,11 +58,27 @@ public partial class MainWindow : Window
 
         runUntilNextButton.Click += delegate
         {
-            while (posesByPersonAtFrame.ContainsKey(currentLeadIndex) &&
-                   posesByPersonAtFrame.ContainsKey(currentFollowIndex))
+            while (frameCount < totalFrameCount &&
+                   posesByPersonAtFrame.ContainsKey(currentLeadIndex) &&
+                   posesByPersonAtFrame.ContainsKey(currentFollowIndex) &&
+                   PoseError() < 200) // arbitrary value from trial and error when figures are about 1/4 of the screen
             {
                 RenderFrame(videoInputPath.Text, alphaPoseJsonPath.Text);
             }
+        };
+
+        Button saveButton = this.Find<Button>("SaveButton")!;
+        saveButton.Click += delegate
+        {
+            string saveDirectory = @"C:\Users\john\Desktop";
+            string cameraName = "0";
+            if (!string.IsNullOrEmpty(videoInputPath.Text))
+            {
+                saveDirectory = Directory.GetParent(videoInputPath.Text).FullName;
+                cameraName = Path.GetFileNameWithoutExtension(videoInputPath.Text);
+            }
+
+            SaveTo(saveDirectory, cameraName);
         };
 
         previewImage = this.Find<Image>("PreviewImage")!;
@@ -56,19 +87,43 @@ public partial class MainWindow : Window
 
     void RenderFrame(string videoPath, string alphaPoseJsonPath)
     {
+        if (frameCount > 0)
+        {
+            // save the lead and follow indices from the last frame
+            finalIndexListLeadAndFollow.Add(new Tuple<int, int>(currentLeadIndex, currentLeadIndex));
+        }
+
         if (!hasBeenInitialized)
         {
             frameSource = Cv2.CreateFrameSource_Video(videoPath);
             PosesByFrameByPerson = AlphaPose.PosesByFrameByPerson(alphaPoseJsonPath);
             totalFrameCount = FindMaxFrame();
-            hasBeenInitialized = true;
         }
 
         OutputArray outputArray = new Mat();
         frameSource.NextFrame(outputArray);
 
         Mat frameMat = outputArray.GetMat();
-        Bitmap frame = Bitmap.DecodeToWidth(frameMat.ToMemoryStream(), frameMat.Width);
+
+        if (!hasBeenInitialized)
+        {
+            canvas.Width = frameMat.Width;
+            canvas.Height = frameMat.Height;
+            hasBeenInitialized = true;
+        }
+        
+        Bitmap frame;
+        try
+        {
+            frame = Bitmap.DecodeToWidth(frameMat.ToMemoryStream(), frameMat.Width);
+        }
+        catch (OpenCVException e)
+        {
+            // end of video
+            Console.WriteLine(e.Message);
+            frameCount++;
+            return;
+        }
 
         posesByPersonAtFrame = new Dictionary<int, List<Vector3>>();
         foreach ((int personId, Dictionary<int, List<Vector3>> posesByFrame) in PosesByFrameByPerson)
@@ -88,10 +143,7 @@ public partial class MainWindow : Window
 
     void SetPreview(IImage frame)
     {
-        Dispatcher.UIThread.Post(() =>
-        {
-            previewImage.Source = frame;
-        }, DispatcherPriority.Render);
+        Dispatcher.UIThread.Post(() => { previewImage.Source = frame; }, DispatcherPriority.Render);
 
         Dispatcher.UIThread.RunJobs();
     }
@@ -136,7 +188,6 @@ public partial class MainWindow : Window
         {
             // deselect follow
             currentFollowIndex = -1;
-            return;
         }
         else if (currentLeadIndex == -1)
         {
@@ -168,8 +219,103 @@ public partial class MainWindow : Window
     int FindMaxFrame()
     {
         return PosesByFrameByPerson.Values
-            .Aggregate(0, 
+            .Aggregate(0,
                 (current, posesByFrames) => posesByFrames.Keys.Prepend(current)
                     .Max());
+    }
+
+    void SaveTo(string directory, string cameraName)
+    {
+        string leadSavePath = Path.Combine(directory, $"lead-{cameraName}.json");
+        string followSavePath = Path.Combine(directory, $"follow-{cameraName}.json");
+
+        List<List<Vector3>> leadPoses = new();
+        List<List<Vector3>> followPoses = new();
+        int count = 0;
+        foreach (Tuple<int, int> leadAndFollow in finalIndexListLeadAndFollow)
+        {
+            if (leadAndFollow.Item1 > -1 && PosesByFrameByPerson[leadAndFollow.Item1].ContainsKey(count))
+            {
+                leadPoses.Add(PosesByFrameByPerson[leadAndFollow.Item1][count]);
+            }
+            else
+            {
+                // add empty if pose is missing
+                leadPoses.Add(new List<Vector3>());
+            }
+
+            if (leadAndFollow.Item2 > -1 && PosesByFrameByPerson[leadAndFollow.Item2].ContainsKey(count))
+            {
+                followPoses.Add(PosesByFrameByPerson[leadAndFollow.Item2][count]);
+            }
+            else
+            {
+                // add empty if pose is missing
+                followPoses.Add(new List<Vector3>());
+            }
+
+            count++;
+        }
+
+        File.WriteAllText(leadSavePath, JsonConvert.SerializeObject(leadPoses, Formatting.Indented));
+        File.WriteAllText(followSavePath, JsonConvert.SerializeObject(followPoses, Formatting.Indented));
+        
+        Console.WriteLine($"Saved to: {leadSavePath})");
+        Console.WriteLine($"Saved to: {followSavePath})");
+    }
+
+    float PoseError()
+    {
+        int poseCount = 0;
+        List<Vector3> currentLeadPoses = new();
+        if (PosesByFrameByPerson[currentLeadIndex].ContainsKey(frameCount))
+        {
+            currentLeadPoses = PosesByFrameByPerson[currentLeadIndex][frameCount];
+            poseCount = currentLeadPoses.Count;
+        }
+
+        List<Vector3> currentFollowPoses = new();
+        if (PosesByFrameByPerson[currentFollowIndex].ContainsKey(frameCount))
+        {
+            currentFollowPoses = PosesByFrameByPerson[currentFollowIndex][frameCount];
+            poseCount = currentFollowPoses.Count;
+        }
+
+        List<Vector3> previousLeadPoses = new();
+        if (PosesByFrameByPerson[currentLeadIndex].ContainsKey(frameCount - 1))
+        {
+            previousLeadPoses = PosesByFrameByPerson[currentLeadIndex][frameCount - 1];
+        }
+
+        List<Vector3> previousFollowPoses = new();
+        if (PosesByFrameByPerson[currentFollowIndex].ContainsKey(frameCount - 1))
+        {
+            previousFollowPoses = PosesByFrameByPerson[currentFollowIndex][frameCount - 1];
+        }
+
+        float error = 0;
+        for (int i = 0; i < poseCount; i++)
+        {
+            if (currentLeadPoses.Count != 0 && previousLeadPoses.Count != 0 &&
+                currentLeadPoses.Count == previousLeadPoses.Count)
+            {
+                error += Vector2.Distance(
+                             new Vector2(currentLeadPoses[i].X, currentLeadPoses[i].Y),
+                             new Vector2(previousLeadPoses[i].X, previousLeadPoses[i].Y))
+                         * currentLeadPoses[i].Z * previousLeadPoses[i].Z; // multiply by confidence
+            }
+
+            if (currentFollowPoses.Count != 0 && previousFollowPoses.Count != 0 &&
+                currentFollowPoses.Count == previousFollowPoses.Count)
+            {
+                error += Vector2.Distance(
+                             new Vector2(currentFollowPoses[i].X, currentFollowPoses[i].Y),
+                             new Vector2(previousFollowPoses[i].X, previousFollowPoses[i].Y))
+                         * currentFollowPoses[i].Z * previousFollowPoses[i].Z; // multiply by confidence
+            }
+        }
+
+        Console.WriteLine($"pose error: {error}");
+        return error;
     }
 }
