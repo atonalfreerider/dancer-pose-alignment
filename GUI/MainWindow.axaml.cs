@@ -16,6 +16,7 @@ public partial class MainWindow : Window
 {
     readonly Image previewImage;
     readonly Image poseImage;
+    readonly TextBox frameNumberText;
 
     bool hasBeenInitialized = false;
     FrameSource frameSource;
@@ -24,6 +25,7 @@ public partial class MainWindow : Window
     int currentFollowIndex = -1;
     int frameCount = 0;
     Dictionary<int, List<Vector3>> posesByPersonAtFrame = new();
+    int totalFrameCount = 0;
 
     public MainWindow()
     {
@@ -31,6 +33,7 @@ public partial class MainWindow : Window
 
         TextBox videoInputPath = this.Find<TextBox>("VideoInputPath")!;
         TextBox alphaPoseJsonPath = this.Find<TextBox>("AlphaPoseJsonPath")!;
+        frameNumberText = this.Find<TextBox>("FrameNumberText")!;
 
         Button nextFrameButton = this.Find<Button>("NextFrameButton")!;
 
@@ -53,20 +56,11 @@ public partial class MainWindow : Window
 
     void RenderFrame(string videoPath, string alphaPoseJsonPath)
     {
-        if (string.IsNullOrEmpty(videoPath))
-        {
-            videoPath = @"C:\Users\john\Desktop\Larissa-Kadu-Recap\output\00-Recap-Ali.mp4";
-        }
-
-        if (string.IsNullOrEmpty(alphaPoseJsonPath))
-        {
-            alphaPoseJsonPath = @"D:\larissa-kadu-recap\0\alphapose-results.json";
-        }
-
         if (!hasBeenInitialized)
         {
             frameSource = Cv2.CreateFrameSource_Video(videoPath);
             PosesByFrameByPerson = AlphaPose.PosesByFrameByPerson(alphaPoseJsonPath);
+            totalFrameCount = FindMaxFrame();
             hasBeenInitialized = true;
         }
 
@@ -85,6 +79,7 @@ public partial class MainWindow : Window
             }
         }
 
+        frameNumberText.Text = $"{frameCount}:{totalFrameCount}";
         SetPreview(frame);
         RedrawPoses();
 
@@ -132,18 +127,26 @@ public partial class MainWindow : Window
             }
         }
 
-        if (currentLeadIndex == -1)
+        if (currentLeadIndex > -1 && closestIndex == currentLeadIndex)
         {
+            // deselect lead
+            currentLeadIndex = -1;
+        }
+        else if (currentFollowIndex > -1 && closestIndex == currentFollowIndex)
+        {
+            // deselect follow
+            currentFollowIndex = -1;
+            return;
+        }
+        else if (currentLeadIndex == -1)
+        {
+            // set lead
             currentLeadIndex = closestIndex;
         }
         else if (currentFollowIndex == -1)
         {
+            // set follow
             currentFollowIndex = closestIndex;
-        }
-        else
-        {
-            currentLeadIndex = closestIndex;
-            currentFollowIndex = -1;
         }
 
         RedrawPoses();
@@ -160,5 +163,13 @@ public partial class MainWindow : Window
         {
             SetDancer(new Vector2((float)x, (float)y));
         }
+    }
+
+    int FindMaxFrame()
+    {
+        return PosesByFrameByPerson.Values
+            .Aggregate(0, 
+                (current, posesByFrames) => posesByFrames.Keys.Prepend(current)
+                    .Max());
     }
 }

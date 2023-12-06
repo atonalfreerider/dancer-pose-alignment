@@ -18,8 +18,9 @@
            <TextBox Name="VideoInputPath" Watermark="Path to video..." Width="300" Margin="5" />
            <TextBox Name="AlphaPoseJsonPath" Watermark="Path to AlphaPose json" Width="300" Margin="5" />
            <StackPanel Orientation="Horizontal" HorizontalAlignment="Center">
-             <Button Name="NextFrameButton" Margin="5" >Next Frame</Button>
-             <Button Name="RunUntilNext" >Run Until Next</Button>
+             <Button Name="NextFrameButton" Height="30" Margin="5" >Next Frame</Button>
+             <TextBox Name="FrameNumberText" Height="30" Width="100" Margin="5" Watermark="Progress..."/>
+             <Button Name="RunUntilNext" Height="30" >Run Until Next</Button>
            </StackPanel>
            <Canvas Name="Canvas" Width="1000" Height="1000" >
              <Image Name="PreviewImage" Width="1000" Height="1000" Stretch="None" Canvas.Left="0" Canvas.Top="0" Canvas.Bottom="0" Canvas.Right="0" />
