@@ -74,15 +74,19 @@ public static class CameraPoseSolver
         {
             List<Ray> leadRays = [];
             List<Ray> followRays = [];
+            List<float> leadConfidences = [];
+            List<float> followConfidences = [];
             foreach (CameraSetup cameraSetup in cameras)
             {
                 leadRays.Add(cameraSetup.PoseRay(0, i, true));
                 followRays.Add(cameraSetup.PoseRay(0, i, false));
+                leadConfidences.Add(cameraSetup.JointConfidence(0, i, true));
+                followConfidences.Add(cameraSetup.JointConfidence(0, i, false));
             }
 
-            Vector3 leadJointMidpoint = RayMidpointFinder.FindMinimumMidpoint(leadRays);
+            Vector3 leadJointMidpoint = RayMidpointFinder.FindMinimumMidpoint(leadRays, leadConfidences);
             merged3DPoseLead.Add(leadJointMidpoint);
-            Vector3 followJointMidpoint = RayMidpointFinder.FindMinimumMidpoint(followRays);
+            Vector3 followJointMidpoint = RayMidpointFinder.FindMinimumMidpoint(followRays, followConfidences);
             merged3DPoseFollow.Add(followJointMidpoint);
         }
 

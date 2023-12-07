@@ -13,10 +13,13 @@ public static class RayMidpointFinder
     const float Tolerance = 0.0001f;
     const int MaxIterations = 1000;
 
-    public static Vector3 FindMinimumMidpoint(List<Ray> rays)
+    public static Vector3 FindMinimumMidpoint(List<Ray> rays, List<float> confidences)
     {
-        Vector3 startPoint = AverageOrigins(rays);
-        Vector3 optimize = Optimize(startPoint, rays);
+        if (rays.Count != confidences.Count)
+            throw new ArgumentException("Rays and confidences lists must have the same length.");
+
+        Vector3 startPoint = AverageOrigins(rays, confidences);
+        Vector3 optimize = Optimize(startPoint, rays, confidences);
         if (float.IsNaN(optimize.X) || float.IsNaN(optimize.Y) || float.IsNaN(optimize.Z))
         {
             return Vector3.Zero;
@@ -25,18 +28,18 @@ public static class RayMidpointFinder
         return optimize;
     }
 
-    static Vector3 Optimize(Vector3 startPoint, List<Ray> rays)
+    static Vector3 Optimize(Vector3 startPoint, List<Ray> rays, List<float> confidences)
     {
         Vector3 currentPoint = startPoint;
         const float stepSize = 0.01f;
 
         for (int i = 0; i < MaxIterations; i++)
         {
-            Vector3 gradient = ComputeGradient(currentPoint, rays);
+            Vector3 gradient = ComputeGradient(currentPoint, rays, confidences);
             Vector3 nextPoint = currentPoint - stepSize * gradient;
 
-            // Check if the objective function value has converged
-            if (Math.Abs(ObjectiveFunction(nextPoint, rays) - ObjectiveFunction(currentPoint, rays)) < Tolerance)
+            if (Math.Abs(ObjectiveFunction(nextPoint, rays, confidences) -
+                         ObjectiveFunction(currentPoint, rays, confidences)) < Tolerance)
                 break;
 
             currentPoint = nextPoint;
@@ -45,43 +48,47 @@ public static class RayMidpointFinder
         return currentPoint;
     }
 
-    static Vector3 ComputeGradient(Vector3 point, List<Ray> rays)
+    static Vector3 ComputeGradient(Vector3 point, List<Ray> rays, List<float> confidences)
     {
         Vector3 gradient = Vector3.Zero;
 
-        foreach (Ray ray in rays)
+        for (int i = 0; i < rays.Count; i++)
         {
+            Ray ray = rays[i];
+            float confidence = confidences[i];
+
             Vector3 w = point - ray.Origin;
             float dotProduct = Vector3.Dot(w, ray.Direction);
             Vector3 projection = dotProduct * ray.Direction;
             Vector3 diff = w - projection;
 
-            // Calculate the gradient of the squared distance
-            Vector3 grad = 2 * (diff - Vector3.Dot(diff, ray.Direction) * ray.Direction);
-
-            // Add the gradient for this ray to the total gradient
+            Vector3 grad = 2 * confidence * (diff - Vector3.Dot(diff, ray.Direction) * ray.Direction);
             gradient += grad;
         }
 
         if (float.IsInfinity(gradient.X) || float.IsInfinity(gradient.Y) || float.IsInfinity(gradient.Z))
         {
-            // blow up
             gradient = Vector3.Zero;
         }
 
         return gradient;
     }
 
-    static float ObjectiveFunction(Vector3 point, IEnumerable<Ray> rays)
+    static float ObjectiveFunction(Vector3 point, List<Ray> rays, List<float> confidences)
     {
-        return rays.Select(ray => DistanceFromPointToRay(point, ray))
-            .Select(distance => distance * distance)
-            .Sum();
+        float sum = 0;
+        for (int i = 0; i < rays.Count; i++)
+        {
+            float distance = DistanceFromPointToRay(point, rays[i]);
+            sum += confidences[i] * distance * distance;
+        }
+
+        return sum;
     }
 
     static float DistanceFromPointToRay(Vector3 point, Ray ray)
     {
-        // Calculate the shortest distance from 'point' to 'ray'
+        // Calculate the shortest distance from 'point' to 'ray' 
         Vector3 w0 = point - ray.Origin;
         float c1 = Vector3.Dot(w0, ray.Direction);
         float c2 = Vector3.Dot(ray.Direction, ray.Direction);
@@ -91,11 +98,17 @@ public static class RayMidpointFinder
         return Vector3.Distance(point, pb);
     }
 
-    static Vector3 AverageOrigins(IReadOnlyCollection<Ray> rays)
+    static Vector3 AverageOrigins(List<Ray> rays, List<float> confidences)
     {
-        Vector3 sum = new Vector3(0, 0, 0);
-        sum = rays.Aggregate(sum, (current, ray) => current + ray.Origin);
+        Vector3 weightedSum = Vector3.Zero;
+        float totalConfidence = 0;
 
-        return sum / rays.Count;
+        for (int i = 0; i < rays.Count; i++)
+        {
+            weightedSum += confidences[i] * rays[i].Origin;
+            totalConfidence += confidences[i];
+        }
+
+        return weightedSum / totalConfidence;
     }
 }

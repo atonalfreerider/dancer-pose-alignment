@@ -95,4 +95,18 @@ public class CameraSetup
                   - PositionsPerFrame[frameNumber]));
         return rayToJoint;
     }
+    
+    public float JointConfidence(int frameNumber, int jointNumber, bool isLead)
+    {
+        return isLead
+            ? LeadPoseAndConfidencePerFrame[frameNumber][jointNumber].Z
+            : FollowPoseAndConfidencePerFrame[frameNumber][jointNumber].Z;
+    }
+    
+    public List<float> PoseConfidences(int frameNumber, bool isLead)
+    {
+        return isLead
+            ? LeadPoseAndConfidencePerFrame[frameNumber].Select(vec => vec.Z).ToList()
+            : FollowPoseAndConfidencePerFrame[frameNumber].Select(vec => vec.Z).ToList();
+    }
 }
