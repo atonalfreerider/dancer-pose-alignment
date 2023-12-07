@@ -15,20 +15,22 @@ static class Program
 
     static void Main(string[] args)
     {
-        RootCommand rootCommand = new()
-        {
+        RootCommand rootCommand =
+        [
             new Argument<string>(
                 "JsonInputDir",
                 "Path to directory containing refined lead and follow poses"),
-            
+
+
             new Argument<string>(
                 "JsonCameraSizes",
                 "Path to json file containing camera sizes"),
 
+
             new Argument<string>(
                 "OutputDb",
                 "Path to output sqlite database")
-        };
+        ];
 
         rootCommand.Description =
             "Converts AlphaPose output to 3D poses, after refining each sequence and identifying lead and follow. ";

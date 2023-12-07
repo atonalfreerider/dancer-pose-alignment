@@ -9,8 +9,8 @@ public static class CameraPoseSolver
     {
         List<Vector2> imageSizes = JsonConvert.DeserializeObject<List<Vector2>>(File.ReadAllText(jsonCameraSizes));
 
-        List<List<List<Vector3>>> leadByCamera = new();
-        List<List<List<Vector3>>> followByCamera = new();
+        List<List<List<Vector3>>> leadByCamera = [];
+        List<List<List<Vector3>>> followByCamera = [];
         foreach (string jsonPath in Directory.EnumerateFiles(inputPath, "*.json"))
         {
             List<List<Vector3>> finalIndexListLeadAndFollow =
@@ -27,7 +27,7 @@ public static class CameraPoseSolver
         }
 
         int frameWithHighestConfidence = FrameWithHighestConfidence(leadByCamera, followByCamera);
-        List<CameraSetup> cameras = new();
+        List<CameraSetup> cameras = [];
         for (int i = 0; i < followByCamera.Count; i++)
         {
             List<Vector3> leadAtCamera = leadByCamera[i][frameWithHighestConfidence];
@@ -56,9 +56,9 @@ public static class CameraPoseSolver
             cameras.Add(camera);
         }
 
-        List<List<Vector3>> planeProjectedPosesLead = new();
-        List<List<Vector3>> planeProjectedPosesFollow = new();
-        List<Vector3> cameraForwards = new();
+        List<List<Vector3>> planeProjectedPosesLead = [];
+        List<List<Vector3>> planeProjectedPosesFollow = [];
+        List<Vector3> cameraForwards = [];
         foreach (CameraSetup cameraSetup in cameras)
         {
             cameraSetup.Project(0);

@@ -4,10 +4,10 @@ namespace dancer_pose_alignment;
 
 public class CameraSetup
 {
-    public readonly List<Vector3> PositionsPerFrame = new();
-    public readonly List<Quaternion> RotationsPerFrame = new();
+    public readonly List<Vector3> PositionsPerFrame = [];
+    public readonly List<Quaternion> RotationsPerFrame = [];
     public Vector2 Size;
-    public float FocalLength = .2f;
+    public float FocalLength = .05f;
 
     const float PixelToMeter = 0.000264583f;
 
@@ -15,20 +15,22 @@ public class CameraSetup
         new Vector3(0, 0, 1),
         RotationsPerFrame[frame]);
 
-    public List<List<Vector3>> LeadProjectionsPerFrame = new();
-    public List<List<Vector3>> FollowProjectionsPerFrame = new();
+    public readonly List<List<Vector3>> LeadProjectionsPerFrame = [];
+    public readonly List<List<Vector3>> FollowProjectionsPerFrame = [];
 
-    readonly List<List<Vector3>> LeadPoseAndConfidencePerFrame = new();
-    readonly List<List<Vector3>> FollowPoseAndConfidencePerFrame = new();
+    readonly List<List<Vector3>> LeadPoseAndConfidencePerFrame = [];
+    readonly List<List<Vector3>> FollowPoseAndConfidencePerFrame = [];
 
     public void Project(int frameNumber)
     {
-        List<Vector3> flattenedLead = LeadPoseAndConfidencePerFrame[frameNumber].Select(x => x with { Z = 0 }).ToList();
-        List<Vector3> flattenedFollow = FollowPoseAndConfidencePerFrame[frameNumber].Select(x => x with { Z = 0 }).ToList();
-        
+        List<Vector3> flattenedLead = LeadPoseAndConfidencePerFrame[frameNumber]
+            .Select(x => x with { Z = 0 }).ToList();
+        List<Vector3> flattenedFollow = FollowPoseAndConfidencePerFrame[frameNumber]
+            .Select(x => x with { Z = 0 }).ToList();
+
         List<Vector3> leadProjectionsAtThisFrame = Adjusted(flattenedLead, frameNumber);
         LeadProjectionsPerFrame.Add(leadProjectionsAtThisFrame);
-        
+
         List<Vector3> followProjectionsAtThisFrame = Adjusted(flattenedFollow, frameNumber);
         FollowProjectionsPerFrame.Add(followProjectionsAtThisFrame);
     }
@@ -36,12 +38,11 @@ public class CameraSetup
     public float Error(List<Vector3> merged3DPoseLead, List<Vector3> merged3DPoseFollow)
     {
         float error = 0;
-        
+
         //TODO
         // cast rays directly from the camera position to the 3D pose position for each list, and then find the
         // intersections on the plane at the focal length distance in front of the camera.
         // sum the distance from the 2D pose to the intersection points to find the error
-        
 
 
         return error;
@@ -79,10 +80,8 @@ public class CameraSetup
         {
             adjustedKeypoints[i] = Vector3.Transform(adjustedKeypoints[i] - cameraCenter, rotation) + cameraCenter;
         }
-        
-        // Translate keypoints to the camera's focal length
-        adjustedKeypoints = adjustedKeypoints.Select(t => t + Forward(frame) * FocalLength).ToList();
 
-        return adjustedKeypoints;
+        // Translate keypoints to the camera's focal length
+        return adjustedKeypoints.Select(t => t + Forward(frame) * FocalLength).ToList();
     }
 }

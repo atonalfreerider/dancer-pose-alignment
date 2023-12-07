@@ -17,15 +17,16 @@ static class RayMidpointFinder
         List<List<Vector3>> planeProjectedPoses,
         IReadOnlyList<Vector3> cameraForwards)
     {
-        List<Vector3> pose = new();
+        List<Vector3> pose = [];
 
         int poseCount = planeProjectedPoses[0].Count;
         for (int i = 0; i < poseCount; i++)
         {
-            List<Ray> rays = new();
+            List<Ray> rays = [];
             int camCounter = 0;
             foreach (List<Vector3> pose2D in planeProjectedPoses)
             {
+                // bug this is wrong, it's projecting forward, not radially
                 Vector3 origin = pose2D[i];
                 Vector3 direction = cameraForwards[camCounter];
                 rays.Add(new Ray(origin, direction));
