@@ -90,10 +90,13 @@ public static class CameraPoseSolver
             merged3DPoseFollow.Add(followJointMidpoint);
         }
 
+        float totalError = 0;
         foreach (CameraSetup cameraSetup in cameras)
         {
-            float error = cameraSetup.Error(merged3DPoseLead, merged3DPoseFollow);
+            totalError += cameraSetup.Error(merged3DPoseLead, merged3DPoseFollow, 0);
         }
+        
+        Console.WriteLine(totalError);
 
         string jsonCameras = JsonConvert.SerializeObject(cameras, Formatting.Indented);
         File.WriteAllText(Path.Combine(@"C:\Users\john\Desktop", "cameras.json"), jsonCameras);

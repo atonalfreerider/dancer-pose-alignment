@@ -11,7 +11,6 @@ public static class Transform
         // Check if direction is not zero
         if (direction == Vector3.Zero)
         {
-            Console.WriteLine("zero");
             return transformRotation;
         }
 
@@ -27,12 +26,10 @@ public static class Transform
 
         if (Math.Abs(dot + 1.0f) <= float.Epsilon)
         {
-            Console.WriteLine("opposite");
             // Vector are opposite. Rotate 180 degrees around an arbitrary orthogonal axis. Axis normalisation can be skipped.
             Vector3 axis = Vector3.Cross(new Vector3(0, 1, 0), forward);
             if (axis.LengthSquared() <= float.Epsilon)
             {
-                Console.WriteLine("right");
                 // Pick another if colinear
                 axis = Vector3.Cross(new Vector3(1, 0, 0), forward);
             }

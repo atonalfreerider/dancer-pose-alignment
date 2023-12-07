@@ -35,14 +35,33 @@ public class CameraSetup
         FollowProjectionsPerFrame.Add(followProjectionsAtThisFrame);
     }
 
-    public float Error(List<Vector3> merged3DPoseLead, List<Vector3> merged3DPoseFollow)
+    public float Error(List<Vector3> merged3DPoseLead, List<Vector3> merged3DPoseFollow, int frameNumber)
     {
         float error = 0;
 
-        //TODO
-        // cast rays directly from the camera position to the 3D pose position for each list, and then find the
-        // intersections on the plane at the focal length distance in front of the camera.
-        // sum the distance from the 2D pose to the intersection points to find the error
+        for (int i = 0; i < merged3DPoseLead.Count; i++)
+        {
+            Vector3 vector3 = merged3DPoseLead[i];
+            Vector3 target = Vector3.Normalize(vector3 - PositionsPerFrame[frameNumber]);
+            Vector3 keypoint = Vector3.Normalize(
+                LeadProjectionsPerFrame[frameNumber][i] - PositionsPerFrame[frameNumber]);
+
+            // find the angle between the vectors
+            error += MathF.Acos(Vector3.Dot(target, keypoint)) * 
+                     LeadPoseAndConfidencePerFrame[frameNumber][i].Z; // confidence
+        }
+
+        for (int i = 0; i < merged3DPoseFollow.Count; i++)
+        {
+            Vector3 vector3 = merged3DPoseFollow[i];
+            Vector3 target = Vector3.Normalize(vector3 - PositionsPerFrame[frameNumber]);
+            Vector3 keypoint = Vector3.Normalize(
+                FollowProjectionsPerFrame[frameNumber][i] - PositionsPerFrame[frameNumber]);
+
+            // find the angle between the vectors
+            error += MathF.Acos(Vector3.Dot(target, keypoint)) * 
+                     FollowPoseAndConfidencePerFrame[frameNumber][i].Z; // confidence
+        }
 
 
         return error;
@@ -95,14 +114,14 @@ public class CameraSetup
                   - PositionsPerFrame[frameNumber]));
         return rayToJoint;
     }
-    
+
     public float JointConfidence(int frameNumber, int jointNumber, bool isLead)
     {
         return isLead
             ? LeadPoseAndConfidencePerFrame[frameNumber][jointNumber].Z
             : FollowPoseAndConfidencePerFrame[frameNumber][jointNumber].Z;
     }
-    
+
     public List<float> PoseConfidences(int frameNumber, bool isLead)
     {
         return isLead
