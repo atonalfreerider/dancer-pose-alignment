@@ -67,8 +67,25 @@ public static class CameraPoseSolver
             cameraForwards.Add(cameraSetup.Forward(0));
         }
 
-        List<Vector3> merged3DPoseLead = RayMidpointFinder.Merged3DPose(planeProjectedPosesLead, cameraForwards);
-        List<Vector3> merged3DPoseFollow = RayMidpointFinder.Merged3DPose(planeProjectedPosesFollow, cameraForwards);
+        List<Vector3> merged3DPoseLead = [];
+        List<Vector3> merged3DPoseFollow = [];
+        int poseCount = planeProjectedPosesLead[0].Count;
+        for (int i = 0; i < poseCount; i++)
+        {
+            List<Ray> leadRays = [];
+            List<Ray> followRays = [];
+            foreach (CameraSetup cameraSetup in cameras)
+            {
+                leadRays.Add(cameraSetup.PoseRay(0, i, true));
+                followRays.Add(cameraSetup.PoseRay(0, i, false));
+            }
+
+            Vector3 leadJointMidpoint = RayMidpointFinder.FindMinimumMidpoint(leadRays);
+            merged3DPoseLead.Add(leadJointMidpoint);
+            Vector3 followJointMidpoint = RayMidpointFinder.FindMinimumMidpoint(followRays);
+            merged3DPoseFollow.Add(followJointMidpoint);
+        }
+
         foreach (CameraSetup cameraSetup in cameras)
         {
             float error = cameraSetup.Error(merged3DPoseLead, merged3DPoseFollow);
@@ -81,7 +98,7 @@ public static class CameraPoseSolver
         string jsonMerged3DPose = JsonConvert.SerializeObject(merged3DPoseLead, Formatting.Indented);
         File.WriteAllText(Path.Combine(@"C:\Users\john\Desktop", "merged3DPoseLead.json"), jsonMerged3DPose);
         Console.WriteLine("wrote merged3DPoseLead.json");
-        
+
         string jsonMerged3DPoseFollow = JsonConvert.SerializeObject(merged3DPoseFollow, Formatting.Indented);
         File.WriteAllText(Path.Combine(@"C:\Users\john\Desktop", "merged3DPoseFollow.json"), jsonMerged3DPoseFollow);
         Console.WriteLine("wrote merged3DPoseFollow.json");

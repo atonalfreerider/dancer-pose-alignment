@@ -2,45 +2,18 @@
 
 namespace dancer_pose_alignment;
 
-static class RayMidpointFinder
+public struct Ray(Vector3 origin, Vector3 direction)
 {
-    struct Ray(Vector3 origin, Vector3 direction)
-    {
-        public readonly Vector3 Origin = origin;
-        public readonly Vector3 Direction = direction;
-    }
+    public readonly Vector3 Origin = origin;
+    public readonly Vector3 Direction = direction;
+}
 
+public static class RayMidpointFinder
+{
     const float Tolerance = 0.0001f;
     const int MaxIterations = 1000;
 
-    public static List<Vector3> Merged3DPose(
-        List<List<Vector3>> planeProjectedPoses,
-        IReadOnlyList<Vector3> cameraForwards)
-    {
-        List<Vector3> pose = [];
-
-        int poseCount = planeProjectedPoses[0].Count;
-        for (int i = 0; i < poseCount; i++)
-        {
-            List<Ray> rays = [];
-            int camCounter = 0;
-            foreach (List<Vector3> pose2D in planeProjectedPoses)
-            {
-                // bug this is wrong, it's projecting forward, not radially
-                Vector3 origin = pose2D[i];
-                Vector3 direction = cameraForwards[camCounter];
-                rays.Add(new Ray(origin, direction));
-                camCounter++;
-            }
-
-            Vector3 midpoint = FindMinimumMidpoint(rays);
-            pose.Add(midpoint);
-        }
-
-        return pose;
-    }
-
-    static Vector3 FindMinimumMidpoint(List<Ray> rays)
+    public static Vector3 FindMinimumMidpoint(List<Ray> rays)
     {
         Vector3 startPoint = AverageOrigins(rays);
         Vector3 optimize = Optimize(startPoint, rays);

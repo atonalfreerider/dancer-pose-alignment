@@ -84,4 +84,15 @@ public class CameraSetup
         // Translate keypoints to the camera's focal length
         return adjustedKeypoints.Select(t => t + Forward(frame) * FocalLength).ToList();
     }
+
+    public Ray PoseRay(int frameNumber, int jointNumber, bool isLead)
+    {
+        Ray rayToJoint = new Ray(
+            PositionsPerFrame[frameNumber],
+            Vector3.Normalize(isLead
+                ? LeadProjectionsPerFrame[frameNumber][jointNumber]
+                : FollowProjectionsPerFrame[frameNumber][jointNumber]
+                  - PositionsPerFrame[frameNumber]));
+        return rayToJoint;
+    }
 }
