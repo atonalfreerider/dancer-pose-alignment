@@ -14,6 +14,14 @@ public class CameraSetup
     public Vector3 Forward(int frame) => Vector3.Transform(
         new Vector3(0, 0, 1),
         RotationsPerFrame[frame]);
+    
+    public Vector3 Up(int frame) => Vector3.Transform(
+        new Vector3(0, 1, 0),
+        RotationsPerFrame[frame]);
+    
+    public Vector3 Right(int frame) => Vector3.Transform(
+        new Vector3(1, 0, 0),
+        RotationsPerFrame[frame]);
 
     public readonly List<List<Vector3>> LeadProjectionsPerFrame = [];
     public readonly List<List<Vector3>> FollowProjectionsPerFrame = [];
@@ -29,10 +37,10 @@ public class CameraSetup
             .Select(x => x with { Z = 0 }).ToList();
 
         List<Vector3> leadProjectionsAtThisFrame = Adjusted(flattenedLead, frameNumber);
-        LeadProjectionsPerFrame.Add(leadProjectionsAtThisFrame);
+        LeadProjectionsPerFrame[frameNumber] = leadProjectionsAtThisFrame;
 
         List<Vector3> followProjectionsAtThisFrame = Adjusted(flattenedFollow, frameNumber);
-        FollowProjectionsPerFrame.Add(followProjectionsAtThisFrame);
+        FollowProjectionsPerFrame[frameNumber] = followProjectionsAtThisFrame;
     }
 
     public float Error(List<Vector3> merged3DPoseLead, List<Vector3> merged3DPoseFollow, int frameNumber)
@@ -85,6 +93,9 @@ public class CameraSetup
             .ToList();
 
         FollowPoseAndConfidencePerFrame.Add(followRecenteredAndRescaled);
+        
+        FollowProjectionsPerFrame.Add([]);
+        LeadProjectionsPerFrame.Add([]);
     }
 
     List<Vector3> Adjusted(IEnumerable<Vector3> keypoints, int frame)
@@ -104,6 +115,12 @@ public class CameraSetup
         return adjustedKeypoints.Select(t => t + Forward(frame) * FocalLength).ToList();
     }
 
+    public bool HasPoseAtFrame(int frameNumber, bool isLead){
+        return isLead
+            ? LeadPoseAndConfidencePerFrame[frameNumber].Count > 0
+            : FollowPoseAndConfidencePerFrame[frameNumber].Count > 0;
+    }
+    
     public Ray PoseRay(int frameNumber, int jointNumber, bool isLead)
     {
         Ray rayToJoint = new Ray(
@@ -120,12 +137,5 @@ public class CameraSetup
         return isLead
             ? LeadPoseAndConfidencePerFrame[frameNumber][jointNumber].Z
             : FollowPoseAndConfidencePerFrame[frameNumber][jointNumber].Z;
-    }
-
-    public List<float> PoseConfidences(int frameNumber, bool isLead)
-    {
-        return isLead
-            ? LeadPoseAndConfidencePerFrame[frameNumber].Select(vec => vec.Z).ToList()
-            : FollowPoseAndConfidencePerFrame[frameNumber].Select(vec => vec.Z).ToList();
     }
 }
