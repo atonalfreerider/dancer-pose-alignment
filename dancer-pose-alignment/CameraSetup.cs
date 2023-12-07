@@ -16,16 +16,16 @@ public class CameraSetup
         public float rotationZ;
         public float rotationW;
     }
-    
-    class Camera
-    {
-        public Vector3 Position;
-        public Quaternion Rotation;
 
-        public Vector3 Forward => Vector3.Transform(
-            new Vector3(0f, 0f, 1f),
-            Rotation);
-    }
+    public Vector3 Position;
+    public Quaternion Rotation;
+    public Vector2 Size;
+    public float FocalLength = .2f;
+    public Plane FocalPlane;
+
+    public Vector3 Forward => Vector3.Transform(
+        new Vector3(0, 0, 1),
+        Rotation);
 
     public static void LoadCameraSetups(string positionPath)
     {
@@ -33,8 +33,8 @@ public class CameraSetup
             .DeserializeObject<Dictionary<string, PositionAndRotation>>(
                 File.ReadAllText(positionPath));
 
-        List<Camera> cameras = positionAndRotationByCam.Values.Select(positionAndRotation =>
-            new Camera
+        List<CameraSetup> cameras = positionAndRotationByCam.Values.Select(positionAndRotation =>
+            new CameraSetup
             {
                 Position = new Vector3(
                     positionAndRotation.positionX,
@@ -46,11 +46,9 @@ public class CameraSetup
                     positionAndRotation.rotationZ,
                     positionAndRotation.rotationW)
             }).ToList();
-
     }
-    
-    
-    static List<Vector3> Adjusted(IEnumerable<Vector3> keypoints, Camera cam)
+
+    static List<Vector3> Adjusted(IEnumerable<Vector3> keypoints, CameraSetup cam)
     {
         // Translate keypoints to the camera center
         Vector3 cameraCenter = cam.Position;

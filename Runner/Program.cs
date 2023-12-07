@@ -18,7 +18,7 @@ static class Program
         {
             new Argument<string>(
                 "InputPath",
-                "Path to directory containing AlphaPose outputs and camera positions json in root"),
+                "Path to directory containing refined lead and follow poses"),
 
             new Argument<string>(
                 "OutputDb",
@@ -35,7 +35,6 @@ static class Program
 
     static void Parse(Args args)
     {
-        CameraSetup.LoadCameraSetups(Path.Combine(args.InputPath, "positions.json"));
-        AlphaPose.LoadAlphaPoseFromDirRoot(args.InputPath);
+        CameraPoseSolver.LoadPoses(args.InputPath);
     }
 }
