@@ -14,15 +14,16 @@ public class CameraSetup
     public Vector3 Forward(int frame) => Vector3.Transform(
         new Vector3(0, 0, 1),
         RotationsPerFrame[frame]);
-    
+
     public Vector3 Up(int frame) => Vector3.Transform(
         new Vector3(0, 1, 0),
         RotationsPerFrame[frame]);
-    
+
     public Vector3 Right(int frame) => Vector3.Transform(
         new Vector3(1, 0, 0),
         RotationsPerFrame[frame]);
 
+    // these are serialized - leave them public
     public readonly List<List<Vector3>> LeadProjectionsPerFrame = [];
     public readonly List<List<Vector3>> FollowProjectionsPerFrame = [];
 
@@ -55,7 +56,7 @@ public class CameraSetup
                 LeadProjectionsPerFrame[frameNumber][i] - PositionsPerFrame[frameNumber]);
 
             // find the angle between the vectors
-            error += MathF.Acos(Vector3.Dot(target, keypoint)) * 
+            error += MathF.Acos(Vector3.Dot(target, keypoint)) *
                      LeadPoseAndConfidencePerFrame[frameNumber][i].Z; // confidence
         }
 
@@ -67,7 +68,7 @@ public class CameraSetup
                 FollowProjectionsPerFrame[frameNumber][i] - PositionsPerFrame[frameNumber]);
 
             // find the angle between the vectors
-            error += MathF.Acos(Vector3.Dot(target, keypoint)) * 
+            error += MathF.Acos(Vector3.Dot(target, keypoint)) *
                      FollowPoseAndConfidencePerFrame[frameNumber][i].Z; // confidence
         }
 
@@ -93,7 +94,7 @@ public class CameraSetup
             .ToList();
 
         FollowPoseAndConfidencePerFrame.Add(followRecenteredAndRescaled);
-        
+
         FollowProjectionsPerFrame.Add([]);
         LeadProjectionsPerFrame.Add([]);
     }
@@ -115,20 +116,20 @@ public class CameraSetup
         return adjustedKeypoints.Select(t => t + Forward(frame) * FocalLength).ToList();
     }
 
-    public bool HasPoseAtFrame(int frameNumber, bool isLead){
+    public bool HasPoseAtFrame(int frameNumber, bool isLead)
+    {
         return isLead
             ? LeadPoseAndConfidencePerFrame[frameNumber].Count > 0
             : FollowPoseAndConfidencePerFrame[frameNumber].Count > 0;
     }
-    
+
     public Ray PoseRay(int frameNumber, int jointNumber, bool isLead)
     {
         Ray rayToJoint = new Ray(
             PositionsPerFrame[frameNumber],
             Vector3.Normalize(isLead
-                ? LeadProjectionsPerFrame[frameNumber][jointNumber]
-                : FollowProjectionsPerFrame[frameNumber][jointNumber]
-                  - PositionsPerFrame[frameNumber]));
+                ? LeadProjectionsPerFrame[frameNumber][jointNumber] - PositionsPerFrame[frameNumber]
+                : FollowProjectionsPerFrame[frameNumber][jointNumber] - PositionsPerFrame[frameNumber]));
         return rayToJoint;
     }
 

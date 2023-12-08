@@ -44,5 +44,7 @@ static class Program
     {
         CameraPoseSolver cameraPoseSolver = new();
         cameraPoseSolver.LoadPoses(args.JsonInputDir, args.JsonCameraSizes);
+        cameraPoseSolver.IterationLoop();
+        cameraPoseSolver.SaveData();
     }
 }
