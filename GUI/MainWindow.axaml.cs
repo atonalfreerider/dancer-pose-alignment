@@ -27,19 +27,20 @@ public partial class MainWindow : Window
     int mirrorCurrentFollowIndex = -1;
 
     // frame numbers
+    int numCameras = 0;
     int frameCount = 0;
     int totalFrameCount = 0;
 
     // current state of frame
     Dictionary<int, List<Vector3>> posesByPersonAtFrame = new();
-    readonly List<Tuple<int, int>> currentSelectedCamerasAndPoseAnchor = [];
-    readonly List<Tuple<int, int>> mirrorCurrentSelectedCamerasAndPoseAnchor = [];
+    readonly List<Tuple<int, bool>> currentSelectedCamerasAndPoseAnchor = [];
+    readonly List<Tuple<int, bool>> mirrorCurrentSelectedCamerasAndPoseAnchor = [];
 
     // states to serialize
     readonly List<Tuple<int, int>> finalIndexListLeadAndFollow = [];
     readonly List<Tuple<int, int>> finalIndexListMirroredLeadAndFollow = [];
-    readonly List<List<Tuple<int, int>>> finalIndexCamerasAndPoseAnchor = [];
-    readonly List<List<Tuple<int, int>>> finalIndexMirroredCamerasAndPoseAnchor = [];
+    readonly List<List<Tuple<int, bool>>> finalIndexCamerasAndPoseAnchor = [];
+    readonly List<List<Tuple<int, bool>>> finalIndexMirroredCamerasAndPoseAnchor = [];
 
     public MainWindow()
     {
@@ -53,12 +54,11 @@ public partial class MainWindow : Window
             currentFollowIndex = -1;
             mirrorCurrentFollowIndex = -1;
             posesByPersonAtFrame = new Dictionary<int, List<Vector3>>();
-            currentSelectedCamerasAndPoseAnchor.Clear();
-            mirrorCurrentSelectedCamerasAndPoseAnchor.Clear();
             finalIndexListLeadAndFollow.Clear();
             finalIndexListMirroredLeadAndFollow.Clear();
             finalIndexCamerasAndPoseAnchor.Clear();
             finalIndexMirroredCamerasAndPoseAnchor.Clear();
+            ResetCamMarkers();
 
             PosesByFrameByPerson = AlphaPose.PosesByFrameByPerson(GetAlphaPoseJsonPath());
             totalFrameCount = FindMaxFrame();
@@ -84,8 +84,9 @@ public partial class MainWindow : Window
             List<string> videoFiles = Directory.EnumerateFiles(videoDirectory, "*.*", SearchOption.TopDirectoryOnly)
                 .Where(file => file.EndsWith(".mp4") || file.EndsWith(".avi") || file.EndsWith(".mkv")).ToList();
             VideoFilesDropdown.ItemsSource = videoFiles;
+            numCameras = videoFiles.Count;
 
-            for (int i = 0; i < videoFiles.Count; i++)
+            for (int i = 0; i < numCameras; i++)
             {
                 RadioButton radioButton = new RadioButton
                 {
@@ -96,8 +97,8 @@ public partial class MainWindow : Window
 
                 DynamicRadioButtonsPanel.Children.Add(radioButton);
 
-                currentSelectedCamerasAndPoseAnchor.Add(new Tuple<int, int>(-1, -1));
-                mirrorCurrentSelectedCamerasAndPoseAnchor.Add(new Tuple<int, int>(-1, -1));
+                currentSelectedCamerasAndPoseAnchor.Add(new Tuple<int, bool>(-1, false));
+                mirrorCurrentSelectedCamerasAndPoseAnchor.Add(new Tuple<int, bool>(-1, false));
             }
         }
     }
@@ -106,7 +107,20 @@ public partial class MainWindow : Window
     {
         currentLeadIndex = -1;
         currentFollowIndex = -1;
+        mirrorCurrentFollowIndex = -1;
+        mirrorCurrentLeadIndex = -1;
+
+        ResetCamMarkers();
         RedrawPoses();
+    }
+
+    void ResetCamMarkers()
+    {
+        for (int i = 0; i < numCameras; i++)
+        {
+            currentSelectedCamerasAndPoseAnchor[i] = new Tuple<int, bool>(-1, false);
+            mirrorCurrentSelectedCamerasAndPoseAnchor[i] = new Tuple<int, bool>(-1, false);
+        }
     }
 
     void BackButton_Click(object sender, RoutedEventArgs e)
@@ -316,12 +330,31 @@ public partial class MainWindow : Window
                 int camNumber = int.Parse(selectedButton[6..]);
                 if (IsMirroredCheckbox.IsChecked == true)
                 {
-                    mirrorCurrentSelectedCamerasAndPoseAnchor[camNumber] =
-                        new Tuple<int, int>(closestIndex, jointSelected);
+                    Tuple<int, bool> camAndHand = mirrorCurrentSelectedCamerasAndPoseAnchor[camNumber];
+                    if (camAndHand.Item1 == closestIndex)
+                    {
+                        mirrorCurrentSelectedCamerasAndPoseAnchor[camNumber] = new Tuple<int, bool>(-1, false);
+                    }
+                    else
+                    {
+                        mirrorCurrentSelectedCamerasAndPoseAnchor[camNumber] = new Tuple<int, bool>(
+                            closestIndex,
+                            HalpeExtension.IsRightSide((Halpe) jointSelected));
+                    }
                 }
                 else
                 {
-                    currentSelectedCamerasAndPoseAnchor[camNumber] = new Tuple<int, int>(closestIndex, jointSelected);
+                    Tuple<int, bool> camAndHand = currentSelectedCamerasAndPoseAnchor[camNumber];
+                    if (camAndHand.Item1 == closestIndex)
+                    {
+                        currentSelectedCamerasAndPoseAnchor[camNumber] = new Tuple<int, bool>(-1, false);
+                    }
+                    else
+                    {
+                        currentSelectedCamerasAndPoseAnchor[camNumber] = new Tuple<int, bool>(
+                            closestIndex,
+                            HalpeExtension.IsRightSide((Halpe) jointSelected));
+                    }
                 }
 
                 break;

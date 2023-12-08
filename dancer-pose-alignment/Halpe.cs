@@ -52,3 +52,12 @@ public enum Halpe
     // ...
     RHand21 = 135
 }
+
+public static class HalpeExtension
+{
+    public static bool IsRightSide(Halpe jointIdx)
+    {
+        return jointIdx is Halpe.RAnkle or Halpe.RBigToe or Halpe.REar or Halpe.RElbow or Halpe.REye or Halpe.RHeel
+            or Halpe.RHip or Halpe.RKnee or Halpe.RShoulder or Halpe.RSmallToe or Halpe.RWrist;
+    }
+}
