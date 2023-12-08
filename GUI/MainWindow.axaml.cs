@@ -29,7 +29,7 @@ public partial class MainWindow : Window
     Dictionary<int, List<Vector3>> posesByPersonAtFrame = new();
     int totalFrameCount = 0;
 
-    readonly List<Tuple<int, int>> finalIndexListLeadAndFollow = new();
+    readonly List<Tuple<int, int>> finalIndexListLeadAndFollow = [];
 
     public MainWindow()
     {
@@ -70,7 +70,7 @@ public partial class MainWindow : Window
         Button saveButton = this.Find<Button>("SaveButton")!;
         saveButton.Click += delegate
         {
-            string saveDirectory = @"C:\Users\john\Desktop";
+            string saveDirectory = Environment.CurrentDirectory;
             string cameraName = "0";
             if (!string.IsNullOrEmpty(videoInputPath.Text))
             {
@@ -90,7 +90,7 @@ public partial class MainWindow : Window
         if (frameCount > 0)
         {
             // save the lead and follow indices from the last frame
-            finalIndexListLeadAndFollow.Add(new Tuple<int, int>(currentLeadIndex, currentLeadIndex));
+            finalIndexListLeadAndFollow.Add(new Tuple<int, int>(currentLeadIndex, currentFollowIndex));
         }
 
         if (!hasBeenInitialized)
@@ -229,29 +229,31 @@ public partial class MainWindow : Window
         string leadSavePath = Path.Combine(directory, $"lead-{cameraName}.json");
         string followSavePath = Path.Combine(directory, $"follow-{cameraName}.json");
 
-        List<List<Vector3>> leadPoses = new();
-        List<List<Vector3>> followPoses = new();
+        List<List<Vector3>> leadPoses = [];
+        List<List<Vector3>> followPoses = [];
         int count = 0;
         foreach (Tuple<int, int> leadAndFollow in finalIndexListLeadAndFollow)
         {
-            if (leadAndFollow.Item1 > -1 && PosesByFrameByPerson[leadAndFollow.Item1].ContainsKey(count))
+            if (leadAndFollow.Item1 > -1 &&
+                PosesByFrameByPerson[leadAndFollow.Item1].TryGetValue(count, out List<Vector3>? leadVal))
             {
-                leadPoses.Add(PosesByFrameByPerson[leadAndFollow.Item1][count]);
+                leadPoses.Add(leadVal);
             }
             else
             {
                 // add empty if pose is missing
-                leadPoses.Add(new List<Vector3>());
+                leadPoses.Add([]);
             }
 
-            if (leadAndFollow.Item2 > -1 && PosesByFrameByPerson[leadAndFollow.Item2].ContainsKey(count))
+            if (leadAndFollow.Item2 > -1 && 
+                PosesByFrameByPerson[leadAndFollow.Item2].TryGetValue(count, out List<Vector3>? followVal))
             {
-                followPoses.Add(PosesByFrameByPerson[leadAndFollow.Item2][count]);
+                followPoses.Add(followVal);
             }
             else
             {
                 // add empty if pose is missing
-                followPoses.Add(new List<Vector3>());
+                followPoses.Add([]);
             }
 
             count++;
@@ -267,27 +269,27 @@ public partial class MainWindow : Window
     float PoseError()
     {
         int poseCount = 0;
-        List<Vector3> currentLeadPoses = new();
+        List<Vector3> currentLeadPoses = [];
         if (PosesByFrameByPerson[currentLeadIndex].ContainsKey(frameCount))
         {
             currentLeadPoses = PosesByFrameByPerson[currentLeadIndex][frameCount];
             poseCount = currentLeadPoses.Count;
         }
 
-        List<Vector3> currentFollowPoses = new();
+        List<Vector3> currentFollowPoses = [];
         if (PosesByFrameByPerson[currentFollowIndex].ContainsKey(frameCount))
         {
             currentFollowPoses = PosesByFrameByPerson[currentFollowIndex][frameCount];
             poseCount = currentFollowPoses.Count;
         }
 
-        List<Vector3> previousLeadPoses = new();
+        List<Vector3> previousLeadPoses = [];
         if (PosesByFrameByPerson[currentLeadIndex].ContainsKey(frameCount - 1))
         {
             previousLeadPoses = PosesByFrameByPerson[currentLeadIndex][frameCount - 1];
         }
 
-        List<Vector3> previousFollowPoses = new();
+        List<Vector3> previousFollowPoses = [];
         if (PosesByFrameByPerson[currentFollowIndex].ContainsKey(frameCount - 1))
         {
             previousFollowPoses = PosesByFrameByPerson[currentFollowIndex][frameCount - 1];
