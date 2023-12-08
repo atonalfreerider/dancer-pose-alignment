@@ -8,18 +8,15 @@ public class CameraPoseSolver
     readonly List<Vector3> merged3DPoseLead = [];
     readonly List<Vector3> merged3DPoseFollow = [];
 
-    List<Vector2> imageSizes;
-
     readonly List<List<List<Vector3>>> leadByCamera = [];
     readonly List<List<List<Vector3>>> followByCamera = [];
 
-    readonly int poseCount = 26;
-
+    readonly int poseCount = 26; // Halpe
     readonly List<CameraSetup> cameras = [];
 
-    public void LoadPoses(string inputPath, string jsonCameraSizes)
+    public void LoadPoses(string inputPath, string jsonCameraSizes, string jsonSeedCameraPositions)
     {
-        imageSizes = JsonConvert.DeserializeObject<List<Vector2>>(File.ReadAllText(jsonCameraSizes));
+        List<Vector2> imageSizes = JsonConvert.DeserializeObject<List<Vector2>>(File.ReadAllText(jsonCameraSizes));
 
         foreach (string jsonPath in Directory.EnumerateFiles(inputPath, "*.json"))
         {
@@ -35,34 +32,55 @@ public class CameraPoseSolver
                 followByCamera.Add(finalIndexListLeadAndFollow);
             }
         }
+        
+        Dictionary<int, CameraSetup.PositionAndRotation> seedCameraPositionsAndRotations = 
+            JsonConvert.DeserializeObject<Dictionary<int, CameraSetup.PositionAndRotation>>(File.ReadAllText(jsonSeedCameraPositions));
+        
+        List<Vector3> seedCameraPositions = [];
+        List<Quaternion> seedCameraRotations = [];
+        foreach (CameraSetup.PositionAndRotation positionAndRotation in seedCameraPositionsAndRotations.Values)
+        {
+            seedCameraPositions.Add(new Vector3(positionAndRotation.positionX, positionAndRotation.positionY, positionAndRotation.positionZ));
+            seedCameraRotations.Add(new Quaternion(positionAndRotation.rotationX, positionAndRotation.rotationY, positionAndRotation.rotationZ, positionAndRotation.rotationW));
+        }
 
-        PlaceCamerasInCircle();
+        CreateAndPlaceCameras(imageSizes, seedCameraPositions, seedCameraRotations);
         AddPosesToCamera();
     }
 
-    void PlaceCamerasInCircle()
+    void CreateAndPlaceCameras(
+        IReadOnlyList<Vector2> imageSizes, 
+        IReadOnlyList<Vector3> seedCameraPositions,
+        IReadOnlyList<Quaternion> seedCameraRotations)
     {
         const int testingFrameNumber = 0;
-        for (int i = 0; i < followByCamera.Count; i++)
+        for (int i = 0; i < imageSizes.Count; i++)
         {
-            // position cameras in a circle
             CameraSetup camera = new()
             {
                 Size = imageSizes[i]
             };
 
-            float angle = -(float)i / followByCamera.Count * 2 * MathF.PI; // ccw
-            const float radius = 3f;
-            const float startingHeight = 1.5f;
-            camera.PositionsPerFrame.Add(new Vector3(
-                MathF.Sin(angle) * radius,
-                startingHeight,
-                MathF.Cos(angle) * radius));
+            if (seedCameraPositions.Count != 0)
+            {
+                camera.PositionsPerFrame.Add(seedCameraPositions[i]);
+                camera.RotationsPerFrame.Add(seedCameraRotations[i]);
+            }
+            else
+            {
+                float angle = -(float)i / followByCamera.Count * 2 * MathF.PI; // ccw
+                const float radius = 3f;
+                const float startingHeight = 1.5f;
+                camera.PositionsPerFrame.Add(new Vector3(
+                    MathF.Sin(angle) * radius,
+                    startingHeight,
+                    MathF.Cos(angle) * radius));
 
-            camera.RotationsPerFrame.Add(Transform.LookAt(
-                new Vector3(0, startingHeight, 0),
-                Quaternion.Identity,
-                camera.PositionsPerFrame[testingFrameNumber]));
+                camera.RotationsPerFrame.Add(Transform.LookAt(
+                    new Vector3(0, startingHeight, 0),
+                    Quaternion.Identity,
+                    camera.PositionsPerFrame[testingFrameNumber]));
+            }
 
             cameras.Add(camera);
         }
@@ -87,47 +105,8 @@ public class CameraPoseSolver
         const int testingFrameNumber = 0;
         float totalError = Calculate3DPosesAndTotalError(testingFrameNumber);
 
-        while (AnyPointsBelowGround)
-        {
-            foreach (CameraSetup camera in cameras)
-            {
-                // pitch the camera up by .01 radians
-                Quaternion upPitchRotation = camera.RotationsPerFrame[testingFrameNumber] *
-                                             Quaternion.CreateFromAxisAngle(new Vector3(1, 0, 0),
-                                                 -.01f);
-
-                // check if the angle between the up pitch forward vector and the ground forward vector is too large
-                Vector3 upPitchForward = Vector3.Normalize(
-                    Vector3.Transform(new Vector3(0, 0, 1), upPitchRotation));
-                Vector3 cameraForwardParallelToGround = Vector3.Normalize(new Vector3(
-                    -camera.PositionsPerFrame[testingFrameNumber].X,
-                    0,
-                    -camera.PositionsPerFrame[testingFrameNumber].Z));
-
-                float angleBetween = MathF.Acos(Vector3.Dot(upPitchForward, cameraForwardParallelToGround));
-                Console.WriteLine(angleBetween);
-                if (angleBetween > MathF.PI / 6)
-                {
-                    Console.WriteLine("pitch maxed out");
-                    upPitchRotation = camera.RotationsPerFrame[testingFrameNumber];
-                }
-
-                camera.RotationsPerFrame[testingFrameNumber] = upPitchRotation;
-
-                camera.FocalLength += .005f;
-                if (camera.FocalLength > .35f)
-                {
-                    Console.WriteLine("focus maxed out");
-                    camera.FocalLength = 0.35f;
-                }
-            }
-
-            Console.WriteLine("Pitching and extending focus");
-            totalError = Calculate3DPosesAndTotalError(testingFrameNumber);
-        }
-
         int iterationCount = 0;
-        while (totalError > .1f && iterationCount < 1000000)
+        while (totalError > 3f && iterationCount < 1000000)
         {
             totalError = Iterate(
                 testingFrameNumber,
@@ -203,6 +182,11 @@ public class CameraPoseSolver
             if (Math.Abs(zPositionError - previousError) < errorMin) break;
             previousError = zPositionError;
             Console.WriteLine("Moving in Z: " + previousError);
+        }
+        
+        if(previousError < 3f)
+        {
+            return previousError;
         }
 
         while (true)
@@ -282,12 +266,16 @@ public class CameraPoseSolver
             angleBetween = MathF.Acos(Vector3.Dot(downPitchForward, camera.Forward(frameNumber)));
             if (angleBetween > MathF.PI / 12)
             {
-                Console.WriteLine("pitch angle too high" + angleBetween);
+                Console.WriteLine("pitch angle too low" + angleBetween);
                 camera.RotationsPerFrame[frameNumber] = originalRotation;
             }
 
             camera.RotationsPerFrame[frameNumber] = upPitchRotation;
             float upPitchError = Calculate3DPosesAndTotalError(frameNumber);
+            if (AnyPointsHigherThan2pt5Meters() || LowestLeadAnkleIsMoreThan10CMAboveZero())
+            {
+                upPitchError = float.MaxValue;
+            }
 
             camera.RotationsPerFrame[frameNumber] = downPitchRotation;
             float downPitchError = Calculate3DPosesAndTotalError(frameNumber);
@@ -323,32 +311,32 @@ public class CameraPoseSolver
             float originalFocalLength = camera.FocalLength;
 
             camera.FocalLength = originalFocalLength + focalStepSize;
-            if (camera.FocalLength > .35f)
+            if (camera.FocalLength > .6f)
             {
-                Console.WriteLine("focal length max" + camera.FocalLength);
+                Console.WriteLine($"focal length max: {cameras.IndexOf(camera)} + {camera.FocalLength}");
                 camera.FocalLength = originalFocalLength;
             }
 
-            float upFocalError = Calculate3DPosesAndTotalError(frameNumber);
+            float zoomInFocalError = Calculate3DPosesAndTotalError(frameNumber);
 
             camera.FocalLength = originalFocalLength - focalStepSize;
             if (camera.FocalLength < .001f)
             {
-                Console.WriteLine("focal length min" + camera.FocalLength);
+                Console.WriteLine($"focal length min: {cameras.IndexOf(camera)} + {camera.FocalLength}");
                 camera.FocalLength = .001f;
             }
 
-            float downFocalError = Calculate3DPosesAndTotalError(frameNumber);
+            float zoomOutFocalError = Calculate3DPosesAndTotalError(frameNumber);
             if (AnyPointsBelowGround)
             {
-                downFocalError = float.MaxValue;
+                zoomOutFocalError = float.MaxValue;
             }
 
-            if (upFocalError < downFocalError && upFocalError < thisError)
+            if (zoomInFocalError < zoomOutFocalError && zoomInFocalError < thisError)
             {
                 camera.FocalLength = originalFocalLength + focalStepSize;
             }
-            else if (downFocalError < upFocalError && downFocalError < thisError)
+            else if (zoomOutFocalError < zoomInFocalError && zoomOutFocalError < thisError)
             {
                 camera.FocalLength = originalFocalLength - focalStepSize;
             }
@@ -717,11 +705,14 @@ public class CameraPoseSolver
     {
         int frameWithHighestConfidence = 0;
         float highestConfidence = 0f;
+         
+        int highestValidIndex = leadByCamera.Select(t => t.Count).Min();
+        
         for (int i = 0; i < leadByCamera.Count; i++)
         {
-            for (int j = 0; j < 896; j++)
+            for (int j = 0; j < highestValidIndex; j++)
             {
-                float confidence = Confidence(followByCamera[i][j], leadByCamera[i][j]);
+                float confidence = Confidence(leadByCamera[i][j], followByCamera[i][j]);
                 if (confidence > highestConfidence)
                 {
                     highestConfidence = confidence;
@@ -739,4 +730,15 @@ public class CameraPoseSolver
     }
 
     bool AnyPointsBelowGround => merged3DPoseLead.Any(vec => vec.Y < 0) || merged3DPoseFollow.Any(vec => vec.Y < 0);
+    
+    bool LowestLeadAnkleIsMoreThan10CMAboveZero()
+    {
+        float lowestLeadAnkle = Math.Min(merged3DPoseLead[(int)Halpe.LAnkle].Y, merged3DPoseLead[(int)Halpe.RAnkle].Y);
+        return lowestLeadAnkle > 0.1f;
+    }
+    
+    bool AnyPointsHigherThan2pt5Meters()
+    {
+        return merged3DPoseLead.Any(vec => vec.Y > 2.5) || merged3DPoseFollow.Any(vec => vec.Y > 2.5);
+    }
 }

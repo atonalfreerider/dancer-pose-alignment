@@ -139,4 +139,19 @@ public class CameraSetup
             ? LeadPoseAndConfidencePerFrame[frameNumber][jointNumber].Z
             : FollowPoseAndConfidencePerFrame[frameNumber][jointNumber].Z;
     }
+    
+    [Serializable] 
+    public class PositionAndRotation 
+    { 
+        public float positionX; 
+        public float positionY; 
+        public float positionZ; 
+ 
+        public float rotationX; 
+        public float rotationY; 
+        public float rotationZ; 
+        public float rotationW; 
+     
+        public float focal; 
+    } 
 }
