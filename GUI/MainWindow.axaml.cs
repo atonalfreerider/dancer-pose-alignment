@@ -17,34 +17,42 @@ namespace GUI;
 
 public partial class MainWindow : Window
 {
+    // initializeation
     bool hasVideoBeenInitialized = false;
     bool hasPoseBeenInitialized = false;
     FrameSource frameSource;
     Dictionary<int, Dictionary<int, List<Vector3>>> PosesByFrameByPerson;
+    
+    // indices for tracked figures
     int currentLeadIndex = -1;
     int mirrorCurrentLeadIndex = -1;
     int currentFollowIndex = -1;
     int mirrorCurrentFollowIndex = -1;
+    
+    // frame numbers
     int frameCount = 0;
-    Dictionary<int, List<Vector3>> posesByPersonAtFrame = new();
     int totalFrameCount = 0;
     int stepBackFrame = 0;
+    readonly List<Bitmap> lastTenFrames = [];
 
+    // current state of frame
+    Dictionary<int, List<Vector3>> posesByPersonAtFrame = new();
     readonly List<Tuple<int, int>> currentSelectedCamerasAndPoseAnchor = [];
     readonly List<Tuple<int, int>> mirrorCurrentSelectedCamerasAndPoseAnchor = [];
 
+    // states to serialize
     readonly List<Tuple<int, int>> finalIndexListLeadAndFollow = [];
     readonly List<Tuple<int, int>> finalIndexListMirroredLeadAndFollow = [];
     readonly List<List<Tuple<int, int>>> finalIndexCamerasAndPoseAnchor = [];
     readonly List<List<Tuple<int, int>>> finalIndexMirroredCamerasAndPoseAnchor = [];
-
-    readonly List<Bitmap> lastTenFrames = [];
 
     public MainWindow()
     {
         InitializeComponent();
     }
 
+    #region BUTTON ACTIONS
+    
     void LoadVideosButton_Click(object sender, RoutedEventArgs e)
     {
         string? videoDirectory = VideoInputPath.Text;
@@ -128,7 +136,11 @@ public partial class MainWindow : Window
 
         SaveTo(saveDirectory, cameraName);
     }
+    
+    #endregion
 
+    #region DRAW INTERACTION
+    
     void RenderFrame(string videoPath, string alphaPoseJsonPath)
     {
         if (frameCount > 0)
@@ -316,19 +328,6 @@ public partial class MainWindow : Window
         RedrawPoses();
     }
 
-    string GetSelectedButton()
-    {
-        foreach (Control? child in DynamicRadioButtonsPanel.Children)
-        {
-            if (child is RadioButton { IsChecked: true } radioButton)
-            {
-                return radioButton.Content.ToString();
-            }
-        }
-
-        return "0";
-    }
-
     void PointerPressedHandler(object sender, PointerPressedEventArgs args)
     {
         PointerPoint point = args.GetCurrentPoint(sender as Control);
@@ -341,7 +340,24 @@ public partial class MainWindow : Window
             SetDancer(new Vector2((float)x, (float)y));
         }
     }
+    
+    #endregion
 
+    #region REFERENCE
+    
+    string GetSelectedButton()
+    {
+        foreach (Control? child in DynamicRadioButtonsPanel.Children)
+        {
+            if (child is RadioButton { IsChecked: true } radioButton)
+            {
+                return radioButton.Content.ToString();
+            }
+        }
+
+        return "0";
+    }
+    
     int FindMaxFrame()
     {
         return PosesByFrameByPerson.Values
@@ -445,4 +461,6 @@ public partial class MainWindow : Window
         string fileName = Path.GetFileNameWithoutExtension(videoPath);
         return $"{AlphaPoseJsonPath.Text}/{fileName}/alphapose-results.json";
     }
+    
+    #endregion
 }
