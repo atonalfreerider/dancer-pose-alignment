@@ -10,7 +10,6 @@ using Avalonia.Threading;
 using dancer_pose_alignment;
 using Newtonsoft.Json;
 using OpenCvSharp;
-using Image = Avalonia.Controls.Image;
 using Window = Avalonia.Controls.Window;
 
 namespace GUI;
@@ -18,22 +17,18 @@ namespace GUI;
 public partial class MainWindow : Window
 {
     // initializeation
-    bool hasVideoBeenInitialized = false;
-    bool hasPoseBeenInitialized = false;
-    FrameSource frameSource;
+    VideoCapture frameSource;
     Dictionary<int, Dictionary<int, List<Vector3>>> PosesByFrameByPerson;
-    
+
     // indices for tracked figures
     int currentLeadIndex = -1;
     int mirrorCurrentLeadIndex = -1;
     int currentFollowIndex = -1;
     int mirrorCurrentFollowIndex = -1;
-    
+
     // frame numbers
     int frameCount = 0;
     int totalFrameCount = 0;
-    int stepBackFrame = 0;
-    readonly List<Bitmap> lastTenFrames = [];
 
     // current state of frame
     Dictionary<int, List<Vector3>> posesByPersonAtFrame = new();
@@ -51,17 +46,12 @@ public partial class MainWindow : Window
         InitializeComponent();
         VideoFilesDropdown.SelectionChanged += delegate
         {
-            hasVideoBeenInitialized = false;
-            hasPoseBeenInitialized = false;
+            // reset the state
             frameCount = 0;
-            totalFrameCount = 0;
-            currentLeadIndex =-1;
+            currentLeadIndex = -1;
             mirrorCurrentLeadIndex = -1;
             currentFollowIndex = -1;
             mirrorCurrentFollowIndex = -1;
-            stepBackFrame = 0;
-            lastTenFrames.Clear();
-            PosesByFrameByPerson = new Dictionary<int, Dictionary<int, List<Vector3>>>();
             posesByPersonAtFrame = new Dictionary<int, List<Vector3>>();
             currentSelectedCamerasAndPoseAnchor.Clear();
             mirrorCurrentSelectedCamerasAndPoseAnchor.Clear();
@@ -69,11 +59,17 @@ public partial class MainWindow : Window
             finalIndexListMirroredLeadAndFollow.Clear();
             finalIndexCamerasAndPoseAnchor.Clear();
             finalIndexMirroredCamerasAndPoseAnchor.Clear();
+
+            PosesByFrameByPerson = AlphaPose.PosesByFrameByPerson(GetAlphaPoseJsonPath());
+            totalFrameCount = FindMaxFrame();
+
+            frameSource = new VideoCapture(GetVideoPath());
+            RenderZero();
         };
     }
 
     #region BUTTON ACTIONS
-    
+
     void LoadVideosButton_Click(object sender, RoutedEventArgs e)
     {
         string? videoDirectory = VideoInputPath.Text;
@@ -115,24 +111,18 @@ public partial class MainWindow : Window
 
     void BackButton_Click(object sender, RoutedEventArgs e)
     {
-        if (frameCount > 0 && stepBackFrame < 10)
-        {
-            stepBackFrame++;
-            RenderFrame(lastTenFrames[stepBackFrame], GetAlphaPoseJsonPath(), frameCount - stepBackFrame);
-        }
+        if (frameCount <= 0) return;
+
+        frameCount--;
+        RenderFrame();
     }
 
     void NextFrameButton_Click(object sender, RoutedEventArgs e)
     {
-        if (stepBackFrame > 0)
-        {
-            stepBackFrame--;
-            RenderFrame(lastTenFrames[stepBackFrame], GetAlphaPoseJsonPath(), frameCount - stepBackFrame);
-        }
-        else
-        {
-            RenderFrame(GetVideoPath(), GetAlphaPoseJsonPath());
-        }
+        if (frameCount >= totalFrameCount) return;
+
+        frameCount++;
+        RenderFrame();
     }
 
     void RunUntilNext_Click(object sender, RoutedEventArgs e)
@@ -141,7 +131,8 @@ public partial class MainWindow : Window
                posesByPersonAtFrame.ContainsKey(currentLeadIndex) &&
                posesByPersonAtFrame.ContainsKey(currentFollowIndex))
         {
-            RenderFrame(GetVideoPath(), GetAlphaPoseJsonPath());
+            frameCount++;
+            RenderFrame();
         }
     }
 
@@ -157,12 +148,26 @@ public partial class MainWindow : Window
 
         SaveTo(saveDirectory, cameraName);
     }
-    
+
     #endregion
 
     #region DRAW INTERACTION
-    
-    void RenderFrame(string videoPath, string alphaPoseJsonPath)
+
+    void RenderZero()
+    {
+        frameSource.Set(VideoCaptureProperties.PosFrames, frameCount);
+
+        OutputArray outputArray = new Mat();
+        frameSource.Read(outputArray);
+
+        Mat frameMat = outputArray.GetMat();
+        VideoCanvas.Width = frameMat.Width;
+        VideoCanvas.Height = frameMat.Height;
+
+        RenderFrame();
+    }
+
+    void RenderFrame()
     {
         if (frameCount > 0)
         {
@@ -170,22 +175,11 @@ public partial class MainWindow : Window
             finalIndexListLeadAndFollow.Add(new Tuple<int, int>(currentLeadIndex, currentFollowIndex));
         }
 
-        if (!hasVideoBeenInitialized)
-        {
-            frameSource = Cv2.CreateFrameSource_Video(videoPath);
-        }
-
         OutputArray outputArray = new Mat();
-        frameSource.NextFrame(outputArray);
+        frameSource.Set(VideoCaptureProperties.PosFrames, frameCount);
+        frameSource.Read(outputArray);
 
         Mat frameMat = outputArray.GetMat();
-
-        if (!hasVideoBeenInitialized)
-        {
-            VideoCanvas.Width = frameMat.Width;
-            VideoCanvas.Height = frameMat.Height;
-            hasVideoBeenInitialized = true;
-        }
 
         Bitmap frame;
         try
@@ -196,29 +190,13 @@ public partial class MainWindow : Window
         {
             // end of video
             Console.WriteLine(e.Message);
-            frameCount++;
             return;
-        }
-
-        InsertToFrontOfQueue(frame);
-
-        RenderFrame(frame, alphaPoseJsonPath, frameCount);
-        frameCount++;
-    }
-
-    void RenderFrame(Bitmap frame, string alphaPoseJsonPath, int frameNumber)
-    {
-        if (!hasPoseBeenInitialized)
-        {
-            PosesByFrameByPerson = AlphaPose.PosesByFrameByPerson(alphaPoseJsonPath);
-            totalFrameCount = FindMaxFrame();
-            hasPoseBeenInitialized = true;
         }
 
         posesByPersonAtFrame = new Dictionary<int, List<Vector3>>();
         foreach ((int personId, Dictionary<int, List<Vector3>> posesByFrame) in PosesByFrameByPerson)
         {
-            if (posesByFrame.TryGetValue(frameNumber, out List<Vector3>? value))
+            if (posesByFrame.TryGetValue(frameCount, out List<Vector3>? value))
             {
                 posesByPersonAtFrame.Add(personId, value);
             }
@@ -332,17 +310,20 @@ public partial class MainWindow : Window
                         currentFollowIndex = closestIndex;
                     }
                 }
+
                 break;
             default:
                 int camNumber = int.Parse(selectedButton[6..]);
                 if (IsMirroredCheckbox.IsChecked == true)
                 {
-                    mirrorCurrentSelectedCamerasAndPoseAnchor[camNumber] = new Tuple<int, int>(closestIndex, jointSelected);
+                    mirrorCurrentSelectedCamerasAndPoseAnchor[camNumber] =
+                        new Tuple<int, int>(closestIndex, jointSelected);
                 }
                 else
                 {
                     currentSelectedCamerasAndPoseAnchor[camNumber] = new Tuple<int, int>(closestIndex, jointSelected);
                 }
+
                 break;
         }
 
@@ -361,11 +342,11 @@ public partial class MainWindow : Window
             SetDancer(new Vector2((float)x, (float)y));
         }
     }
-    
+
     #endregion
 
     #region REFERENCE
-    
+
     string GetSelectedButton()
     {
         foreach (Control? child in DynamicRadioButtonsPanel.Children)
@@ -378,7 +359,7 @@ public partial class MainWindow : Window
 
         return "0";
     }
-    
+
     int FindMaxFrame()
     {
         return PosesByFrameByPerson.Values
@@ -462,14 +443,6 @@ public partial class MainWindow : Window
         return error;
     }
 
-    void InsertToFrontOfQueue(Bitmap frame)
-    {
-        lastTenFrames.Insert(0, frame);
-        if (lastTenFrames.Count > 10)
-        {
-            lastTenFrames.RemoveAt(lastTenFrames.Count - 1);
-        }
-    }
 
     string GetVideoPath()
     {
@@ -482,6 +455,6 @@ public partial class MainWindow : Window
         string fileName = Path.GetFileNameWithoutExtension(videoPath);
         return $"{AlphaPoseJsonPath.Text}/{fileName}/alphapose-results.json";
     }
-    
+
     #endregion
 }
