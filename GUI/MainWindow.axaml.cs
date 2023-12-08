@@ -20,7 +20,8 @@ public partial class MainWindow : Window
     readonly TextBox frameNumberText;
     readonly Canvas canvas;
 
-    bool hasBeenInitialized = false;
+    bool hasVideoBeenInitialized = false;
+    bool hasPoseBeenInitialized = false;
     FrameSource frameSource;
     Dictionary<int, Dictionary<int, List<Vector3>>> PosesByFrameByPerson;
     int currentLeadIndex = -1;
@@ -28,8 +29,11 @@ public partial class MainWindow : Window
     int frameCount = 0;
     Dictionary<int, List<Vector3>> posesByPersonAtFrame = new();
     int totalFrameCount = 0;
+    int stepBackFrame = 0;
 
     readonly List<Tuple<int, int>> finalIndexListLeadAndFollow = [];
+
+    readonly List<Bitmap> lastTenFrames = [];
 
     public MainWindow()
     {
@@ -38,7 +42,7 @@ public partial class MainWindow : Window
         TextBox videoInputPath = this.Find<TextBox>("VideoInputPath")!;
         TextBox alphaPoseJsonPath = this.Find<TextBox>("AlphaPoseJsonPath")!;
         frameNumberText = this.Find<TextBox>("FrameNumberText")!;
-        
+
         canvas = this.Find<Canvas>("Canvas")!;
 
         Button clearDancersButton = this.Find<Button>("ClearDancersButton")!;
@@ -50,9 +54,30 @@ public partial class MainWindow : Window
             RedrawPoses();
         };
 
+        Button backButton = this.Find<Button>("BackButton")!;
+        backButton.Click += delegate
+        {
+            if (frameCount > 0 && stepBackFrame < 10)
+            {
+                stepBackFrame++;
+                RenderFrame(lastTenFrames[stepBackFrame], alphaPoseJsonPath.Text, frameCount - stepBackFrame);
+            }
+        };
+
         Button nextFrameButton = this.Find<Button>("NextFrameButton")!;
 
-        nextFrameButton.Click += delegate { RenderFrame(videoInputPath.Text, alphaPoseJsonPath.Text); };
+        nextFrameButton.Click += delegate
+        {
+            if (stepBackFrame > 0)
+            {
+                stepBackFrame--;
+                RenderFrame(lastTenFrames[stepBackFrame], alphaPoseJsonPath.Text, frameCount - stepBackFrame);
+            }
+            else
+            {
+                RenderFrame(videoInputPath.Text, alphaPoseJsonPath.Text);
+            }
+        };
 
         Button runUntilNextButton = this.Find<Button>("RunUntilNext")!;
 
@@ -93,11 +118,9 @@ public partial class MainWindow : Window
             finalIndexListLeadAndFollow.Add(new Tuple<int, int>(currentLeadIndex, currentFollowIndex));
         }
 
-        if (!hasBeenInitialized)
+        if (!hasVideoBeenInitialized)
         {
             frameSource = Cv2.CreateFrameSource_Video(videoPath);
-            PosesByFrameByPerson = AlphaPose.PosesByFrameByPerson(alphaPoseJsonPath);
-            totalFrameCount = FindMaxFrame();
         }
 
         OutputArray outputArray = new Mat();
@@ -105,13 +128,13 @@ public partial class MainWindow : Window
 
         Mat frameMat = outputArray.GetMat();
 
-        if (!hasBeenInitialized)
+        if (!hasVideoBeenInitialized)
         {
             canvas.Width = frameMat.Width;
             canvas.Height = frameMat.Height;
-            hasBeenInitialized = true;
+            hasVideoBeenInitialized = true;
         }
-        
+
         Bitmap frame;
         try
         {
@@ -125,20 +148,33 @@ public partial class MainWindow : Window
             return;
         }
 
+        InsertToFrontOfQueue(frame);
+
+        RenderFrame(frame, alphaPoseJsonPath, frameCount);
+        frameCount++;
+    }
+
+    void RenderFrame(Bitmap frame, string alphaPoseJsonPath, int frameNumber)
+    {
+        if (!hasPoseBeenInitialized)
+        {
+            PosesByFrameByPerson = AlphaPose.PosesByFrameByPerson(alphaPoseJsonPath);
+            totalFrameCount = FindMaxFrame();
+            hasPoseBeenInitialized = true;
+        }
+
         posesByPersonAtFrame = new Dictionary<int, List<Vector3>>();
         foreach ((int personId, Dictionary<int, List<Vector3>> posesByFrame) in PosesByFrameByPerson)
         {
-            if (posesByFrame.ContainsKey(frameCount))
+            if (posesByFrame.TryGetValue(frameNumber, out List<Vector3>? value))
             {
-                posesByPersonAtFrame.Add(personId, posesByFrame[frameCount]);
+                posesByPersonAtFrame.Add(personId, value);
             }
         }
 
         frameNumberText.Text = $"{frameCount}:{totalFrameCount}";
         SetPreview(frame);
         RedrawPoses();
-
-        frameCount++;
     }
 
     void SetPreview(IImage frame)
@@ -245,7 +281,7 @@ public partial class MainWindow : Window
                 leadPoses.Add([]);
             }
 
-            if (leadAndFollow.Item2 > -1 && 
+            if (leadAndFollow.Item2 > -1 &&
                 PosesByFrameByPerson[leadAndFollow.Item2].TryGetValue(count, out List<Vector3>? followVal))
             {
                 followPoses.Add(followVal);
@@ -261,7 +297,7 @@ public partial class MainWindow : Window
 
         File.WriteAllText(leadSavePath, JsonConvert.SerializeObject(leadPoses, Formatting.Indented));
         File.WriteAllText(followSavePath, JsonConvert.SerializeObject(followPoses, Formatting.Indented));
-        
+
         Console.WriteLine($"Saved to: {leadSavePath})");
         Console.WriteLine($"Saved to: {followSavePath})");
     }
@@ -319,5 +355,14 @@ public partial class MainWindow : Window
 
         Console.WriteLine($"pose error: {error}");
         return error;
+    }
+
+    void InsertToFrontOfQueue(Bitmap frame)
+    {
+        lastTenFrames.Insert(0, frame);
+        if (lastTenFrames.Count > 10)
+        {
+            lastTenFrames.RemoveAt(lastTenFrames.Count - 1);
+        }
     }
 }

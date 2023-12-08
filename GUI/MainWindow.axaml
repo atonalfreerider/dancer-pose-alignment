@@ -19,6 +19,7 @@
            <TextBox Name="AlphaPoseJsonPath" Watermark="Path to AlphaPose json" Width="300" Margin="5" />
            <StackPanel Orientation="Horizontal" HorizontalAlignment="Center">
              <Button Name="ClearDancersButton" Height="30" Margin="5">Clear Dancers</Button>
+             <Button Name="BackButton" Height="30" Margin="5">Back</Button>
              <Button Name="NextFrameButton" Height="30" Margin="5" >Next Frame</Button>
              <TextBox Name="FrameNumberText" Height="30" Width="100" Margin="5" Watermark="Progress..."/>
              <Button Name="RunUntilNext" Height="30" >Run Until Next</Button>
