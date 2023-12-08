@@ -1,6 +1,7 @@
 using System.Numerics;
 using Avalonia;
 using Avalonia.Controls;
+using Avalonia.Controls.Shapes;
 using Avalonia.Input;
 using Avalonia.Interactivity;
 using Avalonia.Media;
@@ -9,6 +10,8 @@ using Avalonia.Threading;
 using dancer_pose_alignment;
 using Newtonsoft.Json;
 using OpenCvSharp;
+using Path = System.IO.Path;
+using Point = Avalonia.Point;
 using Window = Avalonia.Controls.Window;
 
 namespace GUI;
@@ -37,9 +40,12 @@ public partial class MainWindow : Window
 
     // states to serialize
     // 0 - lead, 1 - follow, 2 - mirror lead, 3 - mirror follow. they are updated at every frame change
-    readonly List<List<List<Vector3>>> finalDancerPoses = []; 
+    readonly List<List<List<Vector3>>> finalDancerPoses = [];
     readonly List<List<Tuple<int, bool>>> finalIndexCamerasAndPoseAnchor = [];
     readonly List<List<Tuple<int, bool>>> finalIndexMirroredCamerasAndPoseAnchor = [];
+
+    List<Vector3> cameraPositions = [];
+    List<float> cameraFocalLengths = [];
 
     public MainWindow()
     {
@@ -111,6 +117,9 @@ public partial class MainWindow : Window
                 // populate camera markers
                 currentSelectedCamerasAndPoseAnchor.Add(new Tuple<int, bool>(-1, false));
                 mirrorCurrentSelectedCamerasAndPoseAnchor.Add(new Tuple<int, bool>(-1, false));
+
+                RadioButton layoutCamButton = new RadioButton { Content = $"Camera{i}" };
+                RadioButtonsPanel.Children.Add(layoutCamButton);
             }
         }
     }
@@ -394,15 +403,15 @@ public partial class MainWindow : Window
         string cameraSavePath = Path.Combine(directory, $"camera-{cameraName}.json");
         string mirroredCameraSavePath = Path.Combine(directory, $"mirror-camera-{cameraName}.json");
 
-        File.WriteAllText(leadSavePath, 
+        File.WriteAllText(leadSavePath,
             JsonConvert.SerializeObject(finalDancerPoses[0], Formatting.Indented));
-        File.WriteAllText(followSavePath, 
+        File.WriteAllText(followSavePath,
             JsonConvert.SerializeObject(finalDancerPoses[1], Formatting.Indented));
-        File.WriteAllText(mirroredLeadSavePath, 
+        File.WriteAllText(mirroredLeadSavePath,
             JsonConvert.SerializeObject(finalDancerPoses[2], Formatting.Indented));
-        File.WriteAllText(mirroredFollowSavePath, 
+        File.WriteAllText(mirroredFollowSavePath,
             JsonConvert.SerializeObject(finalDancerPoses[3], Formatting.Indented));
-        
+
         File.WriteAllText(cameraSavePath,
             JsonConvert.SerializeObject(finalIndexCamerasAndPoseAnchor, Formatting.Indented));
         File.WriteAllText(mirroredCameraSavePath,
@@ -456,5 +465,66 @@ public partial class MainWindow : Window
         return $"{AlphaPoseJsonPath.Text}/{fileName}/alphapose-results.json";
     }
 
+    #endregion
+
+    #region ROOM LAYOUT    
+    
+    void LayoutCanvas_MouseDown(object sender, PointerPressedEventArgs args)
+    {
+        // Draw the triangle representing the camera position
+        PointerPoint point = args.GetCurrentPoint(sender as Control);
+
+        // Calculate the triangle size based on the focal length
+        float focalLength = float.Parse(FocalLengthInput.Text);
+
+        // Create and add the triangle to the canvas
+        Polygon triangle = CreateTriangle(point, focalLength, LayoutCanvas.Width, LayoutCanvas.Height);
+        LayoutCanvas.Children.Add(triangle);
+
+        cameraPositions.Add(new Vector3((float)point.Position.X, float.Parse(HeightInputText.Text),
+            (float)point.Position.Y));
+        cameraFocalLengths.Add(focalLength);
+    }
+
+    static Polygon CreateTriangle(PointerPoint position, double focalLength, double canvasWidth, double canvasHeight)
+    {
+        Polygon triangle = new Polygon
+        {
+            Stroke = Brushes.Black,
+            Fill = Brushes.Black,
+            StrokeThickness = 2
+        };
+
+        // The points of the triangle will be determined based on the position and baseWidth
+        const double baseWidth = 30;
+
+        // Calculate the angle to rotate the triangle
+        double angle = Math.Atan2(position.Position.Y - canvasHeight / 2, position.Position.X - canvasWidth / 2) -
+                       Math.PI / 2;
+
+        // Calculate the rotated points
+        Point top = new Point(0, 0);
+        Point bottomLeft = new Point(-baseWidth / 2, -focalLength * 100);
+        Point bottomRight = new Point(baseWidth / 2, -focalLength * 100);
+
+        triangle.Points.Add(top);
+        triangle.Points.Add(RotatePoint(bottomLeft, angle));
+        triangle.Points.Add(RotatePoint(bottomRight, angle));
+
+        // Translate the triangle to the position
+        Matrix matrix = Matrix.CreateTranslation(position.Position.X, position.Position.Y);
+        triangle.RenderTransform = new MatrixTransform(matrix);
+
+        return triangle;
+    }
+
+    static Point RotatePoint(Point point, double angle)
+    {
+        return new Point(
+            point.X * Math.Cos(angle) - point.Y * Math.Sin(angle),
+            point.X * Math.Sin(angle) + point.Y * Math.Cos(angle)
+        );
+    }
+    
     #endregion
 }

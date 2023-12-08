@@ -23,7 +23,7 @@
                 <ComboBox Name="VideoFilesDropdown" Width="300" Margin="5" />
                 <StackPanel Orientation="Horizontal" HorizontalAlignment="Center">
                     <StackPanel Name="DynamicRadioButtonsPanel" Orientation="Horizontal" HorizontalAlignment="Center">
-                        <RadioButton GroupName="Role" Content="Lead" Margin="5" IsChecked="True" IsDefault="True"/>
+                        <RadioButton GroupName="Role" Content="Lead" Margin="5" IsChecked="True" IsDefault="True" />
                         <RadioButton GroupName="Role" Content="Follow" Margin="5" />
                     </StackPanel>
                     <CheckBox Name="IsMirroredCheckbox" Content="Is Mirrored" Margin="5" />
@@ -51,11 +51,21 @@
             <TabItem.Header>
                 <TextBlock VerticalAlignment="Center">Camera Positions</TextBlock>
             </TabItem.Header>
-            <Canvas Name="LayoutCanvas">
-                <Image Name="RoomLayout" Stretch="None" Canvas.Left="0" Canvas.Top="0" Canvas.Bottom="0"
-                       Canvas.Right="0" />
-            </Canvas>
+            <StackPanel>
+                <StackPanel Name="RadioButtonsPanel" Orientation="Horizontal" />
+                <StackPanel Orientation="Horizontal">
+                    <TextBox Name="FocalLengthInput" Text="0.2" />
+                    <TextBox Name="HeightInputText" Text="1.5" />
+                </StackPanel>
+                <Canvas Name="LayoutCanvas" Background="White" PointerPressed="LayoutCanvas_MouseDown" Width="1000"
+                        Height="800">
+                    <Rectangle Width="1000" Height="800" Stroke="Black" />
+                    <Ellipse Fill="Red" Width="50" Height="50" Canvas.Left="475" Canvas.Top="375" />
+                    <Ellipse Fill="Magenta" Width="50" Height="50" Canvas.Left="525" Canvas.Top="375" />
+                </Canvas>
+            </StackPanel>
         </TabItem>
+
         <!-- END Controls / Settings Tab -->
     </TabControl>
 </Window>
