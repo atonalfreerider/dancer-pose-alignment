@@ -49,6 +49,27 @@ public partial class MainWindow : Window
     public MainWindow()
     {
         InitializeComponent();
+        VideoFilesDropdown.SelectionChanged += delegate
+        {
+            hasVideoBeenInitialized = false;
+            hasPoseBeenInitialized = false;
+            frameCount = 0;
+            totalFrameCount = 0;
+            currentLeadIndex =-1;
+            mirrorCurrentLeadIndex = -1;
+            currentFollowIndex = -1;
+            mirrorCurrentFollowIndex = -1;
+            stepBackFrame = 0;
+            lastTenFrames.Clear();
+            PosesByFrameByPerson = new Dictionary<int, Dictionary<int, List<Vector3>>>();
+            posesByPersonAtFrame = new Dictionary<int, List<Vector3>>();
+            currentSelectedCamerasAndPoseAnchor.Clear();
+            mirrorCurrentSelectedCamerasAndPoseAnchor.Clear();
+            finalIndexListLeadAndFollow.Clear();
+            finalIndexListMirroredLeadAndFollow.Clear();
+            finalIndexCamerasAndPoseAnchor.Clear();
+            finalIndexMirroredCamerasAndPoseAnchor.Clear();
+        };
     }
 
     #region BUTTON ACTIONS
