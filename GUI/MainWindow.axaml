@@ -1,4 +1,4 @@
-﻿<Window xmlns="https://github.com/avaloniaui"
+<Window xmlns="https://github.com/avaloniaui"
         xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
         xmlns:d="http://schemas.microsoft.com/expression/blend/2008"
         xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"
@@ -23,7 +23,7 @@
                 <ComboBox Name="VideoFilesDropdown" Width="300" Margin="5" />
                 <StackPanel Orientation="Horizontal" HorizontalAlignment="Center">
                     <StackPanel Name="DynamicRadioButtonsPanel" Orientation="Horizontal" HorizontalAlignment="Center">
-                        <RadioButton GroupName="Role" Content="Lead" Margin="5" />
+                        <RadioButton GroupName="Role" Content="Lead" Margin="5" IsChecked="True" IsDefault="True"/>
                         <RadioButton GroupName="Role" Content="Follow" Margin="5" />
                     </StackPanel>
                     <CheckBox Name="IsMirroredCheckbox" Content="Is Mirrored" Margin="5" />

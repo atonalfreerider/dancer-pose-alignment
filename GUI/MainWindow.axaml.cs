@@ -3,7 +3,6 @@ using Avalonia;
 using Avalonia.Controls;
 using Avalonia.Input;
 using Avalonia.Interactivity;
-using Avalonia.Markup.Xaml;
 using Avalonia.Media;
 using Avalonia.Media.Imaging;
 using Avalonia.Threading;
@@ -18,7 +17,7 @@ public partial class MainWindow : Window
 {
     // initializeation
     VideoCapture frameSource;
-    Dictionary<int, Dictionary<int, List<Vector3>>> PosesByFrameByPerson;
+    Dictionary<int, Dictionary<int, List<Vector3>>> alphaPosesByFrameByPerson;
 
     // indices for tracked figures
     int currentLeadIndex = -1;
@@ -37,8 +36,8 @@ public partial class MainWindow : Window
     readonly List<Tuple<int, bool>> mirrorCurrentSelectedCamerasAndPoseAnchor = [];
 
     // states to serialize
-    readonly List<Tuple<int, int>> finalIndexListLeadAndFollow = [];
-    readonly List<Tuple<int, int>> finalIndexListMirroredLeadAndFollow = [];
+    // 0 - lead, 1 - follow, 2 - mirror lead, 3 - mirror follow. they are updated at every frame change
+    readonly List<List<List<Vector3>>> finalDancerPoses = []; 
     readonly List<List<Tuple<int, bool>>> finalIndexCamerasAndPoseAnchor = [];
     readonly List<List<Tuple<int, bool>>> finalIndexMirroredCamerasAndPoseAnchor = [];
 
@@ -54,14 +53,26 @@ public partial class MainWindow : Window
             currentFollowIndex = -1;
             mirrorCurrentFollowIndex = -1;
             posesByPersonAtFrame = new Dictionary<int, List<Vector3>>();
-            finalIndexListLeadAndFollow.Clear();
-            finalIndexListMirroredLeadAndFollow.Clear();
+            finalDancerPoses.Clear();
             finalIndexCamerasAndPoseAnchor.Clear();
             finalIndexMirroredCamerasAndPoseAnchor.Clear();
-            ResetCamMarkers();
+            ClearCameraMarkers();
 
-            PosesByFrameByPerson = AlphaPose.PosesByFrameByPerson(GetAlphaPoseJsonPath());
+            alphaPosesByFrameByPerson = AlphaPose.PosesByFrameByPerson(GetAlphaPoseJsonPath());
             totalFrameCount = FindMaxFrame();
+            // populate final index lists
+            for (int i = 0; i < totalFrameCount; i++)
+            {
+                List<List<Vector3>> frameDancerPoses = [];
+                for (int j = 0; j < 4; j++)
+                {
+                    frameDancerPoses.Add([]); // 0 - lead, 1 - follow, 2 - mirror lead, 3 - mirror follow
+                }
+
+                finalDancerPoses.Add(frameDancerPoses);
+                finalIndexCamerasAndPoseAnchor.Add([]);
+                finalIndexMirroredCamerasAndPoseAnchor.Add([]);
+            }
 
             frameSource = new VideoCapture(GetVideoPath());
             RenderZero();
@@ -97,6 +108,7 @@ public partial class MainWindow : Window
 
                 DynamicRadioButtonsPanel.Children.Add(radioButton);
 
+                // populate camera markers
                 currentSelectedCamerasAndPoseAnchor.Add(new Tuple<int, bool>(-1, false));
                 mirrorCurrentSelectedCamerasAndPoseAnchor.Add(new Tuple<int, bool>(-1, false));
             }
@@ -110,11 +122,11 @@ public partial class MainWindow : Window
         mirrorCurrentFollowIndex = -1;
         mirrorCurrentLeadIndex = -1;
 
-        ResetCamMarkers();
+        ClearCameraMarkers();
         RedrawPoses();
     }
 
-    void ResetCamMarkers()
+    void ClearCameraMarkers()
     {
         for (int i = 0; i < numCameras; i++)
         {
@@ -126,7 +138,7 @@ public partial class MainWindow : Window
     void BackButton_Click(object sender, RoutedEventArgs e)
     {
         if (frameCount <= 0) return;
-
+        SaveIndicesForFrame();
         frameCount--;
         RenderFrame();
     }
@@ -135,6 +147,7 @@ public partial class MainWindow : Window
     {
         if (frameCount >= totalFrameCount) return;
 
+        SaveIndicesForFrame();
         frameCount++;
         RenderFrame();
     }
@@ -145,6 +158,7 @@ public partial class MainWindow : Window
                posesByPersonAtFrame.ContainsKey(currentLeadIndex) &&
                posesByPersonAtFrame.ContainsKey(currentFollowIndex))
         {
+            SaveIndicesForFrame();
             frameCount++;
             RenderFrame();
         }
@@ -183,12 +197,6 @@ public partial class MainWindow : Window
 
     void RenderFrame()
     {
-        if (frameCount > 0)
-        {
-            // save the lead and follow indices from the last frame
-            finalIndexListLeadAndFollow.Add(new Tuple<int, int>(currentLeadIndex, currentFollowIndex));
-        }
-
         OutputArray outputArray = new Mat();
         frameSource.Set(VideoCaptureProperties.PosFrames, frameCount);
         frameSource.Read(outputArray);
@@ -208,7 +216,7 @@ public partial class MainWindow : Window
         }
 
         posesByPersonAtFrame = new Dictionary<int, List<Vector3>>();
-        foreach ((int personId, Dictionary<int, List<Vector3>> posesByFrame) in PosesByFrameByPerson)
+        foreach ((int personId, Dictionary<int, List<Vector3>> posesByFrame) in alphaPosesByFrameByPerson)
         {
             if (posesByFrame.TryGetValue(frameCount, out List<Vector3>? value))
             {
@@ -217,15 +225,28 @@ public partial class MainWindow : Window
         }
 
         FrameNumberText.Text = $"{frameCount}:{totalFrameCount}";
-        SetPreview(frame);
+
+        Dispatcher.UIThread.Post(() => { PreviewImage.Source = frame; }, DispatcherPriority.Render);
+        Dispatcher.UIThread.RunJobs();
+
         RedrawPoses();
     }
 
-    void SetPreview(IImage frame)
+    void SaveIndicesForFrame()
     {
-        Dispatcher.UIThread.Post(() => { PreviewImage.Source = frame; }, DispatcherPriority.Render);
-
-        Dispatcher.UIThread.RunJobs();
+        // save the lead and follow indices from the last frame
+        finalDancerPoses[frameCount][0] = currentLeadIndex > -1
+            ? posesByPersonAtFrame[currentLeadIndex]
+            : [];
+        finalDancerPoses[frameCount][1] = currentFollowIndex > -1
+            ? posesByPersonAtFrame[currentFollowIndex]
+            : [];
+        finalDancerPoses[frameCount][2] = mirrorCurrentLeadIndex > -1
+            ? posesByPersonAtFrame[mirrorCurrentLeadIndex]
+            : [];
+        finalDancerPoses[frameCount][3] = mirrorCurrentFollowIndex > -1
+            ? posesByPersonAtFrame[mirrorCurrentFollowIndex]
+            : [];
     }
 
     void RedrawPoses()
@@ -271,58 +292,31 @@ public partial class MainWindow : Window
             case "Lead":
                 if (IsMirroredCheckbox.IsChecked == true)
                 {
-                    if (mirrorCurrentLeadIndex > -1 && closestIndex == mirrorCurrentLeadIndex)
-                    {
-                        // deselect lead
-                        mirrorCurrentLeadIndex = -1;
-                    }
-                    else
-                    {
-                        // set lead
-                        mirrorCurrentLeadIndex = closestIndex;
-                    }
+                    mirrorCurrentLeadIndex = mirrorCurrentLeadIndex > -1 && closestIndex == mirrorCurrentLeadIndex
+                        ? -1
+                        : closestIndex;
                 }
                 else
                 {
-                    if (currentLeadIndex > -1 && closestIndex == currentLeadIndex)
-                    {
-                        // deselect lead
-                        currentLeadIndex = -1;
-                    }
-                    else
-                    {
-                        // set lead
-                        currentLeadIndex = closestIndex;
-                    }
+                    currentLeadIndex = currentLeadIndex > -1 && closestIndex == currentLeadIndex
+                        ? -1 // deselect
+                        : closestIndex; // select
                 }
 
                 break;
             case "Follow":
                 if (IsMirroredCheckbox.IsChecked == true)
                 {
-                    if (mirrorCurrentFollowIndex > -1 && closestIndex == mirrorCurrentFollowIndex)
-                    {
-                        // deselect follow
-                        mirrorCurrentFollowIndex = -1;
-                    }
-                    else
-                    {
-                        // set follow
-                        mirrorCurrentFollowIndex = closestIndex;
-                    }
+                    // deselect follow
+                    mirrorCurrentFollowIndex = mirrorCurrentFollowIndex > -1 && closestIndex == mirrorCurrentFollowIndex
+                        ? -1
+                        : closestIndex;
                 }
                 else
                 {
-                    if (currentFollowIndex > -1 && closestIndex == currentFollowIndex)
-                    {
-                        // deselect follow
-                        currentFollowIndex = -1;
-                    }
-                    else
-                    {
-                        // set follow
-                        currentFollowIndex = closestIndex;
-                    }
+                    currentFollowIndex = currentFollowIndex > -1 && closestIndex == currentFollowIndex
+                        ? -1
+                        : closestIndex;
                 }
 
                 break;
@@ -331,30 +325,20 @@ public partial class MainWindow : Window
                 if (IsMirroredCheckbox.IsChecked == true)
                 {
                     Tuple<int, bool> camAndHand = mirrorCurrentSelectedCamerasAndPoseAnchor[camNumber];
-                    if (camAndHand.Item1 == closestIndex)
-                    {
-                        mirrorCurrentSelectedCamerasAndPoseAnchor[camNumber] = new Tuple<int, bool>(-1, false);
-                    }
-                    else
-                    {
-                        mirrorCurrentSelectedCamerasAndPoseAnchor[camNumber] = new Tuple<int, bool>(
+                    mirrorCurrentSelectedCamerasAndPoseAnchor[camNumber] = camAndHand.Item1 == closestIndex
+                        ? new Tuple<int, bool>(-1, false)
+                        : new Tuple<int, bool>(
                             closestIndex,
-                            HalpeExtension.IsRightSide((Halpe) jointSelected));
-                    }
+                            HalpeExtension.IsRightSide((Halpe)jointSelected));
                 }
                 else
                 {
                     Tuple<int, bool> camAndHand = currentSelectedCamerasAndPoseAnchor[camNumber];
-                    if (camAndHand.Item1 == closestIndex)
-                    {
-                        currentSelectedCamerasAndPoseAnchor[camNumber] = new Tuple<int, bool>(-1, false);
-                    }
-                    else
-                    {
-                        currentSelectedCamerasAndPoseAnchor[camNumber] = new Tuple<int, bool>(
+                    currentSelectedCamerasAndPoseAnchor[camNumber] = camAndHand.Item1 == closestIndex
+                        ? new Tuple<int, bool>(-1, false)
+                        : new Tuple<int, bool>(
                             closestIndex,
-                            HalpeExtension.IsRightSide((Halpe) jointSelected));
-                    }
+                            HalpeExtension.IsRightSide((Halpe)jointSelected));
                 }
 
                 break;
@@ -395,7 +379,7 @@ public partial class MainWindow : Window
 
     int FindMaxFrame()
     {
-        return PosesByFrameByPerson.Values
+        return alphaPosesByFrameByPerson.Values
             .Aggregate(0,
                 (current, posesByFrames) => posesByFrames.Keys.Prepend(current)
                     .Max());
@@ -405,58 +389,42 @@ public partial class MainWindow : Window
     {
         string leadSavePath = Path.Combine(directory, $"lead-{cameraName}.json");
         string followSavePath = Path.Combine(directory, $"follow-{cameraName}.json");
+        string mirroredLeadSavePath = Path.Combine(directory, $"mirror-lead-{cameraName}.json");
+        string mirroredFollowSavePath = Path.Combine(directory, $"mirror-follow-{cameraName}.json");
+        string cameraSavePath = Path.Combine(directory, $"camera-{cameraName}.json");
+        string mirroredCameraSavePath = Path.Combine(directory, $"mirror-camera-{cameraName}.json");
 
-        List<List<Vector3>> leadPoses = [];
-        List<List<Vector3>> followPoses = [];
-        int count = 0;
-        foreach (Tuple<int, int> leadAndFollow in finalIndexListLeadAndFollow)
-        {
-            if (leadAndFollow.Item1 > -1 &&
-                PosesByFrameByPerson[leadAndFollow.Item1].TryGetValue(count, out List<Vector3>? leadVal))
-            {
-                leadPoses.Add(leadVal);
-            }
-            else
-            {
-                // add empty if pose is missing
-                leadPoses.Add([]);
-            }
+        File.WriteAllText(leadSavePath, 
+            JsonConvert.SerializeObject(finalDancerPoses[0], Formatting.Indented));
+        File.WriteAllText(followSavePath, 
+            JsonConvert.SerializeObject(finalDancerPoses[1], Formatting.Indented));
+        File.WriteAllText(mirroredLeadSavePath, 
+            JsonConvert.SerializeObject(finalDancerPoses[2], Formatting.Indented));
+        File.WriteAllText(mirroredFollowSavePath, 
+            JsonConvert.SerializeObject(finalDancerPoses[3], Formatting.Indented));
+        
+        File.WriteAllText(cameraSavePath,
+            JsonConvert.SerializeObject(finalIndexCamerasAndPoseAnchor, Formatting.Indented));
+        File.WriteAllText(mirroredCameraSavePath,
+            JsonConvert.SerializeObject(finalIndexMirroredCamerasAndPoseAnchor, Formatting.Indented));
 
-            if (leadAndFollow.Item2 > -1 &&
-                PosesByFrameByPerson[leadAndFollow.Item2].TryGetValue(count, out List<Vector3>? followVal))
-            {
-                followPoses.Add(followVal);
-            }
-            else
-            {
-                // add empty if pose is missing
-                followPoses.Add([]);
-            }
-
-            count++;
-        }
-
-        File.WriteAllText(leadSavePath, JsonConvert.SerializeObject(leadPoses, Formatting.Indented));
-        File.WriteAllText(followSavePath, JsonConvert.SerializeObject(followPoses, Formatting.Indented));
-
-        Console.WriteLine($"Saved to: {leadSavePath})");
-        Console.WriteLine($"Saved to: {followSavePath})");
+        Console.WriteLine($"Saved to: {directory})");
     }
 
     float PoseError(int personIdx)
     {
         int poseCount = 0;
         List<Vector3> currentPose = [];
-        if (PosesByFrameByPerson[personIdx].ContainsKey(frameCount))
+        if (alphaPosesByFrameByPerson[personIdx].ContainsKey(frameCount))
         {
-            currentPose = PosesByFrameByPerson[personIdx][frameCount];
+            currentPose = alphaPosesByFrameByPerson[personIdx][frameCount];
             poseCount = currentPose.Count;
         }
 
         List<Vector3> previousPose = [];
-        if (PosesByFrameByPerson[personIdx].ContainsKey(frameCount - 1))
+        if (alphaPosesByFrameByPerson[personIdx].ContainsKey(frameCount - 1))
         {
-            previousPose = PosesByFrameByPerson[personIdx][frameCount - 1];
+            previousPose = alphaPosesByFrameByPerson[personIdx][frameCount - 1];
         }
 
         float error = 0;
@@ -475,7 +443,6 @@ public partial class MainWindow : Window
         Console.WriteLine($"pose error: {error}");
         return error;
     }
-
 
     string GetVideoPath()
     {
