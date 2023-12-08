@@ -11,7 +11,11 @@ public static class PreviewDrawer
         Dictionary<int, List<Vector3>> posesByPersonAtFrame, 
         Size imgSize,
         int currentLeadIndex,
-        int currentFollowIndex)
+        int currentFollowIndex,
+        int mirrorCurrentLeadIndex,
+        int mirrorCurrentFollowIndex,
+        List<Tuple<int, int>> currentSelectedCamerasAndPoseAnchor,
+        List<Tuple<int, int>> mirrorCurrentSelectedCamerasAndPoseAnchor)
     {
         DrawingImage drawingImage = new DrawingImage();
         DrawingGroup drawingGroup = new DrawingGroup();
@@ -38,6 +42,14 @@ public static class PreviewDrawer
             else if (currentFollowIndex > -1 && personIdx == currentFollowIndex)
             {
                 role = 1;
+            }
+            else if (mirrorCurrentLeadIndex > -1 && personIdx == mirrorCurrentLeadIndex)
+            {
+                role = 2;
+            }
+            else if (mirrorCurrentFollowIndex > -1 && personIdx == mirrorCurrentFollowIndex)
+            {
+                role = 3;
             }
             
             foreach (Vector3 joint in pose)
@@ -150,6 +162,21 @@ public static class PreviewDrawer
                 Rvalue = 255;
                 Gvalue = 0;
                 Bvalue = 255;
+                break;
+            case 2:
+                Rvalue = 255;
+                Gvalue = 100;
+                Bvalue = 100;
+                break;
+            case 3:
+                Rvalue = 255;
+                Gvalue = 100;
+                Bvalue = 255;
+                break;
+            case 4:
+                Rvalue = 0;
+                Gvalue = 255;
+                Bvalue = 0;
                 break;
         }
 

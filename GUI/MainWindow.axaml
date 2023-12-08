@@ -6,35 +6,56 @@
         x:Class="GUI.MainWindow"
         Title="Layout">
 
-  <TabControl>
-    <!-- Controls / Settings Tab -->
-    <TabItem>
-      <TabItem.Header>
-        <TextBlock VerticalAlignment="Center">Pose Refinement</TextBlock>
-      </TabItem.Header>
-      
-      <!-- START Controls Stack Panel -->
-        <StackPanel Orientation="Vertical">
-           <StackPanel Orientation="Horizontal" HorizontalAlignment="Center">
-             <TextBox Name="AlphaPoseJsonPath" Watermark="Path to AlphaPose jsons..." Width="300" Margin="5" />
-             <TextBox Name="VideoInputPath" Watermark="Path to videos..." Width="300" Margin="5" />
-             <Button Name="LoadVideosButton" Content="Load Videos" Margin="5" Click="LoadVideosButton_Click"/>
-           </StackPanel>
-           <ComboBox Name="VideoFilesDropdown" Width="300" Margin="5" />
-           <StackPanel Orientation="Horizontal" HorizontalAlignment="Center">
-             <Button Name="ClearDancersButton" Content="Clear Dancers" Height="30" Margin="5" Click="ClearDancers_Click"/>
-             <Button Name="BackButton" Content="Back" Height="30" Margin="5" Click="BackButton_Click"/>
-             <Button Name="NextFrameButton" Content="Next" Height="30" Margin="5" Click="NextFrameButton_Click"/>
-             <TextBox Name="FrameNumberText" Height="30" Width="100" Margin="5" Watermark="Progress..."/>
-             <Button Name="RunUntilNext" Content="Run Until Next Discontinuity" Height="30" Click="RunUntilNext_Click" />
-             <Button Name="SaveButton" Content="Save" Height="30" Click="SaveButton_Click"/>
-           </StackPanel>
-           <Canvas Name="Canvas">
-             <Image Name="PreviewImage" Stretch="None" Canvas.Left="0" Canvas.Top="0" Canvas.Bottom="0" Canvas.Right="0" />
-             <Image Name="PoseImage" Stretch="None" Canvas.Left="0" Canvas.Top="0" Canvas.Bottom="0" Canvas.Right="0" PointerPressed="PointerPressedHandler" />
-           </Canvas>
-        </StackPanel>
-    </TabItem>
-    <!-- END Controls / Settings Tab -->
-  </TabControl>
+    <TabControl>
+        <!-- Controls / Settings Tab -->
+        <TabItem>
+            <TabItem.Header>
+                <TextBlock VerticalAlignment="Center">Pose Refinement</TextBlock>
+            </TabItem.Header>
+
+            <!-- START Controls Stack Panel -->
+            <StackPanel Orientation="Vertical">
+                <StackPanel Orientation="Horizontal" HorizontalAlignment="Center">
+                    <TextBox Name="AlphaPoseJsonPath" Watermark="Path to AlphaPose jsons..." Width="300" Margin="5" />
+                    <TextBox Name="VideoInputPath" Watermark="Path to videos..." Width="300" Margin="5" />
+                    <Button Name="LoadVideosButton" Content="Load Videos" Margin="5" Click="LoadVideosButton_Click" />
+                </StackPanel>
+                <ComboBox Name="VideoFilesDropdown" Width="300" Margin="5" />
+                <StackPanel Orientation="Horizontal" HorizontalAlignment="Center">
+                    <StackPanel Name="DynamicRadioButtonsPanel" Orientation="Horizontal" HorizontalAlignment="Center">
+                        <RadioButton GroupName="Role" Content="Lead" Margin="5" />
+                        <RadioButton GroupName="Role" Content="Follow" Margin="5" />
+                    </StackPanel>
+                    <CheckBox Name="IsMirroredCheckbox" Content="Is Mirrored" Margin="5" />
+                </StackPanel>
+                <StackPanel Orientation="Horizontal" HorizontalAlignment="Center">
+                    <!-- IMAGE DISPLAY -->
+                    <Button Name="ClearDancersButton" Content="Clear Dancers" Height="30" Margin="5"
+                            Click="ClearDancers_Click" />
+                    <Button Name="BackButton" Content="Back" Height="30" Margin="5" Click="BackButton_Click" />
+                    <Button Name="NextFrameButton" Content="Next" Height="30" Margin="5" Click="NextFrameButton_Click" />
+                    <TextBox Name="FrameNumberText" Height="30" Width="100" Margin="5" Watermark="Progress..." />
+                    <Button Name="RunUntilNext" Content="Run Until Next Discontinuity" Height="30" Margin="5"
+                            Click="RunUntilNext_Click" />
+                    <Button Name="SaveButton" Content="Save" Height="30" Margin="5" Click="SaveButton_Click" />
+                </StackPanel>
+                <Canvas Name="VideoCanvas">
+                    <Image Name="PreviewImage" Stretch="None" Canvas.Left="0" Canvas.Top="0" Canvas.Bottom="0"
+                           Canvas.Right="0" />
+                    <Image Name="PoseImage" Stretch="None" Canvas.Left="0" Canvas.Top="0" Canvas.Bottom="0"
+                           Canvas.Right="0" PointerPressed="PointerPressedHandler" />
+                </Canvas>
+            </StackPanel>
+        </TabItem>
+        <TabItem>
+            <TabItem.Header>
+                <TextBlock VerticalAlignment="Center">Camera Positions</TextBlock>
+            </TabItem.Header>
+            <Canvas Name="LayoutCanvas">
+                <Image Name="RoomLayout" Stretch="None" Canvas.Left="0" Canvas.Top="0" Canvas.Bottom="0"
+                       Canvas.Right="0" />
+            </Canvas>
+        </TabItem>
+        <!-- END Controls / Settings Tab -->
+    </TabControl>
 </Window>
