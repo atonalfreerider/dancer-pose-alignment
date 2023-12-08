@@ -12,6 +12,7 @@ using Newtonsoft.Json;
 using OpenCvSharp;
 using Path = System.IO.Path;
 using Point = Avalonia.Point;
+using Size = Avalonia.Size;
 using Window = Avalonia.Controls.Window;
 
 namespace GUI;
@@ -85,7 +86,7 @@ public partial class MainWindow : Window
         };
     }
 
-    #region BUTTON ACTIONS
+    #region POSE REFINEMENT
 
     void LoadVideosButton_Click(object sender, RoutedEventArgs e)
     {
@@ -524,6 +525,154 @@ public partial class MainWindow : Window
             point.X * Math.Cos(angle) - point.Y * Math.Sin(angle),
             point.X * Math.Sin(angle) + point.Y * Math.Cos(angle)
         );
+    }
+    
+    #endregion
+
+    #region PERSPECTIVE
+    
+    void LoadJsonForPerspectiveButton_Click(object sender, RoutedEventArgs e)
+    {
+        string directoryPath = DirectoryPathTextBox.Text;
+
+        if (Directory.Exists(directoryPath))
+        {
+            CanvasContainer.Items.Clear();
+            foreach (string file in Directory.GetFiles(directoryPath, "*.json"))
+            {
+                try
+                {
+                    // TODO move this out to be able to load multiple files
+                    string jsonContent = File.ReadAllText(file);
+                    List<List<Vector3>> dancerPoses = JsonConvert.DeserializeObject<List<List<Vector3>>>(jsonContent);
+                    Dictionary<int, List<Vector3>> dancersAtFrame = new Dictionary<int, List<Vector3>>();
+                    dancersAtFrame.Add(0, dancerPoses[0]);
+                    Image image = new Image();
+                    Canvas canvas = new Canvas();
+                    canvas.Children.Add(image);
+                    canvas.Width = 500;
+                    canvas.Height = 500;
+                    CanvasContainer.Items.Add(canvas);
+                    
+                    Dispatcher.UIThread.Post(() =>
+                    {
+                        DrawingImage drawingImage = PreviewDrawer.DrawGeometry(
+                            dancersAtFrame,
+                            new Size(500, 500),
+                            0, 
+                            -1, // TODO
+                            -1,
+                            -1,
+                            [],
+                            []);
+                        image.Source = drawingImage;
+                    }, DispatcherPriority.Render);
+
+                    Dispatcher.UIThread.RunJobs();
+                }
+                catch (JsonException jsonEx)
+                {
+                    // Handle JSON deserialization errors
+                    Console.WriteLine($"JSON Error in file {file}: {jsonEx.Message}");
+                }
+                catch (Exception ex)
+                {
+                    // Handle other errors (e.g., file read errors)
+                    Console.WriteLine($"Error loading file {file}: {ex.Message}");
+                }
+            }
+        }
+        else
+        {
+            // Handle the case where the directory does not exist
+            Console.WriteLine("Directory does not exist.");
+        }
+    }
+
+    void Canvas_PointerPressed(object sender, PointerPressedEventArgs e)
+    {
+        // Mark this canvas as selected
+    }
+
+    // Add event handlers for perspective manipulation buttons
+    void YawLeftButton_Click(object sender, RoutedEventArgs e)
+    {
+        /* ... */
+    }
+
+    void YawRightButton_Click(object sender, RoutedEventArgs e)
+    {
+        /* ... */
+    }
+
+    void PitchUpButton_Click(object sender, RoutedEventArgs e)
+    {
+        /* ... */
+    }
+
+    void PitchDownButton_Click(object sender, RoutedEventArgs e)
+    {
+        /* ... */
+    }
+
+    void ZoomInButton_Click(object sender, RoutedEventArgs e)
+    {
+        /* ... */
+    }
+
+    void ZoomOutButton_Click(object sender, RoutedEventArgs e)
+    {
+        /* ... */
+    }
+
+    void RollLeftButton_Click(object sender, RoutedEventArgs e)
+    {
+        /* ... */
+    }
+
+    void RollRightButton_Click(object sender, RoutedEventArgs e)
+    {
+        /* ... */
+    }
+
+    void TranslateLeftButton_Click(object sender, RoutedEventArgs e)
+    {
+        /* ... */
+    }
+
+    void TranslateRightButton_Click(object sender, RoutedEventArgs e)
+    {
+        /* ... */
+    }
+
+    void TranslateUpButton_Click(object sender, RoutedEventArgs e)
+    {
+        /* ... */
+    }
+
+    void TranslateDownButton_Click(object sender, RoutedEventArgs e)
+    {
+        /* ... */
+    }
+
+    void TranslateForwardButton_Click(object sender, RoutedEventArgs e)
+    {
+        /* ... */
+    }
+
+    void TranslateBackwardButton_Click(object sender, RoutedEventArgs e)
+    {
+        /* ... */
+    }
+
+    void SolveButton_Click(object sender, RoutedEventArgs e)
+    {
+        // Implement the solve logic
+    }
+    
+    void Save3D_Click(object sender, RoutedEventArgs e)
+    {
+        // Implement the save logic
     }
     
     #endregion

@@ -65,6 +65,56 @@
                 </Canvas>
             </StackPanel>
         </TabItem>
+        <TabItem>
+            <TabItem.Header>
+                <TextBlock VerticalAlignment="Center">Camera Solver</TextBlock>
+            </TabItem.Header>
+            <StackPanel Orientation="Vertical">
+                <StackPanel Orientation="Horizontal" HorizontalAlignment="Center">
+                    <TextBox x:Name="DirectoryPathTextBox" Width="300" Margin="5" Watermark="Path to 2D jsons and camera jsons dir..." />
+                    <Button Content="Load" Margin="5" Click="LoadJsonForPerspectiveButton_Click" />
+                </StackPanel>
+                <StackPanel Orientation="Horizontal" HorizontalAlignment="Center">
+                    <!-- Buttons for perspective manipulation -->
+                    <Button Content="Yaw Left" Margin="5" Click="YawLeftButton_Click" />
+                    <Button Content="Roll Left" Margin="5" Click="RollLeftButton_Click" />
+                    <Button Content="Pitch Up" Margin="5" Click="PitchUpButton_Click" />
+                    <Button Content="Zoom In" Margin="5" Click="ZoomInButton_Click" />
+                    <Button Content="Zoom Out" Margin="5" Click="ZoomOutButton_Click" />
+                    <Button Content="Pitch Down" Margin="5" Click="PitchDownButton_Click" />
+                    <Button Content="Roll Right" Margin="5" Click="RollRightButton_Click" />
+                    <Button Content="Yaw Right" Margin="5" Click="YawRightButton_Click" />
+                </StackPanel>
+                <ScrollViewer HorizontalScrollBarVisibility="Auto">
+                    <ItemsControl x:Name="CanvasContainer" >
+                        <ItemsControl.ItemsPanel>
+                            <ItemsPanelTemplate>
+                                <StackPanel Orientation="Horizontal" />
+                            </ItemsPanelTemplate>
+                        </ItemsControl.ItemsPanel>
+                        <ItemsControl.ItemTemplate>
+                            <DataTemplate>
+                                <Border BorderBrush="Black" BorderThickness="1" Padding="5">
+                                    <Canvas Width="{Binding Width}" Height="{Binding Height}"
+                                            PointerPressed="Canvas_PointerPressed" />
+                                </Border>
+                            </DataTemplate>
+                        </ItemsControl.ItemTemplate>
+                    </ItemsControl>
+                </ScrollViewer>
+                <StackPanel Orientation="Horizontal" HorizontalAlignment="Center">
+                    <!-- Buttons for translation manipulation -->
+                    <Button Content="Left" Margin="5" Click="TranslateLeftButton_Click" />
+                    <Button Content="Up" Margin="5" Click="TranslateUpButton_Click" />
+                    <Button Content="Down" Margin="5" Click="TranslateDownButton_Click" />
+                    <Button Content="Right" Margin="5" Click="TranslateRightButton_Click" />
+                    <Button Content="Forward" Margin="5" Click="TranslateForwardButton_Click" />
+                    <Button Content="Backward" Margin="5" Click="TranslateBackwardButton_Click" />
+                </StackPanel>
+                <Button Content="Solve" Margin="5" Click="SolveButton_Click" />
+                <Button Content="Save" Margin="5" Click="Save3D_Click" />
+            </StackPanel>
+        </TabItem>
 
         <!-- END Controls / Settings Tab -->
     </TabControl>
