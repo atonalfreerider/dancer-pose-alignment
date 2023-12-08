@@ -1,6 +1,7 @@
 using System.Numerics;
 using Avalonia.Controls;
 using Avalonia.Input;
+using Avalonia.Interactivity;
 using Avalonia.Markup.Xaml;
 using Avalonia.Media;
 using Avalonia.Media.Imaging;
@@ -37,77 +38,83 @@ public partial class MainWindow : Window
 
     public MainWindow()
     {
-        AvaloniaXamlLoader.Load(this);
+        InitializeComponent();
 
-        TextBox videoInputPath = this.Find<TextBox>("VideoInputPath")!;
-        TextBox alphaPoseJsonPath = this.Find<TextBox>("AlphaPoseJsonPath")!;
         frameNumberText = this.Find<TextBox>("FrameNumberText")!;
 
         canvas = this.Find<Canvas>("Canvas")!;
 
-        Button clearDancersButton = this.Find<Button>("ClearDancersButton")!;
-
-        clearDancersButton.Click += delegate
-        {
-            currentLeadIndex = -1;
-            currentFollowIndex = -1;
-            RedrawPoses();
-        };
-
-        Button backButton = this.Find<Button>("BackButton")!;
-        backButton.Click += delegate
-        {
-            if (frameCount > 0 && stepBackFrame < 10)
-            {
-                stepBackFrame++;
-                RenderFrame(lastTenFrames[stepBackFrame], alphaPoseJsonPath.Text, frameCount - stepBackFrame);
-            }
-        };
-
-        Button nextFrameButton = this.Find<Button>("NextFrameButton")!;
-
-        nextFrameButton.Click += delegate
-        {
-            if (stepBackFrame > 0)
-            {
-                stepBackFrame--;
-                RenderFrame(lastTenFrames[stepBackFrame], alphaPoseJsonPath.Text, frameCount - stepBackFrame);
-            }
-            else
-            {
-                RenderFrame(videoInputPath.Text, alphaPoseJsonPath.Text);
-            }
-        };
-
-        Button runUntilNextButton = this.Find<Button>("RunUntilNext")!;
-
-        runUntilNextButton.Click += delegate
-        {
-            while (frameCount < totalFrameCount &&
-                   posesByPersonAtFrame.ContainsKey(currentLeadIndex) &&
-                   posesByPersonAtFrame.ContainsKey(currentFollowIndex) &&
-                   PoseError() < 200) // arbitrary value from trial and error when figures are about 1/4 of the screen
-            {
-                RenderFrame(videoInputPath.Text, alphaPoseJsonPath.Text);
-            }
-        };
-
-        Button saveButton = this.Find<Button>("SaveButton")!;
-        saveButton.Click += delegate
-        {
-            string saveDirectory = Environment.CurrentDirectory;
-            string cameraName = "0";
-            if (!string.IsNullOrEmpty(videoInputPath.Text))
-            {
-                saveDirectory = Directory.GetParent(videoInputPath.Text).FullName;
-                cameraName = Path.GetFileNameWithoutExtension(videoInputPath.Text);
-            }
-
-            SaveTo(saveDirectory, cameraName);
-        };
-
         previewImage = this.Find<Image>("PreviewImage")!;
         poseImage = this.Find<Image>("PoseImage")!;
+    }
+    
+    void LoadVideosButton_Click(object sender, RoutedEventArgs e)
+    {
+        string? videoDirectory = VideoInputPath.Text;
+        if (string.IsNullOrEmpty(videoDirectory)) return;
+        if(!videoDirectory.EndsWith('/') && !videoDirectory.EndsWith('\\'))
+        {
+            videoDirectory += '/';
+        }
+        if (Directory.Exists(videoDirectory))
+        {
+            IEnumerable<string> videoFiles = Directory.EnumerateFiles(videoDirectory, "*.*", SearchOption.TopDirectoryOnly)
+                .Where(file => file.EndsWith(".mp4") || file.EndsWith(".avi") || file.EndsWith(".mkv"));
+            VideoFilesDropdown.ItemsSource = videoFiles;
+        }
+    }
+    
+    void ClearDancers_Click(object sender, RoutedEventArgs e)
+    {
+        currentLeadIndex = -1;
+        currentFollowIndex = -1;
+        RedrawPoses();
+    }
+    
+    void BackButton_Click(object sender, RoutedEventArgs e)
+    {
+        if (frameCount > 0 && stepBackFrame < 10)
+        {
+            stepBackFrame++;
+            RenderFrame(lastTenFrames[stepBackFrame], GetAlphaPoseJsonPath(), frameCount - stepBackFrame);
+        }
+    }
+    
+    void NextFrameButton_Click(object sender, RoutedEventArgs e)
+    {
+        if (stepBackFrame > 0)
+        {
+            stepBackFrame--;
+            RenderFrame(lastTenFrames[stepBackFrame], GetAlphaPoseJsonPath(), frameCount - stepBackFrame);
+        }
+        else
+        {
+            RenderFrame(GetVideoPath(), GetAlphaPoseJsonPath());
+        }
+    }
+    
+    void RunUntilNext_Click(object sender, RoutedEventArgs e)
+    {
+        while (frameCount < totalFrameCount &&
+               posesByPersonAtFrame.ContainsKey(currentLeadIndex) &&
+               posesByPersonAtFrame.ContainsKey(currentFollowIndex) &&
+               PoseError() < 200) // arbitrary value from trial and error when figures are about 1/4 of the screen
+        {
+            RenderFrame(GetVideoPath(), GetAlphaPoseJsonPath());
+        }
+    }
+    
+    void SaveButton_Click(object sender, RoutedEventArgs e)
+    {
+        string saveDirectory = Environment.CurrentDirectory;
+        string cameraName = "0";
+        if (!string.IsNullOrEmpty(VideoInputPath.Text))
+        {
+            saveDirectory = Directory.GetParent(GetVideoPath()).FullName;
+            cameraName = Path.GetFileNameWithoutExtension(VideoInputPath.Text);
+        }
+    
+        SaveTo(saveDirectory, cameraName);
     }
 
     void RenderFrame(string videoPath, string alphaPoseJsonPath)
@@ -364,5 +371,17 @@ public partial class MainWindow : Window
         {
             lastTenFrames.RemoveAt(lastTenFrames.Count - 1);
         }
+    }
+    
+    string GetVideoPath()
+    {
+        return VideoFilesDropdown.SelectedItem?.ToString() ?? "";
+    }
+    
+    string GetAlphaPoseJsonPath()
+    {
+        string videoPath = GetVideoPath();
+        string fileName = Path.GetFileNameWithoutExtension(videoPath);
+        return $"{AlphaPoseJsonPath.Text}/{fileName}/alphapose-results.json";
     }
 }

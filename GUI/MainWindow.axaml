@@ -15,15 +15,19 @@
       
       <!-- START Controls Stack Panel -->
         <StackPanel Orientation="Vertical">
-           <TextBox Name="VideoInputPath" Watermark="Path to video..." Width="300" Margin="5" />
-           <TextBox Name="AlphaPoseJsonPath" Watermark="Path to AlphaPose json" Width="300" Margin="5" />
            <StackPanel Orientation="Horizontal" HorizontalAlignment="Center">
-             <Button Name="ClearDancersButton" Height="30" Margin="5">Clear Dancers</Button>
-             <Button Name="BackButton" Height="30" Margin="5">Back</Button>
-             <Button Name="NextFrameButton" Height="30" Margin="5" >Next Frame</Button>
+             <TextBox Name="AlphaPoseJsonPath" Watermark="Path to AlphaPose jsons..." Width="300" Margin="5" />
+             <TextBox Name="VideoInputPath" Watermark="Path to videos..." Width="300" Margin="5" />
+             <Button Name="LoadVideosButton" Content="Load Videos" Margin="5" Click="LoadVideosButton_Click"/>
+           </StackPanel>
+           <ComboBox Name="VideoFilesDropdown" Width="300" Margin="5" />
+           <StackPanel Orientation="Horizontal" HorizontalAlignment="Center">
+             <Button Name="ClearDancersButton" Content="Clear Dancers" Height="30" Margin="5" Click="ClearDancers_Click"/>
+             <Button Name="BackButton" Content="Back" Height="30" Margin="5" Click="BackButton_Click"/>
+             <Button Name="NextFrameButton" Content="Next" Height="30" Margin="5" Click="NextFrameButton_Click"/>
              <TextBox Name="FrameNumberText" Height="30" Width="100" Margin="5" Watermark="Progress..."/>
-             <Button Name="RunUntilNext" Height="30" >Run Until Next</Button>
-             <Button Name="SaveButton" Height="30" >Save</Button>
+             <Button Name="RunUntilNext" Content="Run Until Next Discontinuity" Height="30" Click="RunUntilNext_Click" />
+             <Button Name="SaveButton" Content="Save" Height="30" Click="SaveButton_Click"/>
            </StackPanel>
            <Canvas Name="Canvas">
              <Image Name="PreviewImage" Stretch="None" Canvas.Left="0" Canvas.Top="0" Canvas.Bottom="0" Canvas.Right="0" />
