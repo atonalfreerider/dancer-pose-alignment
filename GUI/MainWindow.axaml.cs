@@ -233,7 +233,7 @@ public partial class MainWindow : Window
             }
         }
 
-        FrameNumberText.Text = $"{frameCount}:{totalFrameCount}";
+        RefinerFrameNumberText.Text = $"{frameCount}:{totalFrameCount}";
 
         Dispatcher.UIThread.Post(() => { PreviewImage.Source = frame; }, DispatcherPriority.Render);
         Dispatcher.UIThread.RunJobs();
@@ -584,6 +584,11 @@ public partial class MainWindow : Window
 
     #region PERSPECTIVE
 
+    readonly Dictionary<int, List<List<Vector3>>> allLeadPosesByCamera = [];
+    readonly Dictionary<int, List<List<Vector3>>> allFollowPosesByCamera = [];
+    readonly Dictionary<int, List<List<Vector3>>> allMirrorLeadPosesByCamera = [];
+    readonly Dictionary<int, List<List<Vector3>>> allMirrorFollowPosesByCamera = [];
+
     void LoadJsonForPerspectiveButton_Click(object sender, RoutedEventArgs e)
     {
         string directoryPath = DirectoryPathTextBox.Text;
@@ -595,23 +600,9 @@ public partial class MainWindow : Window
             return;
         }
 
-        CanvasContainer.Items.Clear();
+        CameraPoseSolver cameraPoseSolver = new CameraPoseSolver();
+        
 
-        for (int i = 0; i < numCameras; i++)
-        {
-            Image image = new Image();
-            alignmentImages.Add(image);
-            Canvas canvas = new Canvas();
-            canvas.Children.Add(image);
-            canvas.Width = 1000;
-            canvas.Height = 1000;
-            CanvasContainer.Items.Add(canvas);
-        }
-
-        Dictionary<int, List<List<Vector3>>> allLeadPosesByCamera = [];
-        Dictionary<int, List<List<Vector3>>> allFollowPosesByCamera = [];
-        Dictionary<int, List<List<Vector3>>> allMirrorLeadPosesByCamera = [];
-        Dictionary<int, List<List<Vector3>>> allMirrorFollowPosesByCamera = [];
         List<Vector3> cameraPositions;
         List<float> cameraFocalLengths;
         foreach (string file in Directory.GetFiles(directoryPath, "*.json"))
@@ -625,6 +616,8 @@ public partial class MainWindow : Window
                 string jsonContent = File.ReadAllText(file);
                 List<List<Vector3>> dancerPosesByFrames =
                     JsonConvert.DeserializeObject<List<List<Vector3>>>(jsonContent);
+
+                totalFrameCount = dancerPosesByFrames.Count;
 
                 int associatedCamera = int.Parse(fileName[^1].ToString());
                 if (fileName.StartsWith("lead"))
@@ -656,6 +649,24 @@ public partial class MainWindow : Window
                     string jsonContent = File.ReadAllText(file);
                     cameraFocalLengths = JsonConvert.DeserializeObject<List<float>>(jsonContent);
                 }
+                else if (fileName.StartsWith("cameraSizes"))
+                {
+                    string jsonContent = File.ReadAllText(file);
+                    List<Vector2> cameraSizes = JsonConvert.DeserializeObject<List<Vector2>>(jsonContent);
+                    numCameras = cameraSizes.Count;
+                    CanvasContainer.Items.Clear();
+
+                    for (int i = 0; i < numCameras; i++)
+                    {
+                        Image image = new Image();
+                        alignmentImages.Add(image);
+                        Canvas canvas = new Canvas();
+                        canvas.Children.Add(image);
+                        canvas.Width = cameraSizes[i].X;
+                        canvas.Height = cameraSizes[i].Y;
+                        CanvasContainer.Items.Add(canvas);
+                    }
+                }
                 else
                 {
                     List<List<Tuple<int, bool>>> cameraIndicesByFrame =
@@ -665,32 +676,34 @@ public partial class MainWindow : Window
             }
         }
 
+        frameCount = 0;
+        SetPreviewsToFrame();
+    }
+
+    void SetPreviewsToFrame()
+    {
+        SolverFrameNumberText.Text = $"{frameCount}:{totalFrameCount}";
         List<Dictionary<int, List<Vector3>>> posesByPersonAtFrameByCamera = [];
-        const int frameNumber = 0;
+
         for (int i = 0; i < numCameras; i++)
         {
             Dictionary<int, List<Vector3>> x = [];
 
-            List<Vector3> leadPose = allLeadPosesByCamera[i][frameNumber];
+            List<Vector3> leadPose = allLeadPosesByCamera[i][frameCount];
             x.Add(0, leadPose);
 
-            List<Vector3> followPose = allFollowPosesByCamera[i][frameNumber];
+            List<Vector3> followPose = allFollowPosesByCamera[i][frameCount];
             x.Add(1, followPose);
 
-            List<Vector3> mirrorLeadPose = allMirrorLeadPosesByCamera[i][frameNumber];
+            List<Vector3> mirrorLeadPose = allMirrorLeadPosesByCamera[i][frameCount];
             x.Add(2, mirrorLeadPose);
 
-            List<Vector3> mirrorFollowPose = allMirrorFollowPosesByCamera[i][frameNumber];
+            List<Vector3> mirrorFollowPose = allMirrorFollowPosesByCamera[i][frameCount];
             x.Add(3, mirrorFollowPose);
 
             posesByPersonAtFrameByCamera.Add(x);
         }
 
-        SetPreviewsToFrame(posesByPersonAtFrameByCamera);
-    }
-
-    void SetPreviewsToFrame(List<Dictionary<int, List<Vector3>>> posesByPersonAtFrameByCamera)
-    {
         for (int i = 0; i < numCameras; i++)
         {
             int i1 = i;
@@ -786,6 +799,22 @@ public partial class MainWindow : Window
     void TranslateBackwardButton_Click(object sender, RoutedEventArgs e)
     {
         /* ... */
+    }
+
+    void SolverNextFrameButton_Click(object sender, RoutedEventArgs e)
+    {
+        if (frameCount >= totalFrameCount) return;
+
+        frameCount++;
+        SetPreviewsToFrame();
+    }
+
+    void SolverPreviousFrameButton_Click(object sender, RoutedEventArgs e)
+    {
+        if (frameCount <= 0) return;
+
+        frameCount--;
+        SetPreviewsToFrame();
     }
 
     void SolveButton_Click(object sender, RoutedEventArgs e)

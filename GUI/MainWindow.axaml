@@ -34,7 +34,7 @@
                             Click="ClearDancers_Click" />
                     <Button Name="BackButton" Content="Back" Height="30" Margin="5" Click="BackButton_Click" />
                     <Button Name="NextFrameButton" Content="Next" Height="30" Margin="5" Click="NextFrameButton_Click" />
-                    <TextBox Name="FrameNumberText" Height="30" Width="100" Margin="5" Watermark="Progress..." />
+                    <TextBox Name="RefinerFrameNumberText" Height="30" Width="100" Margin="5" Watermark="Progress..." />
                     <Button Name="RunUntilNext" Content="Run Until Next Discontinuity" Height="30" Margin="5"
                             Click="RunUntilNext_Click" />
                     <Button Name="SaveButton" Content="Save" Height="30" Margin="5" Click="SaveButton_Click" />
@@ -52,12 +52,13 @@
                 <TextBlock VerticalAlignment="Center">Camera Positions</TextBlock>
             </TabItem.Header>
             <StackPanel>
-                <StackPanel Name="RadioButtonsPanel" Orientation="Horizontal" HorizontalAlignment="Center"/>
-                <StackPanel Orientation="Horizontal" HorizontalAlignment="Center" >
+                <StackPanel Name="RadioButtonsPanel" Orientation="Horizontal" HorizontalAlignment="Center" />
+                <StackPanel Orientation="Horizontal" HorizontalAlignment="Center">
                     <TextBox Name="FocalLengthInput" Text="0.2" />
                     <TextBox Name="HeightInputText" Text="1.5" />
                 </StackPanel>
-                <Canvas Name="LayoutCanvas" Background="White" PointerPressed="LayoutCanvas_MouseDown" Width="1000" Height="800" >
+                <Canvas Name="LayoutCanvas" Background="White" PointerPressed="LayoutCanvas_MouseDown" Width="1000"
+                        Height="800">
                     <Rectangle Width="1000" Height="800" Stroke="Black" />
                     <Ellipse Fill="Red" Width="50" Height="50" Canvas.Left="525" Canvas.Top="375" />
                     <Ellipse Fill="Magenta" Width="50" Height="50" Canvas.Left="475" Canvas.Top="375" />
@@ -110,8 +111,13 @@
                     <Button Content="Forward" Margin="5" Click="TranslateForwardButton_Click" />
                     <Button Content="Backward" Margin="5" Click="TranslateBackwardButton_Click" />
                 </StackPanel>
-                <Button Content="Solve" Margin="5" Click="SolveButton_Click" />
-                <Button Content="Save" Margin="5" Click="Save3D_Click" />
+                <StackPanel Orientation="Horizontal" HorizontalAlignment="Center">
+                    <Button Content="Previous" Margin="5" Click="SolverPreviousFrameButton_Click" />
+                    <TextBox Name="SolverFrameNumberText" Height="30" Width="100" Margin="5" Watermark="Progress..." />
+                    <Button Content="Next" Margin="5" Click="SolverNextFrameButton_Click" />
+                    <Button Content="Solve" Margin="5" Click="SolveButton_Click" />
+                    <Button Content="Save" Margin="5" Click="Save3D_Click" />
+                </StackPanel>
             </StackPanel>
         </TabItem>
 
