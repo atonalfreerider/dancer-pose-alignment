@@ -8,67 +8,112 @@ public class CameraPoseSolver
     readonly List<Vector3> merged3DPoseLead = [];
     readonly List<Vector3> merged3DPoseFollow = [];
 
-    readonly List<List<List<Vector3>>> leadByCamera = [];
-    readonly List<List<List<Vector3>>> followByCamera = [];
-
     readonly int poseCount = 26; // Halpe
     readonly List<CameraSetup> cameras = [];
 
-    public void LoadPoses(string inputPath, string jsonCameraSizes, string jsonSeedCameraPositions)
+    public void LoadPoses(string directoryPath)
     {
-        List<Vector2> imageSizes = JsonConvert.DeserializeObject<List<Vector2>>(File.ReadAllText(jsonCameraSizes));
+        List<Vector3> cameraPositions = [];
+        List<float> cameraFocalLengths = [];
+        List<Vector2> cameraSizes = [];
 
-        foreach (string jsonPath in Directory.EnumerateFiles(inputPath, "*.json"))
+        Dictionary<int, List<List<Vector3>>> allLeadPosesByCamera = [];
+        Dictionary<int, List<List<Vector3>>> allFollowPosesByCamera = [];
+        Dictionary<int, List<List<Vector3>>> allMirrorLeadPosesByCamera = [];
+        Dictionary<int, List<List<Vector3>>> allMirrorFollowPosesByCamera = [];
+
+        foreach (string file in Directory.GetFiles(directoryPath, "*.json"))
         {
-            List<List<Vector3>> finalIndexListLeadAndFollow =
-                JsonConvert.DeserializeObject<List<List<Vector3>>>(File.ReadAllText(jsonPath));
-
-            if (jsonPath.Contains("lead"))
+            string fileName = Path.GetFileNameWithoutExtension(file);
+            if (fileName.StartsWith("lead") ||
+                fileName.StartsWith("follow") ||
+                fileName.StartsWith("mirror-lead") ||
+                fileName.StartsWith("mirror-follow"))
             {
-                leadByCamera.Add(finalIndexListLeadAndFollow);
+                string jsonContent = File.ReadAllText(file);
+                List<List<Vector3>> dancerPosesByFrames =
+                    JsonConvert.DeserializeObject<List<List<Vector3>>>(jsonContent);
+
+                int associatedCamera = int.Parse(fileName[^1].ToString());
+                if (fileName.StartsWith("lead"))
+                {
+                    allLeadPosesByCamera.Add(associatedCamera, dancerPosesByFrames);
+                }
+                else if (fileName.StartsWith("follow"))
+                {
+                    allFollowPosesByCamera.Add(associatedCamera, dancerPosesByFrames);
+                }
+                else if (fileName.StartsWith("mirror-lead"))
+                {
+                    allMirrorLeadPosesByCamera.Add(associatedCamera, dancerPosesByFrames);
+                }
+                else if (fileName.StartsWith("mirror-follow"))
+                {
+                    allMirrorFollowPosesByCamera.Add(associatedCamera, dancerPosesByFrames);
+                }
             }
             else
             {
-                followByCamera.Add(finalIndexListLeadAndFollow);
+                if (fileName.StartsWith("camera-positions"))
+                {
+                    string jsonContent = File.ReadAllText(file);
+                    cameraPositions = JsonConvert.DeserializeObject<List<Vector3>>(jsonContent);
+                }
+                else if (fileName.StartsWith("camera-focal-lengths"))
+                {
+                    string jsonContent = File.ReadAllText(file);
+                    cameraFocalLengths = JsonConvert.DeserializeObject<List<float>>(jsonContent);
+                }
+                else if (fileName.StartsWith("cameraSizes"))
+                {
+                    string jsonContent = File.ReadAllText(file);
+                    cameraSizes = JsonConvert.DeserializeObject<List<Vector2>>(jsonContent);
+                }
+                else
+                {
+                    List<List<Tuple<int, bool>>> cameraIndicesByFrame =
+                        JsonConvert.DeserializeObject<List<List<Tuple<int, bool>>>>(File.ReadAllText(file));
+                }
             }
         }
-        
-        Dictionary<int, CameraSetup.PositionAndRotation> seedCameraPositionsAndRotations = 
-            JsonConvert.DeserializeObject<Dictionary<int, CameraSetup.PositionAndRotation>>(File.ReadAllText(jsonSeedCameraPositions));
-        
-        List<Vector3> seedCameraPositions = [];
-        List<Quaternion> seedCameraRotations = [];
-        foreach (CameraSetup.PositionAndRotation positionAndRotation in seedCameraPositionsAndRotations.Values)
-        {
-            seedCameraPositions.Add(new Vector3(positionAndRotation.positionX, positionAndRotation.positionY, positionAndRotation.positionZ));
-            seedCameraRotations.Add(new Quaternion(positionAndRotation.rotationX, positionAndRotation.rotationY, positionAndRotation.rotationZ, positionAndRotation.rotationW));
-        }
 
-        CreateAndPlaceCameras(imageSizes, seedCameraPositions, seedCameraRotations);
-        AddPosesToCamera();
+        CreateAndPlaceCameras(cameraSizes, cameraPositions, cameraFocalLengths);
+        AddPosesToCamera(allLeadPosesByCamera, allFollowPosesByCamera, allMirrorLeadPosesByCamera,
+            allMirrorFollowPosesByCamera);
+    }
+
+    public List<List<List<Vector3>>> AllPosesAtFramePerCamera(int frameNumber)
+    {
+        return cameras.Select(camera => camera.PosesPerDancerAtFrame(frameNumber).ToList()).ToList();
     }
 
     void CreateAndPlaceCameras(
-        IReadOnlyList<Vector2> imageSizes, 
+        IReadOnlyList<Vector2> imageSizes,
         IReadOnlyList<Vector3> seedCameraPositions,
-        IReadOnlyList<Quaternion> seedCameraRotations)
+        IReadOnlyList<float> seedCameraFocalLengths)
     {
         const int testingFrameNumber = 0;
         for (int i = 0; i < imageSizes.Count; i++)
         {
             CameraSetup camera = new()
             {
-                Size = imageSizes[i]
+                Size = imageSizes[i],
+                FocalLength = seedCameraFocalLengths[i]
             };
 
             if (seedCameraPositions.Count != 0)
             {
                 camera.PositionsPerFrame.Add(seedCameraPositions[i]);
-                camera.RotationsPerFrame.Add(seedCameraRotations[i]);
+                // TODO confirm this rotation works
+                Quaternion centerLook = Transform.LookAt(
+                    new Vector3(0, 1.5f, 0), 
+                    Quaternion.Identity, 
+                    camera.PositionsPerFrame[testingFrameNumber]);
+                camera.RotationsPerFrame.Add(centerLook);
             }
             else
             {
-                float angle = -(float)i / followByCamera.Count * 2 * MathF.PI; // ccw
+                float angle = -(float)i / imageSizes.Count * 2 * MathF.PI; // ccw
                 const float radius = 3f;
                 const float startingHeight = 1.5f;
                 camera.PositionsPerFrame.Add(new Vector3(
@@ -86,16 +131,20 @@ public class CameraPoseSolver
         }
     }
 
-    void AddPosesToCamera()
+    void AddPosesToCamera(
+        IReadOnlyDictionary<int, List<List<Vector3>>> allLeadPosesByCamera,
+        IReadOnlyDictionary<int, List<List<Vector3>>> allFollowPosesByCamera,
+        IReadOnlyDictionary<int, List<List<Vector3>>> allMirrorLeadPosesByCamera,
+        IReadOnlyDictionary<int, List<List<Vector3>>> allMirrorFollowPosesByCamera)
     {
-        int frameWithHighestConfidence = FrameWithHighestConfidence(leadByCamera, followByCamera);
         int count = 0;
         foreach (CameraSetup camera in cameras)
         {
-            List<Vector3> leadAtCamera = leadByCamera[count][frameWithHighestConfidence];
-            List<Vector3> followAtCamera = followByCamera[count][frameWithHighestConfidence];
-
-            camera.AddPosesAndRecenterAndScaleToCamera(leadAtCamera, followAtCamera);
+            camera.AddPosesAndRecenterAndScaleToCamera(
+                allLeadPosesByCamera[count],
+                allFollowPosesByCamera[count],
+                allMirrorLeadPosesByCamera[count],
+                allMirrorFollowPosesByCamera[count]);
             count++;
         }
     }
@@ -183,8 +232,8 @@ public class CameraPoseSolver
             previousError = zPositionError;
             Console.WriteLine("Moving in Z: " + previousError);
         }
-        
-        if(previousError < 3f)
+
+        if (previousError < 3f)
         {
             return previousError;
         }
@@ -541,7 +590,8 @@ public class CameraPoseSolver
             float translateForwardError = Calculate3DPosesAndTotalError(frameNumber);
             lastLoopError = translateForwardError;
             float yawForwardCorrectionError = IterateYaw(frameNumber, .05f);
-            while (yawForwardCorrectionError < lastLoopError && Math.Abs(yawForwardCorrectionError - lastLoopError) > .02f)
+            while (yawForwardCorrectionError < lastLoopError &&
+                   Math.Abs(yawForwardCorrectionError - lastLoopError) > .02f)
             {
                 // recenter to make a fair comparison
                 lastLoopError = yawForwardCorrectionError;
@@ -550,7 +600,8 @@ public class CameraPoseSolver
 
             lastLoopError = translateForwardError;
             float iterateForwardFocalError = IterateFocal(frameNumber, .005f);
-            while (iterateForwardFocalError < lastLoopError && Math.Abs(iterateForwardFocalError - lastLoopError) > .02f)
+            while (iterateForwardFocalError < lastLoopError &&
+                   Math.Abs(iterateForwardFocalError - lastLoopError) > .02f)
             {
                 // recenter to make a fair comparison
                 lastLoopError = iterateForwardFocalError;
@@ -625,7 +676,8 @@ public class CameraPoseSolver
 
             // recenter pitch to make a fair comparison
             float pitchDownCorrectionError = IteratePitch(frameNumber, .05f);
-            while (pitchDownCorrectionError < lastLoopError && Math.Abs(pitchDownCorrectionError - lastLoopError) > .02f)
+            while (pitchDownCorrectionError < lastLoopError &&
+                   Math.Abs(pitchDownCorrectionError - lastLoopError) > .02f)
             {
                 // recenter to make a fair comparison
                 lastLoopError = pitchDownCorrectionError;
@@ -705,9 +757,9 @@ public class CameraPoseSolver
     {
         int frameWithHighestConfidence = 0;
         float highestConfidence = 0f;
-         
+
         int highestValidIndex = leadByCamera.Select(t => t.Count).Min();
-        
+
         for (int i = 0; i < leadByCamera.Count; i++)
         {
             for (int j = 0; j < highestValidIndex; j++)
@@ -730,13 +782,13 @@ public class CameraPoseSolver
     }
 
     bool AnyPointsBelowGround => merged3DPoseLead.Any(vec => vec.Y < 0) || merged3DPoseFollow.Any(vec => vec.Y < 0);
-    
+
     bool LowestLeadAnkleIsMoreThan10CMAboveZero()
     {
         float lowestLeadAnkle = Math.Min(merged3DPoseLead[(int)Halpe.LAnkle].Y, merged3DPoseLead[(int)Halpe.RAnkle].Y);
         return lowestLeadAnkle > 0.1f;
     }
-    
+
     bool AnyPointsHigherThan2pt5Meters()
     {
         return merged3DPoseLead.Any(vec => vec.Y > 2.5) || merged3DPoseFollow.Any(vec => vec.Y > 2.5);

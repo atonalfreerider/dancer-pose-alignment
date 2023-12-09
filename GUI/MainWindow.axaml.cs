@@ -584,11 +584,7 @@ public partial class MainWindow : Window
 
     #region PERSPECTIVE
 
-    readonly Dictionary<int, List<List<Vector3>>> allLeadPosesByCamera = [];
-    readonly Dictionary<int, List<List<Vector3>>> allFollowPosesByCamera = [];
-    readonly Dictionary<int, List<List<Vector3>>> allMirrorLeadPosesByCamera = [];
-    readonly Dictionary<int, List<List<Vector3>>> allMirrorFollowPosesByCamera = [];
-
+    CameraPoseSolver cameraPoseSolver;
     void LoadJsonForPerspectiveButton_Click(object sender, RoutedEventArgs e)
     {
         string directoryPath = DirectoryPathTextBox.Text;
@@ -599,81 +595,25 @@ public partial class MainWindow : Window
             Console.WriteLine("Directory does not exist.");
             return;
         }
-
-        CameraPoseSolver cameraPoseSolver = new CameraPoseSolver();
         
+        string sizesJsonPath = Path.Combine(directoryPath, "cameraSizes.json");
+        List<Vector2> cameraSizes = JsonConvert.DeserializeObject<List<Vector2>>(File.ReadAllText(sizesJsonPath));
 
-        List<Vector3> cameraPositions;
-        List<float> cameraFocalLengths;
-        foreach (string file in Directory.GetFiles(directoryPath, "*.json"))
+        cameraPoseSolver = new CameraPoseSolver();
+        cameraPoseSolver.LoadPoses(directoryPath);
+        
+        numCameras = cameraSizes.Count;
+        CanvasContainer.Items.Clear();
+
+        for (int i = 0; i < numCameras; i++)
         {
-            string fileName = Path.GetFileNameWithoutExtension(file);
-            if (fileName.StartsWith("lead") ||
-                fileName.StartsWith("follow") ||
-                fileName.StartsWith("mirror-lead") ||
-                fileName.StartsWith("mirror-follow"))
-            {
-                string jsonContent = File.ReadAllText(file);
-                List<List<Vector3>> dancerPosesByFrames =
-                    JsonConvert.DeserializeObject<List<List<Vector3>>>(jsonContent);
-
-                totalFrameCount = dancerPosesByFrames.Count;
-
-                int associatedCamera = int.Parse(fileName[^1].ToString());
-                if (fileName.StartsWith("lead"))
-                {
-                    allLeadPosesByCamera.Add(associatedCamera, dancerPosesByFrames);
-                }
-                else if (fileName.StartsWith("follow"))
-                {
-                    allFollowPosesByCamera.Add(associatedCamera, dancerPosesByFrames);
-                }
-                else if (fileName.StartsWith("mirror-lead"))
-                {
-                    allMirrorLeadPosesByCamera.Add(associatedCamera, dancerPosesByFrames);
-                }
-                else if (fileName.StartsWith("mirror-follow"))
-                {
-                    allMirrorFollowPosesByCamera.Add(associatedCamera, dancerPosesByFrames);
-                }
-            }
-            else
-            {
-                if (fileName.StartsWith("camera-positions"))
-                {
-                    string jsonContent = File.ReadAllText(file);
-                    cameraPositions = JsonConvert.DeserializeObject<List<Vector3>>(jsonContent);
-                }
-                else if (fileName.StartsWith("camera-focal-lengths"))
-                {
-                    string jsonContent = File.ReadAllText(file);
-                    cameraFocalLengths = JsonConvert.DeserializeObject<List<float>>(jsonContent);
-                }
-                else if (fileName.StartsWith("cameraSizes"))
-                {
-                    string jsonContent = File.ReadAllText(file);
-                    List<Vector2> cameraSizes = JsonConvert.DeserializeObject<List<Vector2>>(jsonContent);
-                    numCameras = cameraSizes.Count;
-                    CanvasContainer.Items.Clear();
-
-                    for (int i = 0; i < numCameras; i++)
-                    {
-                        Image image = new Image();
-                        alignmentImages.Add(image);
-                        Canvas canvas = new Canvas();
-                        canvas.Children.Add(image);
-                        canvas.Width = cameraSizes[i].X;
-                        canvas.Height = cameraSizes[i].Y;
-                        CanvasContainer.Items.Add(canvas);
-                    }
-                }
-                else
-                {
-                    List<List<Tuple<int, bool>>> cameraIndicesByFrame =
-                        JsonConvert.DeserializeObject<List<List<Tuple<int, bool>>>>(File.ReadAllText(file));
-                    var x = 1;
-                }
-            }
+            Image image = new Image();
+            alignmentImages.Add(image);
+            Canvas canvas = new Canvas();
+            canvas.Children.Add(image);
+            canvas.Width = cameraSizes[i].X;
+            canvas.Height = cameraSizes[i].Y;
+            CanvasContainer.Items.Add(canvas);
         }
 
         frameCount = 0;
@@ -683,26 +623,10 @@ public partial class MainWindow : Window
     void SetPreviewsToFrame()
     {
         SolverFrameNumberText.Text = $"{frameCount}:{totalFrameCount}";
-        List<Dictionary<int, List<Vector3>>> posesByPersonAtFrameByCamera = [];
-
-        for (int i = 0; i < numCameras; i++)
-        {
-            Dictionary<int, List<Vector3>> x = [];
-
-            List<Vector3> leadPose = allLeadPosesByCamera[i][frameCount];
-            x.Add(0, leadPose);
-
-            List<Vector3> followPose = allFollowPosesByCamera[i][frameCount];
-            x.Add(1, followPose);
-
-            List<Vector3> mirrorLeadPose = allMirrorLeadPosesByCamera[i][frameCount];
-            x.Add(2, mirrorLeadPose);
-
-            List<Vector3> mirrorFollowPose = allMirrorFollowPosesByCamera[i][frameCount];
-            x.Add(3, mirrorFollowPose);
-
-            posesByPersonAtFrameByCamera.Add(x);
-        }
+        List<List<List<Vector3>>> posesByPersonAtFrameByCamera =
+            cameraPoseSolver.AllPosesAtFramePerCamera(frameCount);
+        List<Dictionary<int, List<Vector3>>> posesByPersonAtFrameByCameraDict =
+            posesByPersonAtFrameByCamera.Select(list => list.ToDictionary(list.IndexOf, listVec => listVec)).ToList();
 
         for (int i = 0; i < numCameras; i++)
         {
@@ -710,8 +634,8 @@ public partial class MainWindow : Window
             Dispatcher.UIThread.Post(() =>
             {
                 DrawingImage drawingImage = PreviewDrawer.DrawGeometry(
-                    posesByPersonAtFrameByCamera[i1],
-                    new Size(500, 500),
+                    posesByPersonAtFrameByCameraDict[i1],
+                    alignmentImages[i1].Bounds.Size,
                     0,
                     1,
                     2,

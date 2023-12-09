@@ -27,14 +27,21 @@ public class CameraSetup
     public readonly List<List<Vector3>> LeadProjectionsPerFrame = [];
     public readonly List<List<Vector3>> FollowProjectionsPerFrame = [];
 
-    readonly List<List<Vector3>> LeadPoseAndConfidencePerFrame = [];
-    readonly List<List<Vector3>> FollowPoseAndConfidencePerFrame = [];
+    List<List<Vector3>> leadPoseAndConfidencePerFrame;
+    List<List<Vector3>> followPoseAndConfidencePerFrame;
+    List<List<Vector3>> mirrorLeadPoseAndConfidencePerFrame;
+    List<List<Vector3>> mirrorFollowPoseAndConfidencePerFrame;
+    
+    List<List<Vector3>> recenteredLeadPoseAndConfidencePerFrame;
+    List<List<Vector3>> recenteredFollowPoseAndConfidencePerFrame;
+    List<List<Vector3>> mirrorRecenteredLeadPoseAndConfidencePerFrame;
+    List<List<Vector3>> mirrorRecenteredFollowPoseAndConfidencePerFrame;
 
     public void Project(int frameNumber)
     {
-        List<Vector3> flattenedLead = LeadPoseAndConfidencePerFrame[frameNumber]
+        List<Vector3> flattenedLead = recenteredLeadPoseAndConfidencePerFrame[frameNumber]
             .Select(x => x with { Z = 0 }).ToList();
-        List<Vector3> flattenedFollow = FollowPoseAndConfidencePerFrame[frameNumber]
+        List<Vector3> flattenedFollow = recenteredFollowPoseAndConfidencePerFrame[frameNumber]
             .Select(x => x with { Z = 0 }).ToList();
 
         List<Vector3> leadProjectionsAtThisFrame = Adjusted(flattenedLead, frameNumber);
@@ -57,7 +64,7 @@ public class CameraSetup
 
             // find the angle between the vectors
             error += MathF.Acos(Vector3.Dot(target, keypoint)) *
-                     LeadPoseAndConfidencePerFrame[frameNumber][i].Z; // confidence
+                     recenteredLeadPoseAndConfidencePerFrame[frameNumber][i].Z; // confidence
         }
 
         for (int i = 0; i < merged3DPoseFollow.Count; i++)
@@ -69,34 +76,48 @@ public class CameraSetup
 
             // find the angle between the vectors
             error += MathF.Acos(Vector3.Dot(target, keypoint)) *
-                     FollowPoseAndConfidencePerFrame[frameNumber][i].Z; // confidence
+                     recenteredFollowPoseAndConfidencePerFrame[frameNumber][i].Z; // confidence
         }
-
 
         return error;
     }
 
     public void AddPosesAndRecenterAndScaleToCamera(
-        IEnumerable<Vector3> lead2DPixelsAndConfidence,
-        IEnumerable<Vector3> follow2PixelsAndConfidence)
+        List<List<Vector3>> lead2DPixelsAndConfidence,
+        List<List<Vector3>> follow2PixelsAndConfidence,
+        List<List<Vector3>> mirrorLead2DPixelsAndConfidence,
+        List<List<Vector3>> mirrorFollow2DPixelsAndConfidence)
     {
-        List<Vector3> leadRecenteredAndRescaled = lead2DPixelsAndConfidence.Select(vec => new Vector3(
+        leadPoseAndConfidencePerFrame = lead2DPixelsAndConfidence;
+        followPoseAndConfidencePerFrame = follow2PixelsAndConfidence;
+        mirrorLeadPoseAndConfidencePerFrame = mirrorLead2DPixelsAndConfidence;
+        mirrorFollowPoseAndConfidencePerFrame = mirrorFollow2DPixelsAndConfidence;
+        
+        recenteredLeadPoseAndConfidencePerFrame = lead2DPixelsAndConfidence.Select(listVec => listVec.Select(vec => new Vector3(
                 (vec.X - Size.X / 2) * PixelToMeter,
                 -(vec.Y - Size.Y / 2) * PixelToMeter, // flip
                 vec.Z)) // keep the confidence
-            .ToList();
-        LeadPoseAndConfidencePerFrame.Add(leadRecenteredAndRescaled);
+            .ToList()).ToList();
 
-        List<Vector3> followRecenteredAndRescaled = follow2PixelsAndConfidence.Select(vec => new Vector3(
+        recenteredFollowPoseAndConfidencePerFrame = follow2PixelsAndConfidence.Select(listVec => listVec.Select(vec => new Vector3(
                 (vec.X - Size.X / 2) * PixelToMeter,
                 -(vec.Y - Size.Y / 2) * PixelToMeter, // flip
                 vec.Z)) // keep the confidence
-            .ToList();
-
-        FollowPoseAndConfidencePerFrame.Add(followRecenteredAndRescaled);
+            .ToList()).ToList();
 
         FollowProjectionsPerFrame.Add([]);
         LeadProjectionsPerFrame.Add([]);
+    }
+    
+    public List<List<Vector3>> PosesPerDancerAtFrame(int frameNumber)
+    {
+        return
+        [
+            leadPoseAndConfidencePerFrame[frameNumber],
+            followPoseAndConfidencePerFrame[frameNumber],
+            mirrorLeadPoseAndConfidencePerFrame[frameNumber],
+            mirrorFollowPoseAndConfidencePerFrame[frameNumber]
+        ];
     }
 
     List<Vector3> Adjusted(IEnumerable<Vector3> keypoints, int frame)
@@ -119,8 +140,8 @@ public class CameraSetup
     public bool HasPoseAtFrame(int frameNumber, bool isLead)
     {
         return isLead
-            ? LeadPoseAndConfidencePerFrame[frameNumber].Count > 0
-            : FollowPoseAndConfidencePerFrame[frameNumber].Count > 0;
+            ? recenteredLeadPoseAndConfidencePerFrame[frameNumber].Count > 0
+            : recenteredFollowPoseAndConfidencePerFrame[frameNumber].Count > 0;
     }
 
     public Ray PoseRay(int frameNumber, int jointNumber, bool isLead)
@@ -136,8 +157,8 @@ public class CameraSetup
     public float JointConfidence(int frameNumber, int jointNumber, bool isLead)
     {
         return isLead
-            ? LeadPoseAndConfidencePerFrame[frameNumber][jointNumber].Z
-            : FollowPoseAndConfidencePerFrame[frameNumber][jointNumber].Z;
+            ? recenteredLeadPoseAndConfidencePerFrame[frameNumber][jointNumber].Z
+            : recenteredFollowPoseAndConfidencePerFrame[frameNumber][jointNumber].Z;
     }
     
     [Serializable] 

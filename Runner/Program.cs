@@ -9,8 +9,7 @@ static class Program
     class Args
     {
         public string JsonInputDir { get; set; }
-        public string JsonCameraSizes { get; set; }
-        public string JsonSeedCameraPositions { get; set; }
+
         public string OutputDb { get; set; }
     }
 
@@ -21,14 +20,6 @@ static class Program
             new Argument<string>(
                 "JsonInputDir",
                 "Path to directory containing refined lead and follow poses"),
-
-            new Argument<string>(
-                "JsonCameraSizes",
-                "Path to json file containing camera sizes"),
-            
-            new Argument<string>(
-                "JsonSeedCameraPositions",
-                "Path to json file containing seed camera positions"),
             
             new Argument<string>(
                 "OutputDb",
@@ -46,7 +37,7 @@ static class Program
     static void Parse(Args args)
     {
         CameraPoseSolver cameraPoseSolver = new();
-        cameraPoseSolver.LoadPoses(args.JsonInputDir, args.JsonCameraSizes, args.JsonSeedCameraPositions);
+        cameraPoseSolver.LoadPoses(args.JsonInputDir);
         cameraPoseSolver.IterationLoop();
         cameraPoseSolver.SaveData();
     }
