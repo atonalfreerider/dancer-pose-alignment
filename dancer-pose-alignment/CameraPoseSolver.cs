@@ -123,9 +123,27 @@ public class CameraPoseSolver
             .ToList();
     }
     
-    public List<Vector2> ReverseProjectOriginsPerCamera(int frameNumber)
+    public List<List<Vector2>> ReverseProjectOriginCrossPerCamera(int frameNumber)
     {
-        return cameras.Select(camera => camera.ReverseProjectPoint(Vector3.Zero, frameNumber)).ToList();
+        List<List<Vector2>> originCross = [];
+        foreach (CameraSetup camera in cameras)
+        {
+            originCross.Add([
+                camera.ReverseProjectPoint(Vector3.Zero, frameNumber),
+                camera.ReverseProjectPoint(Vector3.UnitX, frameNumber),
+                camera.ReverseProjectPoint(Vector3.UnitY, frameNumber),
+                camera.ReverseProjectPoint(Vector3.UnitZ, frameNumber)
+            ]);
+        }
+
+        return originCross;
+    }
+    
+    public List<Vector2> ReverseProjectionsOfOtherCamerasPerCamera(int frameNumber, int cameraIndex)
+    {
+        return cameras.Select((camera, index) => index == cameraIndex 
+            ? Vector2.Zero 
+            : cameras[cameraIndex].ReverseProjectPoint(camera.PositionsPerFrame[frameNumber], frameNumber)).ToList();
     }
 
     void CreateAndPlaceCameras(

@@ -58,6 +58,28 @@ public class CameraSetup
         Vector2 offcenterAndRescaleAndFlip = new Vector2(
             imagePlaneCoordinates.X / PixelToMeter + Size.X / 2,
             -imagePlaneCoordinates.Y / PixelToMeter + Size.Y / 2);
+
+        // don't render off screen
+        if (offcenterAndRescaleAndFlip.Y < 0)
+        {
+            offcenterAndRescaleAndFlip.Y = 0;
+        }
+
+        if (offcenterAndRescaleAndFlip.Y > Size.Y)
+        {
+            offcenterAndRescaleAndFlip.Y = Size.Y;
+        }
+
+        if (offcenterAndRescaleAndFlip.X < 0)
+        {
+            offcenterAndRescaleAndFlip.X = 0;
+        }
+
+        if (offcenterAndRescaleAndFlip.X > Size.X)
+        {
+            offcenterAndRescaleAndFlip.X = Size.X;
+        }
+
         return offcenterAndRescaleAndFlip;
     }
 

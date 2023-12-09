@@ -627,8 +627,15 @@ public partial class MainWindow : Window
         float error = cameraPoseSolver.Calculate3DPosesAndTotalError(frameCount);
         SolverErrorText.Text = error.ToString();
         
-        List<Vector2> reverseProjectedOrigins = cameraPoseSolver.ReverseProjectOriginsPerCamera(frameCount);
-        
+        List<List<Vector2>> reverseProjectedOriginCrossPerCam = cameraPoseSolver.ReverseProjectOriginCrossPerCamera(frameCount);
+
+        List<List<Vector2>> reverseProjectionsOfOtherCamerasPerCamera = [];
+        for (int i = 0; i < numCameras; i++)
+        {
+            reverseProjectionsOfOtherCamerasPerCamera.Add(cameraPoseSolver
+                .ReverseProjectionsOfOtherCamerasPerCamera(frameCount, i));
+        }
+
         List<List<Vector2>> leadReverseProjectedPerCamera = 
             cameraPoseSolver.ReverseProjectionOfLeadPosePerCamera(frameCount);
         List<List<Vector2>> followReverseProjectedPerCamera = 
@@ -655,7 +662,8 @@ public partial class MainWindow : Window
                     3,
                     [],
                     [],
-                    reverseProjectedOrigins[i1],
+                    reverseProjectedOriginCrossPerCam[i1],
+                    reverseProjectionsOfOtherCamerasPerCamera[i1],
                     leadReverseProjectedPerCamera[i1],
                     followReverseProjectedPerCamera[i1]);
                 drawingImage.Drawing = drawingGroup;

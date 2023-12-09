@@ -86,47 +86,7 @@ public static class PreviewDrawer
                 continue;
             }
 
-            GeometryDrawing leftCalf = DrawLine(pose[(int)Halpe.LAnkle], pose[(int)Halpe.LKnee], role);
-            drawingGroup.Children.Add(leftCalf);
-
-            GeometryDrawing leftThigh = DrawLine(pose[(int)Halpe.LKnee], pose[(int)Halpe.LHip], role);
-            drawingGroup.Children.Add(leftThigh);
-
-            GeometryDrawing rightCalf = DrawLine(pose[(int)Halpe.RAnkle], pose[(int)Halpe.RKnee], role);
-            drawingGroup.Children.Add(rightCalf);
-
-            GeometryDrawing rightThigh = DrawLine(pose[(int)Halpe.RKnee], pose[(int)Halpe.RHip], role);
-            drawingGroup.Children.Add(rightThigh);
-
-            GeometryDrawing leftUpperArm = DrawLine(pose[(int)Halpe.LShoulder], pose[(int)Halpe.LElbow], role);
-            drawingGroup.Children.Add(leftUpperArm);
-
-            GeometryDrawing leftForearm = DrawLine(pose[(int)Halpe.LElbow], pose[(int)Halpe.LWrist], role);
-            drawingGroup.Children.Add(leftForearm);
-
-            GeometryDrawing rightUpperArm = DrawLine(pose[(int)Halpe.RShoulder], pose[(int)Halpe.RElbow], role);
-            drawingGroup.Children.Add(rightUpperArm);
-
-            GeometryDrawing rightForearm = DrawLine(pose[(int)Halpe.RElbow], pose[(int)Halpe.RWrist], role);
-            drawingGroup.Children.Add(rightForearm);
-
-            GeometryDrawing spine = DrawLine(pose[(int)Halpe.Neck], pose[(int)Halpe.Hip], role);
-            drawingGroup.Children.Add(spine);
-
-            GeometryDrawing neck = DrawLine(pose[(int)Halpe.Head], pose[(int)Halpe.Neck], role);
-            drawingGroup.Children.Add(neck);
-
-            GeometryDrawing lHip = DrawLine(pose[(int)Halpe.Hip], pose[(int)Halpe.LHip], role);
-            drawingGroup.Children.Add(lHip);
-
-            GeometryDrawing rHip = DrawLine(pose[(int)Halpe.Hip], pose[(int)Halpe.RHip], role);
-            drawingGroup.Children.Add(rHip);
-
-            GeometryDrawing lShoulder = DrawLine(pose[(int)Halpe.Neck], pose[(int)Halpe.LShoulder], role);
-            drawingGroup.Children.Add(lShoulder);
-
-            GeometryDrawing rShoulder = DrawLine(pose[(int)Halpe.Neck], pose[(int)Halpe.RShoulder], role);
-            drawingGroup.Children.Add(rShoulder);
+            drawingGroup = DrawHalpe(drawingGroup, pose, role);
         }
 
         return drawingGroup;
@@ -141,7 +101,8 @@ public static class PreviewDrawer
         int mirrorCurrentFollowIndex,
         List<Tuple<int, bool>> currentSelectedCamerasAndPoseAnchor,
         List<Tuple<int, bool>> mirrorCurrentSelectedCamerasAndPoseAnchor,
-        Vector2 origin,
+        List<Vector2> originCross,
+        List<Vector2> otherCameras,
         List<Vector2> leadProjectionsAtFrame,
         List<Vector2> followProjectionsAtFrame)
     {
@@ -154,15 +115,80 @@ public static class PreviewDrawer
             mirrorCurrentFollowIndex,
             currentSelectedCamerasAndPoseAnchor,
             mirrorCurrentSelectedCamerasAndPoseAnchor);
-        
-        SolidColorBrush originBrush = new SolidColorBrush(Colors.Blue);
+
+        SolidColorBrush originBrush = new SolidColorBrush(Colors.Black);
         Pen originPen = new Pen(originBrush)
         {
             Thickness = 10
         };
-        GeometryDrawing originGeometry = DrawPoint(origin, originPen);
+        GeometryDrawing originGeometry = DrawPoint(originCross[0], originPen);
         drawingGroup.Children.Add(originGeometry);
         
+        // draw red line to positive xuint
+        SolidColorBrush xBrush = new SolidColorBrush(Colors.Red);
+        Pen xPen = new Pen(xBrush)
+        {
+            Thickness = 10
+        };
+        LineGeometry xLine = new LineGeometry
+        {
+            StartPoint = new Point(originCross[0].X, originCross[0].Y),
+            EndPoint = new Point(originCross[1].X, originCross[1].Y)
+        };
+        GeometryDrawing xGeometry = new GeometryDrawing
+        {
+            Pen = xPen,
+            Geometry = xLine
+        };
+        drawingGroup.Children.Add(xGeometry);
+        
+        // draw green line to positive y
+        SolidColorBrush yBrush = new SolidColorBrush(Colors.Green);
+        Pen yPen = new Pen(yBrush)
+        {
+            Thickness = 10
+        };
+        LineGeometry yLine = new LineGeometry
+        {
+            StartPoint = new Point(originCross[0].X, originCross[0].Y),
+            EndPoint = new Point(originCross[2].X, originCross[2].Y)
+        };
+        GeometryDrawing yGeometry = new GeometryDrawing
+        {
+            Pen = yPen,
+            Geometry = yLine
+        };
+        drawingGroup.Children.Add(yGeometry);
+        
+        // draw blue line to positive z
+        SolidColorBrush zBrush = new SolidColorBrush(Colors.Blue);
+        Pen zPen = new Pen(zBrush)
+        {
+            Thickness = 10
+        };
+        LineGeometry zLine = new LineGeometry
+        {
+            StartPoint = new Point(originCross[0].X, originCross[0].Y),
+            EndPoint = new Point(originCross[3].X, originCross[3].Y)
+        };
+        GeometryDrawing zGeometry = new GeometryDrawing
+        {
+            Pen = zPen,
+            Geometry = zLine
+        };
+        drawingGroup.Children.Add(zGeometry);
+
+        SolidColorBrush camBrush = new SolidColorBrush(Colors.Green);
+        Pen camPen = new Pen(camBrush)
+        {
+            Thickness = 10
+        };
+        foreach (Vector2 otherCamera in otherCameras)
+        {
+            GeometryDrawing poseGeometry = DrawPoint(otherCamera, camPen);
+            drawingGroup.Children.Add(poseGeometry);
+        }
+
         SolidColorBrush brush = new SolidColorBrush(Colors.Black);
         Pen pen = new Pen(brush)
         {
@@ -174,6 +200,8 @@ public static class PreviewDrawer
             drawingGroup.Children.Add(poseGeometry);
         }
         
+        drawingGroup = DrawHalpe(drawingGroup, leadProjectionsAtFrame.Select(x => new Vector3(x.X, x.Y, 1f)).ToList(), -1);
+
         SolidColorBrush followBrush = new SolidColorBrush(Colors.Gray);
         Pen followPen = new Pen(followBrush)
         {
@@ -184,6 +212,55 @@ public static class PreviewDrawer
             GeometryDrawing poseGeometry = DrawPoint(point, followPen);
             drawingGroup.Children.Add(poseGeometry);
         }
+
+        drawingGroup = DrawHalpe(drawingGroup, followProjectionsAtFrame.Select(x => new Vector3(x.X, x.Y, 1f)).ToList(), -1);
+
+        return drawingGroup;
+    }
+
+    static DrawingGroup DrawHalpe(DrawingGroup drawingGroup, List<Vector3> pose, int role)
+    {
+        GeometryDrawing leftCalf = DrawLine(pose[(int)Halpe.LAnkle], pose[(int)Halpe.LKnee], role);
+        drawingGroup.Children.Add(leftCalf);
+
+        GeometryDrawing leftThigh = DrawLine(pose[(int)Halpe.LKnee], pose[(int)Halpe.LHip], role);
+        drawingGroup.Children.Add(leftThigh);
+
+        GeometryDrawing rightCalf = DrawLine(pose[(int)Halpe.RAnkle], pose[(int)Halpe.RKnee], role);
+        drawingGroup.Children.Add(rightCalf);
+
+        GeometryDrawing rightThigh = DrawLine(pose[(int)Halpe.RKnee], pose[(int)Halpe.RHip], role);
+        drawingGroup.Children.Add(rightThigh);
+
+        GeometryDrawing leftUpperArm = DrawLine(pose[(int)Halpe.LShoulder], pose[(int)Halpe.LElbow], role);
+        drawingGroup.Children.Add(leftUpperArm);
+
+        GeometryDrawing leftForearm = DrawLine(pose[(int)Halpe.LElbow], pose[(int)Halpe.LWrist], role);
+        drawingGroup.Children.Add(leftForearm);
+
+        GeometryDrawing rightUpperArm = DrawLine(pose[(int)Halpe.RShoulder], pose[(int)Halpe.RElbow], role);
+        drawingGroup.Children.Add(rightUpperArm);
+
+        GeometryDrawing rightForearm = DrawLine(pose[(int)Halpe.RElbow], pose[(int)Halpe.RWrist], role);
+        drawingGroup.Children.Add(rightForearm);
+
+        GeometryDrawing spine = DrawLine(pose[(int)Halpe.Neck], pose[(int)Halpe.Hip], role);
+        drawingGroup.Children.Add(spine);
+
+        GeometryDrawing neck = DrawLine(pose[(int)Halpe.Head], pose[(int)Halpe.Neck], role);
+        drawingGroup.Children.Add(neck);
+
+        GeometryDrawing lHip = DrawLine(pose[(int)Halpe.Hip], pose[(int)Halpe.LHip], role);
+        drawingGroup.Children.Add(lHip);
+
+        GeometryDrawing rHip = DrawLine(pose[(int)Halpe.Hip], pose[(int)Halpe.RHip], role);
+        drawingGroup.Children.Add(rHip);
+
+        GeometryDrawing lShoulder = DrawLine(pose[(int)Halpe.Neck], pose[(int)Halpe.LShoulder], role);
+        drawingGroup.Children.Add(lShoulder);
+
+        GeometryDrawing rShoulder = DrawLine(pose[(int)Halpe.Neck], pose[(int)Halpe.RShoulder], role);
+        drawingGroup.Children.Add(rShoulder);
 
         return drawingGroup;
     }
