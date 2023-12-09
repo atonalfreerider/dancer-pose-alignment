@@ -164,9 +164,7 @@ public partial class MainWindow : Window
 
     void RunUntilNext_Click(object sender, RoutedEventArgs e)
     {
-        while (frameCount < totalFrameCount &&
-               posesByPersonAtFrame.ContainsKey(currentLeadIndex) &&
-               posesByPersonAtFrame.ContainsKey(currentFollowIndex))
+        while (frameCount < totalFrameCount && Continuity())
         {
             SaveIndicesForFrame();
             frameCount++;
@@ -181,7 +179,7 @@ public partial class MainWindow : Window
         if (!string.IsNullOrEmpty(VideoInputPath.Text))
         {
             saveDirectory = Directory.GetParent(GetVideoPath()).FullName;
-            cameraName = Path.GetFileNameWithoutExtension(VideoInputPath.Text);
+            cameraName = Path.GetFileNameWithoutExtension(GetVideoPath());
         }
 
         SaveTo(saveDirectory, cameraName);
@@ -245,18 +243,35 @@ public partial class MainWindow : Window
     void SaveIndicesForFrame()
     {
         // save the lead and follow indices from the last frame
-        finalDancerPoses[frameCount][0] = currentLeadIndex > -1
-            ? posesByPersonAtFrame[currentLeadIndex]
+        finalDancerPoses[frameCount][0] = currentLeadIndex > -1 &&
+                                          posesByPersonAtFrame.TryGetValue(currentLeadIndex,
+                                              out List<Vector3>? lVal)
+            ? lVal
             : [];
-        finalDancerPoses[frameCount][1] = currentFollowIndex > -1
-            ? posesByPersonAtFrame[currentFollowIndex]
+        finalDancerPoses[frameCount][1] = currentFollowIndex > -1 &&
+                                          posesByPersonAtFrame.TryGetValue(currentFollowIndex,
+                                              out List<Vector3>? fVal)
+            ? fVal
             : [];
-        finalDancerPoses[frameCount][2] = mirrorCurrentLeadIndex > -1
-            ? posesByPersonAtFrame[mirrorCurrentLeadIndex]
+        finalDancerPoses[frameCount][2] = mirrorCurrentLeadIndex > -1 &&
+                                          posesByPersonAtFrame.TryGetValue(mirrorCurrentLeadIndex,
+                                              out List<Vector3>? mirLeadVal)
+            ? mirLeadVal
             : [];
-        finalDancerPoses[frameCount][3] = mirrorCurrentFollowIndex > -1
-            ? posesByPersonAtFrame[mirrorCurrentFollowIndex]
+        finalDancerPoses[frameCount][3] = mirrorCurrentFollowIndex > -1 &&
+                                          posesByPersonAtFrame.TryGetValue(mirrorCurrentFollowIndex,
+                                              out List<Vector3>? mirFolVal)
+            ? mirFolVal
             : [];
+
+        // save the camera indices from the last frame
+        finalIndexCamerasAndPoseAnchor[frameCount].Clear();
+        finalIndexMirroredCamerasAndPoseAnchor[frameCount].Clear();
+        for (int i = 0; i < numCameras; i++)
+        {
+            finalIndexCamerasAndPoseAnchor[frameCount].Add(currentSelectedCamerasAndPoseAnchor[i]);
+            finalIndexMirroredCamerasAndPoseAnchor[frameCount].Add(mirrorCurrentSelectedCamerasAndPoseAnchor[i]);
+        }
     }
 
     void RedrawPoses()
@@ -405,13 +420,13 @@ public partial class MainWindow : Window
         string mirroredCameraSavePath = Path.Combine(directory, $"mirror-camera-{cameraName}.json");
 
         File.WriteAllText(leadSavePath,
-            JsonConvert.SerializeObject(finalDancerPoses[0], Formatting.Indented));
+            JsonConvert.SerializeObject(finalDancerPoses.Select(x => x[0]), Formatting.Indented));
         File.WriteAllText(followSavePath,
-            JsonConvert.SerializeObject(finalDancerPoses[1], Formatting.Indented));
+            JsonConvert.SerializeObject(finalDancerPoses.Select(x => x[1]), Formatting.Indented));
         File.WriteAllText(mirroredLeadSavePath,
-            JsonConvert.SerializeObject(finalDancerPoses[2], Formatting.Indented));
+            JsonConvert.SerializeObject(finalDancerPoses.Select(x => x[2]), Formatting.Indented));
         File.WriteAllText(mirroredFollowSavePath,
-            JsonConvert.SerializeObject(finalDancerPoses[3], Formatting.Indented));
+            JsonConvert.SerializeObject(finalDancerPoses.Select(x => x[3]), Formatting.Indented));
 
         File.WriteAllText(cameraSavePath,
             JsonConvert.SerializeObject(finalIndexCamerasAndPoseAnchor, Formatting.Indented));
@@ -454,6 +469,22 @@ public partial class MainWindow : Window
         return error;
     }
 
+    bool Continuity()
+    {
+        if (currentLeadIndex == -1 || currentFollowIndex == -1)
+        {
+            return false;
+        }
+
+        if (!posesByPersonAtFrame.ContainsKey(currentLeadIndex)) return false;
+        if (!posesByPersonAtFrame.ContainsKey(currentFollowIndex)) return false;
+
+        if (mirrorCurrentFollowIndex > -1 && !posesByPersonAtFrame.ContainsKey(mirrorCurrentFollowIndex)) return false;
+        if (mirrorCurrentLeadIndex > -1 && !posesByPersonAtFrame.ContainsKey(mirrorCurrentLeadIndex)) return false;
+
+        return true;
+    }
+
     string GetVideoPath()
     {
         return VideoFilesDropdown.SelectedItem?.ToString() ?? "";
@@ -468,8 +499,8 @@ public partial class MainWindow : Window
 
     #endregion
 
-    #region ROOM LAYOUT    
-    
+    #region ROOM LAYOUT
+
     void LayoutCanvas_MouseDown(object sender, PointerPressedEventArgs args)
     {
         // Draw the triangle representing the camera position
@@ -526,11 +557,11 @@ public partial class MainWindow : Window
             point.X * Math.Sin(angle) + point.Y * Math.Cos(angle)
         );
     }
-    
+
     #endregion
 
     #region PERSPECTIVE
-    
+
     void LoadJsonForPerspectiveButton_Click(object sender, RoutedEventArgs e)
     {
         string directoryPath = DirectoryPathTextBox.Text;
@@ -553,13 +584,13 @@ public partial class MainWindow : Window
                     canvas.Width = 500;
                     canvas.Height = 500;
                     CanvasContainer.Items.Add(canvas);
-                    
+
                     Dispatcher.UIThread.Post(() =>
                     {
                         DrawingImage drawingImage = PreviewDrawer.DrawGeometry(
                             dancersAtFrame,
                             new Size(500, 500),
-                            0, 
+                            0,
                             -1, // TODO
                             -1,
                             -1,
@@ -669,11 +700,11 @@ public partial class MainWindow : Window
     {
         // Implement the solve logic
     }
-    
+
     void Save3D_Click(object sender, RoutedEventArgs e)
     {
         // Implement the save logic
     }
-    
+
     #endregion
 }
