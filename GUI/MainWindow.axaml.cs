@@ -622,6 +622,12 @@ public partial class MainWindow : Window
 
     void SetPreviewsToFrame()
     {
+        float error = cameraPoseSolver.Calculate3DPosesAndTotalError(frameCount);
+        List<List<Vector2>> leadReverseProjectedPerCamera = 
+            cameraPoseSolver.ReverseProjectionOfLeadPosePerCamera();
+        
+        SolverErrorText.Text = error.ToString();
+        
         SolverFrameNumberText.Text = $"{frameCount}:{totalFrameCount}";
         List<List<List<Vector3>>> posesByPersonAtFrameByCamera =
             cameraPoseSolver.AllPosesAtFramePerCamera(frameCount);

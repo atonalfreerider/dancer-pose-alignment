@@ -22,10 +22,9 @@ public class CameraSetup
     public Vector3 Right(int frame) => Vector3.Transform(
         new Vector3(1, 0, 0),
         RotationsPerFrame[frame]);
-
-    // these are serialized - leave them public
-    public readonly List<List<Vector3>> LeadProjectionsPerFrame = [];
-    public readonly List<List<Vector3>> FollowProjectionsPerFrame = [];
+    
+    readonly List<List<Vector3>> leadProjectionsPerFrame = [];
+    readonly List<List<Vector3>> followProjectionsPerFrame = [];
 
     List<List<Vector3>> leadPoseAndConfidencePerFrame;
     List<List<Vector3>> followPoseAndConfidencePerFrame;
@@ -45,10 +44,15 @@ public class CameraSetup
             .Select(x => x with { Z = 0 }).ToList();
 
         List<Vector3> leadProjectionsAtThisFrame = Adjusted(flattenedLead, frameNumber);
-        LeadProjectionsPerFrame[frameNumber] = leadProjectionsAtThisFrame;
+        leadProjectionsPerFrame[frameNumber] = leadProjectionsAtThisFrame;
 
         List<Vector3> followProjectionsAtThisFrame = Adjusted(flattenedFollow, frameNumber);
-        FollowProjectionsPerFrame[frameNumber] = followProjectionsAtThisFrame;
+        followProjectionsPerFrame[frameNumber] = followProjectionsAtThisFrame;
+    }
+
+    public List<Vector2> ReverseProject(List<Vector3> threeDimensionalPose)
+    {
+        return new List<Vector2>();
     }
 
     public float Error(List<Vector3> merged3DPoseLead, List<Vector3> merged3DPoseFollow, int frameNumber)
@@ -60,7 +64,7 @@ public class CameraSetup
             Vector3 vector3 = merged3DPoseLead[i];
             Vector3 target = Vector3.Normalize(vector3 - PositionsPerFrame[frameNumber]);
             Vector3 keypoint = Vector3.Normalize(
-                LeadProjectionsPerFrame[frameNumber][i] - PositionsPerFrame[frameNumber]);
+                leadProjectionsPerFrame[frameNumber][i] - PositionsPerFrame[frameNumber]);
 
             // find the angle between the vectors
             error += MathF.Acos(Vector3.Dot(target, keypoint)) *
@@ -72,7 +76,7 @@ public class CameraSetup
             Vector3 vector3 = merged3DPoseFollow[i];
             Vector3 target = Vector3.Normalize(vector3 - PositionsPerFrame[frameNumber]);
             Vector3 keypoint = Vector3.Normalize(
-                FollowProjectionsPerFrame[frameNumber][i] - PositionsPerFrame[frameNumber]);
+                followProjectionsPerFrame[frameNumber][i] - PositionsPerFrame[frameNumber]);
 
             // find the angle between the vectors
             error += MathF.Acos(Vector3.Dot(target, keypoint)) *
@@ -105,8 +109,8 @@ public class CameraSetup
                 vec.Z)) // keep the confidence
             .ToList()).ToList();
 
-        FollowProjectionsPerFrame.Add([]);
-        LeadProjectionsPerFrame.Add([]);
+        followProjectionsPerFrame.Add([]);
+        leadProjectionsPerFrame.Add([]);
     }
     
     public List<List<Vector3>> PosesPerDancerAtFrame(int frameNumber)
@@ -149,8 +153,8 @@ public class CameraSetup
         Ray rayToJoint = new Ray(
             PositionsPerFrame[frameNumber],
             Vector3.Normalize(isLead
-                ? LeadProjectionsPerFrame[frameNumber][jointNumber] - PositionsPerFrame[frameNumber]
-                : FollowProjectionsPerFrame[frameNumber][jointNumber] - PositionsPerFrame[frameNumber]));
+                ? leadProjectionsPerFrame[frameNumber][jointNumber] - PositionsPerFrame[frameNumber]
+                : followProjectionsPerFrame[frameNumber][jointNumber] - PositionsPerFrame[frameNumber]));
         return rayToJoint;
     }
 

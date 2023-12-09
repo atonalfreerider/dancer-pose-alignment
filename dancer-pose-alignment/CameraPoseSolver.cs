@@ -86,6 +86,11 @@ public class CameraPoseSolver
     {
         return cameras.Select(camera => camera.PosesPerDancerAtFrame(frameNumber).ToList()).ToList();
     }
+    
+    public List<List<Vector2>> ReverseProjectionOfLeadPosePerCamera()
+    {
+        return cameras.Select(camera => camera.ReverseProject(merged3DPoseLead)).ToList();
+    }
 
     void CreateAndPlaceCameras(
         IReadOnlyList<Vector2> imageSizes,
@@ -706,7 +711,7 @@ public class CameraPoseSolver
         return Calculate3DPosesAndTotalError(frameNumber);
     }
 
-    float Calculate3DPosesAndTotalError(int frameNumber)
+    public float Calculate3DPosesAndTotalError(int frameNumber)
     {
         foreach (CameraSetup cameraSetup in cameras)
         {
