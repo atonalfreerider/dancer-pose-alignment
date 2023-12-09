@@ -5,8 +5,8 @@ namespace dancer_pose_alignment;
 
 public class CameraPoseSolver
 {
-    readonly List<Vector3> merged3DPoseLead = [];
-    readonly List<Vector3> merged3DPoseFollow = [];
+    readonly List<List<Vector3>> merged3DPoseLeadPerFrame = [];
+    readonly List<List<Vector3>> merged3DPoseFollowPerFrame = [];
 
     readonly int poseCount = 26; // Halpe
     readonly List<CameraSetup> cameras = [];
@@ -21,6 +21,7 @@ public class CameraPoseSolver
         Dictionary<int, List<List<Vector3>>> allFollowPosesByCamera = [];
         Dictionary<int, List<List<Vector3>>> allMirrorLeadPosesByCamera = [];
         Dictionary<int, List<List<Vector3>>> allMirrorFollowPosesByCamera = [];
+        int totalFrameCount = 0;
 
         foreach (string file in Directory.GetFiles(directoryPath, "*.json"))
         {
@@ -33,6 +34,7 @@ public class CameraPoseSolver
                 string jsonContent = File.ReadAllText(file);
                 List<List<Vector3>> dancerPosesByFrames =
                     JsonConvert.DeserializeObject<List<List<Vector3>>>(jsonContent);
+                totalFrameCount = dancerPosesByFrames.Count;
 
                 int associatedCamera = int.Parse(fileName[^1].ToString());
                 if (fileName.StartsWith("lead"))
@@ -58,6 +60,16 @@ public class CameraPoseSolver
                 {
                     string jsonContent = File.ReadAllText(file);
                     cameraPositions = JsonConvert.DeserializeObject<List<Vector3>>(jsonContent);
+
+                    // rescale and offset the camera Z and X, so that the origin is in the middle of the 10m x 8m dance floor. Also 1000 pixels = 10M
+                    for (int i = 0; i < cameraPositions.Count; i++)
+                    {
+                        cameraPositions[i] = cameraPositions[i] with
+                        {
+                            X = cameraPositions[i].X / 100 - 5,
+                            Z = -(cameraPositions[i].Z / 100 - 4) // orient forward
+                        };
+                    }
                 }
                 else if (fileName.StartsWith("camera-focal-lengths"))
                 {
@@ -77,8 +89,18 @@ public class CameraPoseSolver
             }
         }
 
+        // seed
+        for (int i = 0; i < totalFrameCount; i++)
+        {
+            merged3DPoseLeadPerFrame.Add([]);
+            merged3DPoseFollowPerFrame.Add([]);
+        }
+
         CreateAndPlaceCameras(cameraSizes, cameraPositions, cameraFocalLengths);
-        AddPosesToCamera(allLeadPosesByCamera, allFollowPosesByCamera, allMirrorLeadPosesByCamera,
+        AddPosesToCamera(
+            allLeadPosesByCamera,
+            allFollowPosesByCamera,
+            allMirrorLeadPosesByCamera,
             allMirrorFollowPosesByCamera);
     }
 
@@ -86,10 +108,24 @@ public class CameraPoseSolver
     {
         return cameras.Select(camera => camera.PosesPerDancerAtFrame(frameNumber).ToList()).ToList();
     }
-    
-    public List<List<Vector2>> ReverseProjectionOfLeadPosePerCamera()
+
+    public List<List<Vector2>> ReverseProjectionOfLeadPosePerCamera(int frameNumber)
     {
-        return cameras.Select(camera => camera.ReverseProject(merged3DPoseLead)).ToList();
+        return cameras.Select(camera => merged3DPoseLeadPerFrame[frameNumber]
+                .Select(x => camera.ReverseProjectPoint(x, frameNumber)).ToList())
+            .ToList();
+    }
+    
+    public List<List<Vector2>> ReverseProjectionOfFollowPosePerCamera(int frameNumber)
+    {
+        return cameras.Select(camera => merged3DPoseFollowPerFrame[frameNumber]
+                .Select(x => camera.ReverseProjectPoint(x, frameNumber)).ToList())
+            .ToList();
+    }
+    
+    public List<Vector2> ReverseProjectOriginsPerCamera(int frameNumber)
+    {
+        return cameras.Select(camera => camera.ReverseProjectPoint(Vector3.Zero, frameNumber)).ToList();
     }
 
     void CreateAndPlaceCameras(
@@ -111,8 +147,8 @@ public class CameraPoseSolver
                 camera.PositionsPerFrame.Add(seedCameraPositions[i]);
                 // TODO confirm this rotation works
                 Quaternion centerLook = Transform.LookAt(
-                    new Vector3(0, 1.5f, 0), 
-                    Quaternion.Identity, 
+                    new Vector3(0, 1.5f, 0),
+                    Quaternion.Identity,
                     camera.PositionsPerFrame[testingFrameNumber]);
                 camera.RotationsPerFrame.Add(centerLook);
             }
@@ -177,11 +213,11 @@ public class CameraPoseSolver
         File.WriteAllText(Path.Combine(@"C:\Users\john\Desktop", "cameras.json"), jsonCameras);
         Console.WriteLine("wrote cameras.json");
 
-        string jsonMerged3DPose = JsonConvert.SerializeObject(merged3DPoseLead, Formatting.Indented);
+        string jsonMerged3DPose = JsonConvert.SerializeObject(merged3DPoseLeadPerFrame, Formatting.Indented);
         File.WriteAllText(Path.Combine(@"C:\Users\john\Desktop", "merged3DPoseLead.json"), jsonMerged3DPose);
         Console.WriteLine("wrote merged3DPoseLead.json");
 
-        string jsonMerged3DPoseFollow = JsonConvert.SerializeObject(merged3DPoseFollow, Formatting.Indented);
+        string jsonMerged3DPoseFollow = JsonConvert.SerializeObject(merged3DPoseFollowPerFrame, Formatting.Indented);
         File.WriteAllText(Path.Combine(@"C:\Users\john\Desktop", "merged3DPoseFollow.json"), jsonMerged3DPoseFollow);
         Console.WriteLine("wrote merged3DPoseFollow.json");
     }
@@ -326,14 +362,14 @@ public class CameraPoseSolver
 
             camera.RotationsPerFrame[frameNumber] = upPitchRotation;
             float upPitchError = Calculate3DPosesAndTotalError(frameNumber);
-            if (AnyPointsHigherThan2pt5Meters() || LowestLeadAnkleIsMoreThan10CMAboveZero())
+            if (AnyPointsHigherThan2pt5Meters(frameNumber) || LowestLeadAnkleIsMoreThan10CMAboveZero(frameNumber))
             {
                 upPitchError = float.MaxValue;
             }
 
             camera.RotationsPerFrame[frameNumber] = downPitchRotation;
             float downPitchError = Calculate3DPosesAndTotalError(frameNumber);
-            if (AnyPointsBelowGround)
+            if (AnyPointsBelowGround(frameNumber))
             {
                 downPitchError = float.MaxValue;
             }
@@ -381,7 +417,7 @@ public class CameraPoseSolver
             }
 
             float zoomOutFocalError = Calculate3DPosesAndTotalError(frameNumber);
-            if (AnyPointsBelowGround)
+            if (AnyPointsBelowGround(frameNumber))
             {
                 zoomOutFocalError = float.MaxValue;
             }
@@ -718,8 +754,8 @@ public class CameraPoseSolver
             cameraSetup.Project(frameNumber);
         }
 
-        merged3DPoseLead.Clear();
-        merged3DPoseFollow.Clear();
+        merged3DPoseLeadPerFrame[frameNumber].Clear();
+        merged3DPoseFollowPerFrame[frameNumber].Clear();
         for (int i = 0; i < poseCount; i++)
         {
             List<Ray> leadRays = [];
@@ -742,15 +778,16 @@ public class CameraPoseSolver
             }
 
             Vector3 leadJointMidpoint = RayMidpointFinder.FindMinimumMidpoint(leadRays, leadConfidences);
-            merged3DPoseLead.Add(leadJointMidpoint);
+            merged3DPoseLeadPerFrame[frameNumber].Add(leadJointMidpoint);
             Vector3 followJointMidpoint = RayMidpointFinder.FindMinimumMidpoint(followRays, followConfidences);
-            merged3DPoseFollow.Add(followJointMidpoint);
+            merged3DPoseFollowPerFrame[frameNumber].Add(followJointMidpoint);
         }
 
         float totalError = 0;
         foreach (CameraSetup cameraSetup in cameras)
         {
-            totalError += cameraSetup.Error(merged3DPoseLead, merged3DPoseFollow, frameNumber);
+            totalError += cameraSetup.Error(merged3DPoseLeadPerFrame[frameNumber],
+                merged3DPoseFollowPerFrame[frameNumber], frameNumber);
         }
 
         return totalError;
@@ -786,16 +823,20 @@ public class CameraPoseSolver
         return lead.Sum(vector3 => vector3.Z) + follow.Sum(vector3 => vector3.Z);
     }
 
-    bool AnyPointsBelowGround => merged3DPoseLead.Any(vec => vec.Y < 0) || merged3DPoseFollow.Any(vec => vec.Y < 0);
+    bool AnyPointsBelowGround(int frameNumber) => merged3DPoseLeadPerFrame[frameNumber].Any(vec => vec.Y < 0) ||
+                                                  merged3DPoseFollowPerFrame[frameNumber].Any(vec => vec.Y < 0);
 
-    bool LowestLeadAnkleIsMoreThan10CMAboveZero()
+    bool LowestLeadAnkleIsMoreThan10CMAboveZero(int frameNumber)
     {
-        float lowestLeadAnkle = Math.Min(merged3DPoseLead[(int)Halpe.LAnkle].Y, merged3DPoseLead[(int)Halpe.RAnkle].Y);
+        float lowestLeadAnkle = Math.Min(
+            merged3DPoseLeadPerFrame[frameNumber][(int)Halpe.LAnkle].Y,
+            merged3DPoseLeadPerFrame[frameNumber][(int)Halpe.RAnkle].Y);
         return lowestLeadAnkle > 0.1f;
     }
 
-    bool AnyPointsHigherThan2pt5Meters()
+    bool AnyPointsHigherThan2pt5Meters(int frameNumber)
     {
-        return merged3DPoseLead.Any(vec => vec.Y > 2.5) || merged3DPoseFollow.Any(vec => vec.Y > 2.5);
+        return merged3DPoseLeadPerFrame[frameNumber].Any(vec => vec.Y > 2.5) ||
+               merged3DPoseFollowPerFrame[frameNumber].Any(vec => vec.Y > 2.5);
     }
 }

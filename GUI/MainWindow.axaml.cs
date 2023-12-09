@@ -279,7 +279,8 @@ public partial class MainWindow : Window
     {
         Dispatcher.UIThread.Post(() =>
         {
-            DrawingImage drawingImage = PreviewDrawer.DrawGeometry(
+            DrawingImage drawingImage = new DrawingImage();
+            DrawingGroup drawingGroup = PreviewDrawer.DrawGeometry(
                 posesByPersonAtFrame,
                 PreviewImage.Bounds.Size,
                 currentLeadIndex,
@@ -288,6 +289,7 @@ public partial class MainWindow : Window
                 mirrorCurrentFollowIndex,
                 currentSelectedCamerasAndPoseAnchor,
                 mirrorCurrentSelectedCamerasAndPoseAnchor);
+            drawingImage.Drawing = drawingGroup;
             PoseImage.Source = drawingImage;
         }, DispatcherPriority.Render);
 
@@ -623,10 +625,14 @@ public partial class MainWindow : Window
     void SetPreviewsToFrame()
     {
         float error = cameraPoseSolver.Calculate3DPosesAndTotalError(frameCount);
-        List<List<Vector2>> leadReverseProjectedPerCamera = 
-            cameraPoseSolver.ReverseProjectionOfLeadPosePerCamera();
-        
         SolverErrorText.Text = error.ToString();
+        
+        List<Vector2> reverseProjectedOrigins = cameraPoseSolver.ReverseProjectOriginsPerCamera(frameCount);
+        
+        List<List<Vector2>> leadReverseProjectedPerCamera = 
+            cameraPoseSolver.ReverseProjectionOfLeadPosePerCamera(frameCount);
+        List<List<Vector2>> followReverseProjectedPerCamera = 
+            cameraPoseSolver.ReverseProjectionOfFollowPosePerCamera(frameCount);
         
         SolverFrameNumberText.Text = $"{frameCount}:{totalFrameCount}";
         List<List<List<Vector3>>> posesByPersonAtFrameByCamera =
@@ -639,7 +645,8 @@ public partial class MainWindow : Window
             int i1 = i;
             Dispatcher.UIThread.Post(() =>
             {
-                DrawingImage drawingImage = PreviewDrawer.DrawGeometry(
+                DrawingImage drawingImage = new DrawingImage();
+                DrawingGroup drawingGroup = PreviewDrawer.DrawGeometry(
                     posesByPersonAtFrameByCameraDict[i1],
                     alignmentImages[i1].Bounds.Size,
                     0,
@@ -647,7 +654,11 @@ public partial class MainWindow : Window
                     2,
                     3,
                     [],
-                    []);
+                    [],
+                    reverseProjectedOrigins[i1],
+                    leadReverseProjectedPerCamera[i1],
+                    followReverseProjectedPerCamera[i1]);
+                drawingImage.Drawing = drawingGroup;
                 alignmentImages[i1].Source = drawingImage;
             }, DispatcherPriority.Render);
         }

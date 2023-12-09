@@ -7,7 +7,7 @@ namespace GUI;
 
 public static class PreviewDrawer
 {
-    public static DrawingImage DrawGeometry(
+    public static DrawingGroup DrawGeometry(
         Dictionary<int, List<Vector3>> posesByPersonAtFrame,
         Size imgSize,
         int currentLeadIndex,
@@ -17,7 +17,6 @@ public static class PreviewDrawer
         List<Tuple<int, bool>> currentSelectedCamerasAndPoseAnchor,
         List<Tuple<int, bool>> mirrorCurrentSelectedCamerasAndPoseAnchor)
     {
-        DrawingImage drawingImage = new DrawingImage();
         DrawingGroup drawingGroup = new DrawingGroup();
 
         // HACK: add small dots to the corners of the image to force the overlay to not resize
@@ -130,9 +129,63 @@ public static class PreviewDrawer
             drawingGroup.Children.Add(rShoulder);
         }
 
+        return drawingGroup;
+    }
 
-        drawingImage.Drawing = drawingGroup;
-        return drawingImage;
+    public static DrawingGroup DrawGeometry(
+        Dictionary<int, List<Vector3>> posesByPersonAtFrame,
+        Size imgSize,
+        int currentLeadIndex,
+        int currentFollowIndex,
+        int mirrorCurrentLeadIndex,
+        int mirrorCurrentFollowIndex,
+        List<Tuple<int, bool>> currentSelectedCamerasAndPoseAnchor,
+        List<Tuple<int, bool>> mirrorCurrentSelectedCamerasAndPoseAnchor,
+        Vector2 origin,
+        List<Vector2> leadProjectionsAtFrame,
+        List<Vector2> followProjectionsAtFrame)
+    {
+        DrawingGroup drawingGroup = DrawGeometry(
+            posesByPersonAtFrame,
+            imgSize,
+            currentLeadIndex,
+            currentFollowIndex,
+            mirrorCurrentLeadIndex,
+            mirrorCurrentFollowIndex,
+            currentSelectedCamerasAndPoseAnchor,
+            mirrorCurrentSelectedCamerasAndPoseAnchor);
+        
+        SolidColorBrush originBrush = new SolidColorBrush(Colors.Blue);
+        Pen originPen = new Pen(originBrush)
+        {
+            Thickness = 10
+        };
+        GeometryDrawing originGeometry = DrawPoint(origin, originPen);
+        drawingGroup.Children.Add(originGeometry);
+        
+        SolidColorBrush brush = new SolidColorBrush(Colors.Black);
+        Pen pen = new Pen(brush)
+        {
+            Thickness = 4
+        };
+        foreach (Vector2 point in leadProjectionsAtFrame)
+        {
+            GeometryDrawing poseGeometry = DrawPoint(point, pen);
+            drawingGroup.Children.Add(poseGeometry);
+        }
+        
+        SolidColorBrush followBrush = new SolidColorBrush(Colors.Gray);
+        Pen followPen = new Pen(followBrush)
+        {
+            Thickness = 4
+        };
+        foreach (Vector2 point in followProjectionsAtFrame)
+        {
+            GeometryDrawing poseGeometry = DrawPoint(point, followPen);
+            drawingGroup.Children.Add(poseGeometry);
+        }
+
+        return drawingGroup;
     }
 
     static GeometryDrawing DrawLine(Vector3 start, Vector3 end, int role)

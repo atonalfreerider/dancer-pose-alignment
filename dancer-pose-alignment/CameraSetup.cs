@@ -22,7 +22,7 @@ public class CameraSetup
     public Vector3 Right(int frame) => Vector3.Transform(
         new Vector3(1, 0, 0),
         RotationsPerFrame[frame]);
-    
+
     readonly List<List<Vector3>> leadProjectionsPerFrame = [];
     readonly List<List<Vector3>> followProjectionsPerFrame = [];
 
@@ -30,7 +30,7 @@ public class CameraSetup
     List<List<Vector3>> followPoseAndConfidencePerFrame;
     List<List<Vector3>> mirrorLeadPoseAndConfidencePerFrame;
     List<List<Vector3>> mirrorFollowPoseAndConfidencePerFrame;
-    
+
     List<List<Vector3>> recenteredLeadPoseAndConfidencePerFrame;
     List<List<Vector3>> recenteredFollowPoseAndConfidencePerFrame;
     List<List<Vector3>> mirrorRecenteredLeadPoseAndConfidencePerFrame;
@@ -50,9 +50,29 @@ public class CameraSetup
         followProjectionsPerFrame[frameNumber] = followProjectionsAtThisFrame;
     }
 
-    public List<Vector2> ReverseProject(List<Vector3> threeDimensionalPose)
+    public Vector2 ReverseProjectPoint(Vector3 worldPoint, int frameNumber)
     {
-        return new List<Vector2>();
+        Vector3 target = TargetAtFrame(worldPoint, frameNumber);
+        Vector2 imagePlaneCoordinates = GetImagePlaneCoordinates(target, frameNumber);
+
+        Vector2 offcenterAndRescaleAndFlip = new Vector2(
+            imagePlaneCoordinates.X / PixelToMeter + Size.X / 2,
+            -imagePlaneCoordinates.Y / PixelToMeter + Size.Y / 2);
+        return offcenterAndRescaleAndFlip;
+    }
+
+    Vector2 GetImagePlaneCoordinates(Vector3 rayDirection, int frameNumber)
+    {
+        // Calculate the intersection point with the image plane
+        float t = FocalLength / Vector3.Dot(Forward(frameNumber), rayDirection);
+        Vector3 intersectionPoint = t * rayDirection;
+
+        // Calculate the coordinates relative to the image plane center
+        Vector2 imagePlaneCoordinates = new Vector2(
+            Vector3.Dot(intersectionPoint, Right(frameNumber)),
+            Vector3.Dot(intersectionPoint, Up(frameNumber)));
+
+        return imagePlaneCoordinates;
     }
 
     public float Error(List<Vector3> merged3DPoseLead, List<Vector3> merged3DPoseFollow, int frameNumber)
@@ -61,10 +81,8 @@ public class CameraSetup
 
         for (int i = 0; i < merged3DPoseLead.Count; i++)
         {
-            Vector3 vector3 = merged3DPoseLead[i];
-            Vector3 target = Vector3.Normalize(vector3 - PositionsPerFrame[frameNumber]);
-            Vector3 keypoint = Vector3.Normalize(
-                leadProjectionsPerFrame[frameNumber][i] - PositionsPerFrame[frameNumber]);
+            Vector3 target = TargetAtFrame(merged3DPoseLead[i], frameNumber);
+            Vector3 keypoint = TargetAtFrame(leadProjectionsPerFrame[frameNumber][i], frameNumber);
 
             // find the angle between the vectors
             error += MathF.Acos(Vector3.Dot(target, keypoint)) *
@@ -73,10 +91,8 @@ public class CameraSetup
 
         for (int i = 0; i < merged3DPoseFollow.Count; i++)
         {
-            Vector3 vector3 = merged3DPoseFollow[i];
-            Vector3 target = Vector3.Normalize(vector3 - PositionsPerFrame[frameNumber]);
-            Vector3 keypoint = Vector3.Normalize(
-                followProjectionsPerFrame[frameNumber][i] - PositionsPerFrame[frameNumber]);
+            Vector3 target = TargetAtFrame(merged3DPoseFollow[i], frameNumber);
+            Vector3 keypoint = TargetAtFrame(followProjectionsPerFrame[frameNumber][i], frameNumber);
 
             // find the angle between the vectors
             error += MathF.Acos(Vector3.Dot(target, keypoint)) *
@@ -84,6 +100,14 @@ public class CameraSetup
         }
 
         return error;
+    }
+
+    /// <summary>
+    /// Provides a normalized vector from this camera to a target in 3D space at a given frame
+    /// </summary>
+    Vector3 TargetAtFrame(Vector3 vector3, int frameNumber)
+    {
+        return Vector3.Normalize(vector3 - PositionsPerFrame[frameNumber]);
     }
 
     public void AddPosesAndRecenterAndScaleToCamera(
@@ -96,23 +120,25 @@ public class CameraSetup
         followPoseAndConfidencePerFrame = follow2PixelsAndConfidence;
         mirrorLeadPoseAndConfidencePerFrame = mirrorLead2DPixelsAndConfidence;
         mirrorFollowPoseAndConfidencePerFrame = mirrorFollow2DPixelsAndConfidence;
-        
-        recenteredLeadPoseAndConfidencePerFrame = lead2DPixelsAndConfidence.Select(listVec => listVec.Select(vec => new Vector3(
-                (vec.X - Size.X / 2) * PixelToMeter,
-                -(vec.Y - Size.Y / 2) * PixelToMeter, // flip
-                vec.Z)) // keep the confidence
+
+        recenteredLeadPoseAndConfidencePerFrame = lead2DPixelsAndConfidence.Select(listVec => listVec.Select(vec =>
+                new Vector3(
+                    (vec.X - Size.X / 2) * PixelToMeter,
+                    -(vec.Y - Size.Y / 2) * PixelToMeter, // flip
+                    vec.Z)) // keep the confidence
             .ToList()).ToList();
 
-        recenteredFollowPoseAndConfidencePerFrame = follow2PixelsAndConfidence.Select(listVec => listVec.Select(vec => new Vector3(
-                (vec.X - Size.X / 2) * PixelToMeter,
-                -(vec.Y - Size.Y / 2) * PixelToMeter, // flip
-                vec.Z)) // keep the confidence
+        recenteredFollowPoseAndConfidencePerFrame = follow2PixelsAndConfidence.Select(listVec => listVec.Select(vec =>
+                new Vector3(
+                    (vec.X - Size.X / 2) * PixelToMeter,
+                    -(vec.Y - Size.Y / 2) * PixelToMeter, // flip
+                    vec.Z)) // keep the confidence
             .ToList()).ToList();
 
         followProjectionsPerFrame.Add([]);
         leadProjectionsPerFrame.Add([]);
     }
-    
+
     public List<List<Vector3>> PosesPerDancerAtFrame(int frameNumber)
     {
         return
@@ -164,19 +190,19 @@ public class CameraSetup
             ? recenteredLeadPoseAndConfidencePerFrame[frameNumber][jointNumber].Z
             : recenteredFollowPoseAndConfidencePerFrame[frameNumber][jointNumber].Z;
     }
-    
-    [Serializable] 
-    public class PositionAndRotation 
-    { 
-        public float positionX; 
-        public float positionY; 
-        public float positionZ; 
- 
-        public float rotationX; 
-        public float rotationY; 
-        public float rotationZ; 
-        public float rotationW; 
-     
-        public float focal; 
-    } 
+
+    [Serializable]
+    public class PositionAndRotation
+    {
+        public float positionX;
+        public float positionY;
+        public float positionZ;
+
+        public float rotationX;
+        public float rotationY;
+        public float rotationZ;
+        public float rotationW;
+
+        public float focal;
+    }
 }
