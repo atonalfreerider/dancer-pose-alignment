@@ -47,7 +47,6 @@ public partial class MainWindow : Window
     readonly List<List<Tuple<int, bool>>> finalIndexMirroredCamerasAndPoseAnchor = [];
 
     readonly List<Vector3> cameraPositions = [];
-    readonly List<float> cameraFocalLengths = [];
 
     public MainWindow()
     {
@@ -510,15 +509,14 @@ public partial class MainWindow : Window
         PointerPoint point = args.GetCurrentPoint(sender as Control);
 
         // Calculate the triangle size based on the focal length
-        float focalLength = float.Parse(FocalLengthInput.Text);
+        
 
         // Create and add the triangle to the canvas
-        Polygon triangle = CreateTriangle(point, focalLength, LayoutCanvas.Width, LayoutCanvas.Height);
+        Polygon triangle = CreateTriangle(point, .2f, LayoutCanvas.Width, LayoutCanvas.Height);
         LayoutCanvas.Children.Add(triangle);
 
         cameraPositions.Add(new Vector3((float)point.Position.X, float.Parse(HeightInputText.Text),
             (float)point.Position.Y));
-        cameraFocalLengths.Add(focalLength);
     }
 
     static Polygon CreateTriangle(PointerPoint position, double focalLength, double canvasWidth, double canvasHeight)
@@ -572,12 +570,9 @@ public partial class MainWindow : Window
         }
 
         string cameraSavePath = Path.Combine(saveDirectory, $"camera-positions-{cameraName}.json");
-        string cameraFocalSavePath = Path.Combine(saveDirectory, $"camera-focal-lengths-{cameraName}.json");
-
+        
         File.WriteAllText(cameraSavePath,
             JsonConvert.SerializeObject(cameraPositions, Formatting.Indented));
-        File.WriteAllText(cameraFocalSavePath,
-            JsonConvert.SerializeObject(cameraFocalLengths, Formatting.Indented));
 
         Console.WriteLine($"Saved to: {saveDirectory})");
     }
@@ -603,6 +598,8 @@ public partial class MainWindow : Window
 
         cameraPoseSolver = new CameraPoseSolver();
         cameraPoseSolver.LoadPoses(directoryPath);
+        
+        cameraPoseSolver.HomeAllCameras();
         
         numCameras = cameraSizes.Count;
         CanvasContainer.Items.Clear();

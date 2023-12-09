@@ -189,6 +189,61 @@ public class CameraSetup
         return adjustedKeypoints.Select(t => t + Forward(frame) * FocalLength).ToList();
     }
 
+    public void Home()
+    {
+        Vector2 leadLeftAnkle = new Vector2(
+            leadPoseAndConfidencePerFrame[0][(int)Halpe.LAnkle].X,
+            leadPoseAndConfidencePerFrame[0][(int)Halpe.LAnkle].Y);
+
+        Vector2 leadHip = new Vector2(
+            leadPoseAndConfidencePerFrame[0][(int)Halpe.LHip].X,
+            leadPoseAndConfidencePerFrame[0][(int)Halpe.LHip].Y);
+        
+        const float hipHeight = .75f;
+
+        for (int j = 0; j < 4; j++)
+        {
+            Vector2 origin = ReverseProjectPoint(Vector3.Zero, 0);
+            while (leadLeftAnkle.X < origin.X)
+            {
+                RotationsPerFrame[0] *= Quaternion.CreateFromAxisAngle(Vector3.UnitY, .001f);
+                origin = ReverseProjectPoint(Vector3.Zero, 0);
+            }
+
+            while (leadLeftAnkle.X > origin.X)
+            {
+                RotationsPerFrame[0] *= Quaternion.CreateFromAxisAngle(Vector3.UnitY, -.001f);
+                origin = ReverseProjectPoint(Vector3.Zero, 0);
+            }
+
+            Vector2 worldHip = ReverseProjectPoint(new Vector3(0, hipHeight, 0), 0);
+            for (int i = 0; i < 500; i++)
+            {
+                if (leadLeftAnkle.Y > origin.Y && leadHip.Y > worldHip.Y)
+                {
+                    // pitch up
+                    RotationsPerFrame[0] *= Quaternion.CreateFromAxisAngle(Vector3.UnitX, -.001f);
+                }
+                else if (leadLeftAnkle.Y < origin.Y && leadHip.Y < worldHip.Y)
+                {
+                    // pitch down
+                    RotationsPerFrame[0] *= Quaternion.CreateFromAxisAngle(Vector3.UnitX, .001f);
+                }
+                else if (leadLeftAnkle.Y > origin.Y && leadHip.Y < worldHip.Y)
+                {
+                    FocalLength += .001f;
+                }
+                else if (leadLeftAnkle.Y < origin.Y && leadHip.Y > worldHip.Y)
+                {
+                    FocalLength -= .001f;
+                }
+
+                origin = ReverseProjectPoint(Vector3.Zero, 0);
+                worldHip = ReverseProjectPoint(new Vector3(0, hipHeight, 0), 0);
+            }
+        }
+    }
+
     public bool HasPoseAtFrame(int frameNumber, bool isLead)
     {
         return isLead

@@ -54,7 +54,6 @@
             <StackPanel>
                 <StackPanel Name="RadioButtonsPanel" Orientation="Horizontal" HorizontalAlignment="Center" />
                 <StackPanel Orientation="Horizontal" HorizontalAlignment="Center">
-                    <TextBox Name="FocalLengthInput" Text="0.2" />
                     <TextBox Name="HeightInputText" Text="1.5" />
                 </StackPanel>
                 <Canvas Name="LayoutCanvas" Background="White" PointerPressed="LayoutCanvas_MouseDown" Width="1000"

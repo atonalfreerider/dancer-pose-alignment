@@ -14,7 +14,6 @@ public class CameraPoseSolver
     public void LoadPoses(string directoryPath)
     {
         List<Vector3> cameraPositions = [];
-        List<float> cameraFocalLengths = [];
         List<Vector2> cameraSizes = [];
 
         Dictionary<int, List<List<Vector3>>> allLeadPosesByCamera = [];
@@ -71,11 +70,6 @@ public class CameraPoseSolver
                         };
                     }
                 }
-                else if (fileName.StartsWith("camera-focal-lengths"))
-                {
-                    string jsonContent = File.ReadAllText(file);
-                    cameraFocalLengths = JsonConvert.DeserializeObject<List<float>>(jsonContent);
-                }
                 else if (fileName.StartsWith("cameraSizes"))
                 {
                     string jsonContent = File.ReadAllText(file);
@@ -96,7 +90,7 @@ public class CameraPoseSolver
             merged3DPoseFollowPerFrame.Add([]);
         }
 
-        CreateAndPlaceCameras(cameraSizes, cameraPositions, cameraFocalLengths);
+        CreateAndPlaceCameras(cameraSizes, cameraPositions);
         AddPosesToCamera(
             allLeadPosesByCamera,
             allFollowPosesByCamera,
@@ -148,16 +142,14 @@ public class CameraPoseSolver
 
     void CreateAndPlaceCameras(
         IReadOnlyList<Vector2> imageSizes,
-        IReadOnlyList<Vector3> seedCameraPositions,
-        IReadOnlyList<float> seedCameraFocalLengths)
+        IReadOnlyList<Vector3> seedCameraPositions)
     {
         const int testingFrameNumber = 0;
         for (int i = 0; i < imageSizes.Count; i++)
         {
             CameraSetup camera = new()
             {
-                Size = imageSizes[i],
-                FocalLength = seedCameraFocalLengths[i]
+                Size = imageSizes[i]
             };
 
             if (seedCameraPositions.Count != 0)
@@ -203,6 +195,40 @@ public class CameraPoseSolver
         }
     }
 
+    #region SET CAM ORIENTATION
+
+    public void HomeAllCameras()
+    {
+        foreach (CameraSetup camera in cameras)
+        {
+            camera.Home();
+        }
+    }
+    
+    public void YawCamera(int camIndex, int frameNumber, float angle)
+    {
+        cameras[camIndex].RotationsPerFrame[frameNumber] *= Quaternion.CreateFromAxisAngle(Vector3.UnitY, angle);
+    }
+    
+    public void PitchCamera(int camIndex, int frameNumber, float angle)
+    {
+        cameras[camIndex].RotationsPerFrame[frameNumber] *= Quaternion.CreateFromAxisAngle(Vector3.UnitX, angle);
+    }
+    
+    public void RollCamera(int camIndex, int frameNumber, float angle)
+    {
+        cameras[camIndex].RotationsPerFrame[frameNumber] *= Quaternion.CreateFromAxisAngle(Vector3.UnitZ, angle);
+    }
+    
+    public void ZoomCamera(int camIndex, float zoom)
+    {
+        cameras[camIndex].FocalLength += zoom;
+    }
+
+    #endregion
+
+    #region ITERATORS
+    
     public void IterationLoop()
     {
         const int testingFrameNumber = 0;
@@ -302,27 +328,7 @@ public class CameraPoseSolver
 
         return previousError;
     }
-
-    public void YawCamera(int camIndex, int frameNumber, float angle)
-    {
-        cameras[camIndex].RotationsPerFrame[frameNumber] *= Quaternion.CreateFromAxisAngle(Vector3.UnitY, angle);
-    }
     
-    public void PitchCamera(int camIndex, int frameNumber, float angle)
-    {
-        cameras[camIndex].RotationsPerFrame[frameNumber] *= Quaternion.CreateFromAxisAngle(Vector3.UnitX, angle);
-    }
-    
-    public void RollCamera(int camIndex, int frameNumber, float angle)
-    {
-        cameras[camIndex].RotationsPerFrame[frameNumber] *= Quaternion.CreateFromAxisAngle(Vector3.UnitZ, angle);
-    }
-    
-    public void ZoomCamera(int camIndex, float zoom)
-    {
-        cameras[camIndex].FocalLength += zoom;
-    }
-
     float IterateYaw(int frameNumber, float yawStepSize)
     {
         foreach (CameraSetup camera in cameras)
@@ -779,6 +785,8 @@ public class CameraPoseSolver
 
         return Calculate3DPosesAndTotalError(frameNumber);
     }
+    
+    #endregion
 
     public float Calculate3DPosesAndTotalError(int frameNumber)
     {
