@@ -163,12 +163,6 @@ public class CameraPoseSolver
             if (seedCameraPositions.Count != 0)
             {
                 camera.PositionsPerFrame.Add(seedCameraPositions[i]);
-                // TODO confirm this rotation works
-                Quaternion centerLook = Transform.LookAt(
-                    new Vector3(0, 1.5f, 0),
-                    Quaternion.Identity,
-                    camera.PositionsPerFrame[testingFrameNumber]);
-                camera.RotationsPerFrame.Add(centerLook);
             }
             else
             {
@@ -179,12 +173,13 @@ public class CameraPoseSolver
                     MathF.Sin(angle) * radius,
                     startingHeight,
                     MathF.Cos(angle) * radius));
-
-                camera.RotationsPerFrame.Add(Transform.LookAt(
-                    new Vector3(0, startingHeight, 0),
-                    Quaternion.Identity,
-                    camera.PositionsPerFrame[testingFrameNumber]));
             }
+            
+            Quaternion centerLook = Transform.LookAt(
+                new Vector3(0, 1.5f, 0),
+                Quaternion.Identity,
+                camera.PositionsPerFrame[testingFrameNumber]);
+            camera.RotationsPerFrame.Add(centerLook);
 
             cameras.Add(camera);
         }
@@ -308,6 +303,26 @@ public class CameraPoseSolver
         return previousError;
     }
 
+    public void YawCamera(int camIndex, int frameNumber, float angle)
+    {
+        cameras[camIndex].RotationsPerFrame[frameNumber] *= Quaternion.CreateFromAxisAngle(Vector3.UnitY, angle);
+    }
+    
+    public void PitchCamera(int camIndex, int frameNumber, float angle)
+    {
+        cameras[camIndex].RotationsPerFrame[frameNumber] *= Quaternion.CreateFromAxisAngle(Vector3.UnitX, angle);
+    }
+    
+    public void RollCamera(int camIndex, int frameNumber, float angle)
+    {
+        cameras[camIndex].RotationsPerFrame[frameNumber] *= Quaternion.CreateFromAxisAngle(Vector3.UnitZ, angle);
+    }
+    
+    public void ZoomCamera(int camIndex, float zoom)
+    {
+        cameras[camIndex].FocalLength += zoom;
+    }
+
     float IterateYaw(int frameNumber, float yawStepSize)
     {
         foreach (CameraSetup camera in cameras)
@@ -318,9 +333,9 @@ public class CameraPoseSolver
             Quaternion originalRotation = camera.RotationsPerFrame[frameNumber];
 
             Quaternion leftYawRotation = originalRotation *
-                                         Quaternion.CreateFromAxisAngle(new Vector3(0, 1, 0), yawStepSize);
+                                         Quaternion.CreateFromAxisAngle(Vector3.UnitY, yawStepSize);
             Quaternion rightYawRotation = originalRotation *
-                                          Quaternion.CreateFromAxisAngle(new Vector3(0, 1, 0), -yawStepSize);
+                                          Quaternion.CreateFromAxisAngle(Vector3.UnitY, -yawStepSize);
 
             camera.RotationsPerFrame[frameNumber] = leftYawRotation;
             float leftYawError = Calculate3DPosesAndTotalError(frameNumber);
@@ -354,10 +369,10 @@ public class CameraPoseSolver
             // pitch camera up and down
             Quaternion originalRotation = camera.RotationsPerFrame[frameNumber];
             Quaternion upPitchRotation = originalRotation *
-                                         Quaternion.CreateFromAxisAngle(new Vector3(1, 0, 0), -pitchStepSize);
+                                         Quaternion.CreateFromAxisAngle(Vector3.UnitX, -pitchStepSize);
 
             // check if the angle between the up pitch forward vector and the ground forward vector is greater than 15 degrees
-            Vector3 upPitchForward = Vector3.Normalize(Vector3.Transform(new Vector3(0, 0, 1), upPitchRotation));
+            Vector3 upPitchForward = Vector3.Normalize(Vector3.Transform(Vector3.UnitZ, upPitchRotation));
 
             float angleBetween = MathF.Acos(Vector3.Dot(upPitchForward, camera.Forward(frameNumber)));
             if (angleBetween > MathF.PI / 12)
@@ -367,10 +382,10 @@ public class CameraPoseSolver
             }
 
             Quaternion downPitchRotation = originalRotation *
-                                           Quaternion.CreateFromAxisAngle(new Vector3(0, 0, 1), pitchStepSize);
+                                           Quaternion.CreateFromAxisAngle(Vector3.UnitZ, pitchStepSize);
 
             // check if the angle between the down pitch forward vector and the ground forward vector is greater than 15 degrees
-            Vector3 downPitchForward = Vector3.Normalize(Vector3.Transform(new Vector3(0, 0, 1), downPitchRotation));
+            Vector3 downPitchForward = Vector3.Normalize(Vector3.Transform(Vector3.UnitZ, downPitchRotation));
             angleBetween = MathF.Acos(Vector3.Dot(downPitchForward, camera.Forward(frameNumber)));
             if (angleBetween > MathF.PI / 12)
             {
@@ -466,10 +481,10 @@ public class CameraPoseSolver
             Quaternion originalRotation = camera.RotationsPerFrame[frameNumber];
 
             Quaternion leftRollRotation = originalRotation *
-                                          Quaternion.CreateFromAxisAngle(new Vector3(0, 0, 1), rollStepSize);
+                                          Quaternion.CreateFromAxisAngle(Vector3.UnitZ, rollStepSize);
 
             // check if the up vector has rolled too far to the left relative to the ground up vector
-            Vector3 leftRollUp = Vector3.Normalize(Vector3.Transform(new Vector3(0, 1, 0), leftRollRotation));
+            Vector3 leftRollUp = Vector3.Normalize(Vector3.Transform(Vector3.UnitY, leftRollRotation));
 
             float angleBetween = MathF.Acos(Vector3.Dot(leftRollUp, camera.Up(frameNumber)));
             if (angleBetween > MathF.PI / 12)
@@ -479,10 +494,10 @@ public class CameraPoseSolver
             }
 
             Quaternion rightRollRotation = originalRotation *
-                                           Quaternion.CreateFromAxisAngle(new Vector3(0, 0, 1), -rollStepSize);
+                                           Quaternion.CreateFromAxisAngle(Vector3.UnitZ, -rollStepSize);
 
             // check if the up vector has rolled too far to the right relative to the ground up vector
-            Vector3 rightRollUp = Vector3.Transform(new Vector3(0, 1, 0), rightRollRotation);
+            Vector3 rightRollUp = Vector3.Transform(Vector3.UnitY, rightRollRotation);
             angleBetween = MathF.Acos(Vector3.Dot(rightRollUp, camera.Up(frameNumber)));
             if (angleBetween > MathF.PI / 12)
             {

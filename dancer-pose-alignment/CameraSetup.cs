@@ -12,15 +12,15 @@ public class CameraSetup
     const float PixelToMeter = 0.000264583f;
 
     public Vector3 Forward(int frame) => Vector3.Transform(
-        new Vector3(0, 0, 1),
+        Vector3.UnitZ,
         RotationsPerFrame[frame]);
 
     public Vector3 Up(int frame) => Vector3.Transform(
-        new Vector3(0, 1, 0),
+        Vector3.UnitY,
         RotationsPerFrame[frame]);
 
     public Vector3 Right(int frame) => Vector3.Transform(
-        new Vector3(1, 0, 0),
+        Vector3.UnitX,
         RotationsPerFrame[frame]);
 
     readonly List<List<Vector3>> leadProjectionsPerFrame = [];

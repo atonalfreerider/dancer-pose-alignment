@@ -615,6 +615,7 @@ public partial class MainWindow : Window
             canvas.Children.Add(image);
             canvas.Width = cameraSizes[i].X;
             canvas.Height = cameraSizes[i].Y;
+            canvas.PointerPressed += Canvas_PointerPressed;
             CanvasContainer.Items.Add(canvas);
         }
 
@@ -674,50 +675,70 @@ public partial class MainWindow : Window
         Dispatcher.UIThread.RunJobs();
     }
 
+    int selectedCanvas = -1;
+
     void Canvas_PointerPressed(object sender, PointerPressedEventArgs e)
     {
         // Mark this canvas as selected
+        selectedCanvas = CanvasContainer.Items.IndexOf(sender as Canvas);
+        Console.WriteLine(selectedCanvas);
     }
 
     // Add event handlers for perspective manipulation buttons
     void YawLeftButton_Click(object sender, RoutedEventArgs e)
     {
-        /* ... */
+        if (selectedCanvas == -1) return;
+        cameraPoseSolver.YawCamera(selectedCanvas, frameCount, -.01f);
+        SetPreviewsToFrame();
     }
 
     void YawRightButton_Click(object sender, RoutedEventArgs e)
     {
-        /* ... */
+        if (selectedCanvas == -1) return;
+        cameraPoseSolver.YawCamera(selectedCanvas, frameCount, .01f);
+        SetPreviewsToFrame();
     }
 
     void PitchUpButton_Click(object sender, RoutedEventArgs e)
     {
-        /* ... */
+        if (selectedCanvas == -1) return;
+        cameraPoseSolver.PitchCamera(selectedCanvas, frameCount, -.01f);
+        SetPreviewsToFrame();
     }
 
     void PitchDownButton_Click(object sender, RoutedEventArgs e)
     {
-        /* ... */
+        if (selectedCanvas == -1) return;
+        cameraPoseSolver.PitchCamera(selectedCanvas, frameCount, .01f);
+        SetPreviewsToFrame();
     }
 
     void ZoomInButton_Click(object sender, RoutedEventArgs e)
     {
-        /* ... */
+        if (selectedCanvas == -1) return;
+        cameraPoseSolver.ZoomCamera(selectedCanvas, .01f);
+        SetPreviewsToFrame();
     }
 
     void ZoomOutButton_Click(object sender, RoutedEventArgs e)
     {
-        /* ... */
+        if (selectedCanvas == -1) return;
+        cameraPoseSolver.ZoomCamera(selectedCanvas, -.01f);
+        SetPreviewsToFrame();
     }
 
     void RollLeftButton_Click(object sender, RoutedEventArgs e)
     {
-        /* ... */
+        if (selectedCanvas == -1) return;
+        cameraPoseSolver.RollCamera(selectedCanvas, frameCount, .01f);
+        SetPreviewsToFrame();
     }
 
     void RollRightButton_Click(object sender, RoutedEventArgs e)
     {
-        /* ... */
+        if (selectedCanvas == -1) return;
+        cameraPoseSolver.RollCamera(selectedCanvas, frameCount, -.01f);
+        SetPreviewsToFrame();
     }
 
     void TranslateLeftButton_Click(object sender, RoutedEventArgs e)
