@@ -52,17 +52,17 @@
                 <TextBlock VerticalAlignment="Center">Camera Positions</TextBlock>
             </TabItem.Header>
             <StackPanel>
-                <StackPanel Name="RadioButtonsPanel" Orientation="Horizontal" />
-                <StackPanel Orientation="Horizontal">
+                <StackPanel Name="RadioButtonsPanel" Orientation="Horizontal" HorizontalAlignment="Center"/>
+                <StackPanel Orientation="Horizontal" HorizontalAlignment="Center" >
                     <TextBox Name="FocalLengthInput" Text="0.2" />
                     <TextBox Name="HeightInputText" Text="1.5" />
                 </StackPanel>
-                <Canvas Name="LayoutCanvas" Background="White" PointerPressed="LayoutCanvas_MouseDown" Width="1000"
-                        Height="800">
+                <Canvas Name="LayoutCanvas" Background="White" PointerPressed="LayoutCanvas_MouseDown" Width="1000" Height="800" >
                     <Rectangle Width="1000" Height="800" Stroke="Black" />
-                    <Ellipse Fill="Red" Width="50" Height="50" Canvas.Left="475" Canvas.Top="375" />
-                    <Ellipse Fill="Magenta" Width="50" Height="50" Canvas.Left="525" Canvas.Top="375" />
+                    <Ellipse Fill="Red" Width="50" Height="50" Canvas.Left="525" Canvas.Top="375" />
+                    <Ellipse Fill="Magenta" Width="50" Height="50" Canvas.Left="475" Canvas.Top="375" />
                 </Canvas>
+                <Button Name="SaveLayoutButton" Content="Save" Click="SaveLayoutButton_Click" />
             </StackPanel>
         </TabItem>
         <TabItem>
@@ -95,8 +95,7 @@
                         <ItemsControl.ItemTemplate>
                             <DataTemplate>
                                 <Border BorderBrush="Black" BorderThickness="1" Padding="5">
-                                    <Canvas Width="{Binding Width}" Height="{Binding Height}"
-                                            PointerPressed="Canvas_PointerPressed" />
+                                    <Canvas PointerPressed="Canvas_PointerPressed" />
                                 </Border>
                             </DataTemplate>
                         </ItemsControl.ItemTemplate>

@@ -82,6 +82,11 @@ public static class PreviewDrawer
                 drawingGroup.Children.Add(poseGeometry);
             }
 
+            if (pose.Count == 0)
+            {
+                continue;
+            }
+
             GeometryDrawing leftCalf = DrawLine(pose[(int)Halpe.LAnkle], pose[(int)Halpe.LKnee], role);
             drawingGroup.Children.Add(leftCalf);
 
