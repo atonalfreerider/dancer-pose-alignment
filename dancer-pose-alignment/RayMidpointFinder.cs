@@ -1,4 +1,5 @@
 ﻿using System.Numerics;
+using ComputeSharp;
 
 namespace dancer_pose_alignment;
 
@@ -8,107 +9,117 @@ public struct Ray(Vector3 origin, Vector3 direction)
     public readonly Vector3 Direction = direction;
 }
 
-public static class RayMidpointFinder
+[ThreadGroupSize(DefaultThreadGroupSizes.X)]
+[GeneratedComputeShaderDescriptor]
+public readonly partial struct MidpointFinder(
+    ReadWriteBuffer<float3> minMidpointBuffer,
+    ReadOnlyBuffer<float3> rayOriginsBuffer,
+    ReadOnlyBuffer<float3> rayDirectionsBuffer,
+    ReadOnlyBuffer<float> confidencesBuffer,
+    int camCount
+) : IComputeShader
 {
-    const float Tolerance = 0.0001f;
-    const int MaxIterations = 1000;
-
-    public static Vector3 FindMinimumMidpoint(List<Ray> rays, List<float> confidences)
+    public void Execute()
     {
-        if (rays.Count != confidences.Count)
-            throw new ArgumentException("Rays and confidences lists must have the same length.");
+        int i = ThreadIds.X;
 
-        Vector3 startPoint = AverageOrigins(rays, confidences);
-        Vector3 optimize = Optimize(startPoint, rays, confidences);
-        if (float.IsNaN(optimize.X) || float.IsNaN(optimize.Y) || float.IsNaN(optimize.Z))
+        // Average Origin
+        float3 weightedSum = float3.Zero;
+        float totalConfidence = 0;
+
+        for (int ex = i * camCount; ex < i * camCount + camCount; ex++)
         {
-            return Vector3.Zero;
+            weightedSum += Hlsl.Mul(confidencesBuffer[ex], rayOriginsBuffer[ex]);
+            totalConfidence += confidencesBuffer[ex];
         }
 
-        return optimize;
-    }
+        float3 averageOrigin = Hlsl.Mul(weightedSum, 1 / totalConfidence);
 
-    static Vector3 Optimize(Vector3 startPoint, List<Ray> rays, List<float> confidences)
-    {
-        Vector3 currentPoint = startPoint;
+        // Optimize
         const float stepSize = 0.01f;
+        float3 currentPoint = averageOrigin;
 
-        for (int i = 0; i < MaxIterations; i++)
+        for (int j = 0; j < 1000; j++)
         {
-            Vector3 gradient = ComputeGradient(currentPoint, rays, confidences);
-            Vector3 nextPoint = currentPoint - stepSize * gradient;
+            // Compute Gradient
+            float3 gradient = float3.Zero;
 
-            if (Math.Abs(ObjectiveFunction(nextPoint, rays, confidences) -
-                         ObjectiveFunction(currentPoint, rays, confidences)) < Tolerance)
-                break;
+            for (int k = i * camCount; k < i * camCount + camCount; k++)
+            {
+                float confidence = confidencesBuffer[k];
+                float3 rayDirection = rayDirectionsBuffer[k];
+
+                float3 w = currentPoint - rayOriginsBuffer[k];
+                float dotProduct = Hlsl.Dot(w, rayDirection);
+                float3 projection = Hlsl.Mul(dotProduct, rayDirection);
+                float3 diff = w - projection;
+
+                float3 grad = Hlsl.Mul(2,
+                    Hlsl.Mul(confidence, (diff - Hlsl.Mul(Hlsl.Dot(diff, rayDirection), rayDirection))));
+                gradient += grad;
+            }
+
+            if (Hlsl.IsInfinite(gradient.X) || Hlsl.IsInfinite(gradient.Y) || Hlsl.IsInfinite(gradient.Z))
+            {
+                gradient = float3.Zero;
+            }
+
+            float3 nextPoint = currentPoint - Hlsl.Mul(stepSize, gradient);
+
+            // Objective Function Next Point
+            float nextSum = 0;
+            for (int m = i * camCount; m < i * camCount + camCount; m++)
+            {
+                // Calculate the shortest distance from 'point' to 'ray'
+                float3 direction = rayDirectionsBuffer[m];
+                float3 origin = rayOriginsBuffer[m];
+                float3 w0 = nextPoint - rayOriginsBuffer[m];
+                float c1 = Hlsl.Dot(w0, direction);
+                float c2 = Hlsl.Dot(direction, direction);
+                float b = c1 / c2;
+
+                float3 pb = origin + Hlsl.Mul(direction, b);
+
+                float distance = Hlsl.Distance(nextPoint, pb);
+
+                nextSum += Hlsl.Mul(confidencesBuffer[m], Hlsl.Mul(distance, distance));
+            }
+
+            // Objective Function Current Point
+            float currentSum = 0;
+            for (int m = i * camCount; m < i * camCount + camCount; m++)
+            {
+                // Calculate the shortest distance from 'point' to 'ray'
+                float3 direction = rayDirectionsBuffer[m];
+                float3 origin = rayOriginsBuffer[m];
+                float3 w0 = currentPoint - rayOriginsBuffer[m];
+                float c1 = Hlsl.Dot(w0, direction);
+                float c2 = Hlsl.Dot(direction, direction);
+                float b = c1 / c2;
+
+                float3 pb = origin + Hlsl.Mul(direction, b);
+
+                float distance = Hlsl.Distance(currentPoint, pb);
+
+
+                currentSum += Hlsl.Mul(confidencesBuffer[m], Hlsl.Mul(distance, distance));
+            }
+
+            // FINAL
+            if (Hlsl.Abs(nextSum - currentSum) < 0.0001f)
+            {
+                j = 1000; // break
+            }
 
             currentPoint = nextPoint;
         }
 
-        return currentPoint;
-    }
 
-    static Vector3 ComputeGradient(Vector3 point, List<Ray> rays, List<float> confidences)
-    {
-        Vector3 gradient = Vector3.Zero;
-
-        for (int i = 0; i < rays.Count; i++)
+        if (Hlsl.IsNaN(currentPoint.X) || Hlsl.IsNaN(currentPoint.Y) || Hlsl.IsNaN(currentPoint.Z))
         {
-            Ray ray = rays[i];
-            float confidence = confidences[i];
-
-            Vector3 w = point - ray.Origin;
-            float dotProduct = Vector3.Dot(w, ray.Direction);
-            Vector3 projection = dotProduct * ray.Direction;
-            Vector3 diff = w - projection;
-
-            Vector3 grad = 2 * confidence * (diff - Vector3.Dot(diff, ray.Direction) * ray.Direction);
-            gradient += grad;
+            minMidpointBuffer[i] = float3.Zero;
         }
 
-        if (float.IsInfinity(gradient.X) || float.IsInfinity(gradient.Y) || float.IsInfinity(gradient.Z))
-        {
-            gradient = Vector3.Zero;
-        }
-
-        return gradient;
-    }
-
-    static float ObjectiveFunction(Vector3 point, List<Ray> rays, List<float> confidences)
-    {
-        float sum = 0;
-        for (int i = 0; i < rays.Count; i++)
-        {
-            float distance = DistanceFromPointToRay(point, rays[i]);
-            sum += confidences[i] * distance * distance;
-        }
-
-        return sum;
-    }
-
-    static float DistanceFromPointToRay(Vector3 point, Ray ray)
-    {
-        // Calculate the shortest distance from 'point' to 'ray' 
-        Vector3 w0 = point - ray.Origin;
-        float c1 = Vector3.Dot(w0, ray.Direction);
-        float c2 = Vector3.Dot(ray.Direction, ray.Direction);
-        float b = c1 / c2;
-
-        Vector3 pb = ray.Origin + b * ray.Direction;
-        return Vector3.Distance(point, pb);
-    }
-
-    static Vector3 AverageOrigins(List<Ray> rays, List<float> confidences)
-    {
-        Vector3 weightedSum = Vector3.Zero;
-        float totalConfidence = 0;
-
-        for (int i = 0; i < rays.Count; i++)
-        {
-            weightedSum += confidences[i] * rays[i].Origin;
-            totalConfidence += confidences[i];
-        }
-
-        return weightedSum / totalConfidence;
+        minMidpointBuffer[i] = currentPoint;
     }
 }

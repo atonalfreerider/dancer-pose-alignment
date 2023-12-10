@@ -1,4 +1,7 @@
-﻿using System.Numerics;
+﻿using System.ComponentModel;
+using System.Numerics;
+using System.Reflection;
+using ComputeSharp;
 using Newtonsoft.Json;
 
 namespace dancer_pose_alignment;
@@ -334,7 +337,8 @@ public class CameraPoseSolver
             }
 
             // TODO translate XYZ +/- .1m and determine which path has lowest error after homing
-            bool moved = highestErrorCam.TestSixTranslations(merged3DPoseLeadPerFrame[frameNumber], merged3DPoseFollowPerFrame[frameNumber], frameNumber);
+            bool moved = highestErrorCam.TestSixTranslations(merged3DPoseLeadPerFrame[frameNumber],
+                merged3DPoseFollowPerFrame[frameNumber], frameNumber);
             if (!moved)
             {
                 break;
@@ -899,31 +903,113 @@ public class CameraPoseSolver
 
         merged3DPoseLeadPerFrame[frameNumber].Clear();
         merged3DPoseFollowPerFrame[frameNumber].Clear();
+        List<float3> leadRayOriginPerCameraPerJoint = []; // in batches of camera count
+        List<float3> leadRayDirectionPerCameraPerJoint = []; // in batches of camera count
+        List<float> leadJointConfidencePerCameraPerJoint = []; // in batches of camera count
+        List<float3> followRayOriginPerCameraPerJoint = []; // in batches of camera count
+        List<float3> followRayDirectionPerCameraPerJoint = []; // in batches of camera count
+        List<float> followJointConfidencePerCameraPerJoint = []; // in batches of camera count
+
+        int arrayLength = poseCount * cameras.Count;
+
         for (int i = 0; i < poseCount; i++)
         {
-            List<Ray> leadRays = [];
-            List<Ray> followRays = [];
-            List<float> leadConfidences = [];
-            List<float> followConfidences = [];
             foreach (CameraSetup cameraSetup in cameras)
             {
                 if (cameraSetup.HasPoseAtFrame(frameNumber, true))
                 {
-                    leadRays.Add(cameraSetup.PoseRay(frameNumber, i, true));
-                    leadConfidences.Add(cameraSetup.JointConfidence(frameNumber, i, true));
+                    Ray ray = cameraSetup.PoseRay(frameNumber, i, true);
+                    leadRayOriginPerCameraPerJoint.Add(ray.Origin);
+                    leadRayDirectionPerCameraPerJoint.Add(ray.Direction);
+                    leadJointConfidencePerCameraPerJoint.Add(cameraSetup.JointConfidence(frameNumber, i, true));
+                }
+                else
+                {
+                    leadRayOriginPerCameraPerJoint.Add(float3.Zero);
+                    leadRayDirectionPerCameraPerJoint.Add(float3.UnitZ);
+                    leadJointConfidencePerCameraPerJoint.Add(0);
                 }
 
                 if (cameraSetup.HasPoseAtFrame(frameNumber, false))
                 {
-                    followRays.Add(cameraSetup.PoseRay(frameNumber, i, false));
-                    followConfidences.Add(cameraSetup.JointConfidence(frameNumber, i, false));
+                    Ray ray = cameraSetup.PoseRay(frameNumber, i, false);
+                    followRayOriginPerCameraPerJoint.Add(ray.Origin);
+                    followRayDirectionPerCameraPerJoint.Add(ray.Direction);
+                    followJointConfidencePerCameraPerJoint.Add(cameraSetup.JointConfidence(frameNumber, i, false));
+                }
+                else
+                {
+                    followRayOriginPerCameraPerJoint.Add(float3.Zero);
+                    followRayDirectionPerCameraPerJoint.Add(float3.UnitZ);
+                    followJointConfidencePerCameraPerJoint.Add(0);
                 }
             }
+        }
 
-            Vector3 leadJointMidpoint = RayMidpointFinder.FindMinimumMidpoint(leadRays, leadConfidences);
-            merged3DPoseLeadPerFrame[frameNumber].Add(leadJointMidpoint);
-            Vector3 followJointMidpoint = RayMidpointFinder.FindMinimumMidpoint(followRays, followConfidences);
-            merged3DPoseFollowPerFrame[frameNumber].Add(followJointMidpoint);
+        float3[] leadJointMidpoints = new float3[poseCount];
+
+        using ReadWriteBuffer<float3> leadMinMidpointBuffer =
+            GraphicsDevice.GetDefault().AllocateReadWriteBuffer(leadJointMidpoints);
+        using ReadOnlyBuffer<float3> leadRayOriginBuffer =
+            GraphicsDevice.GetDefault().AllocateReadOnlyBuffer(leadRayOriginPerCameraPerJoint.ToArray());
+        using ReadOnlyBuffer<float3> leadRayDirectionBuffer = GraphicsDevice.GetDefault()
+            .AllocateReadOnlyBuffer(leadRayDirectionPerCameraPerJoint.ToArray());
+        using ReadOnlyBuffer<float> leadJointConfidenceBuffer = GraphicsDevice.GetDefault()
+            .AllocateReadOnlyBuffer(leadJointConfidencePerCameraPerJoint.ToArray());
+
+        MidpointFinder leadMidpointFinder = new MidpointFinder(
+            leadMinMidpointBuffer,
+            leadRayOriginBuffer,
+            leadRayDirectionBuffer,
+            leadJointConfidenceBuffer,
+            cameras.Count);
+
+        try
+        {
+            GraphicsDevice.GetDefault().For(arrayLength, leadMidpointFinder);
+        }
+        catch (TargetInvocationException e)
+        {
+            Console.WriteLine(e);
+        }
+
+        float3[] leadResults = leadMinMidpointBuffer.ToArray();
+        foreach (float3 result in leadResults)
+        {
+            merged3DPoseLeadPerFrame[frameNumber].Add(new Vector3(result.X, result.Y, result.Z));
+        }
+
+        float3[] followJointMidpoints = new float3[poseCount];
+
+        using ReadWriteBuffer<float3> followMinMidpointBuffer =
+            GraphicsDevice.GetDefault().AllocateReadWriteBuffer(followJointMidpoints);
+        using ReadOnlyBuffer<float3> followRayOriginBuffer = GraphicsDevice.GetDefault()
+            .AllocateReadOnlyBuffer(followRayOriginPerCameraPerJoint.ToArray());
+        using ReadOnlyBuffer<float3> followRayDirectionBuffer = GraphicsDevice.GetDefault()
+            .AllocateReadOnlyBuffer(followRayDirectionPerCameraPerJoint.ToArray());
+        using ReadOnlyBuffer<float> followJointConfidenceBuffer = GraphicsDevice.GetDefault()
+            .AllocateReadOnlyBuffer(followJointConfidencePerCameraPerJoint.ToArray());
+
+        MidpointFinder followMidpointFinder = new MidpointFinder(
+            followMinMidpointBuffer,
+            followRayOriginBuffer,
+            followRayDirectionBuffer,
+            followJointConfidenceBuffer,
+            cameras.Count);
+
+        try
+        {
+            GraphicsDevice.GetDefault().For(arrayLength, followMidpointFinder);
+        }
+        catch (TargetInvocationException e)
+        {
+            Console.WriteLine(e);
+        }
+
+        float3[] followResults = followMinMidpointBuffer.ToArray();
+        foreach (float3 result in followResults)
+        {
+            merged3DPoseFollowPerFrame[frameNumber].Add(new Vector3(result.X, result.Y, result.Z));
         }
 
         float totalError = 0;
