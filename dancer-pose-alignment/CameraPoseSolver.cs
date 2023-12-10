@@ -255,7 +255,7 @@ public class CameraPoseSolver
     {
         cameras[camIndex].FocalLength += zoom;
     }
-    
+
     public void MoveCameraForward(int camIndex, float move)
     {
         cameras[camIndex].PositionsPerFrame[frameNumber] += cameras[camIndex].Forward(frameNumber) * move;
@@ -264,7 +264,7 @@ public class CameraPoseSolver
             cameras[camIndex].Home();
         }
     }
-    
+
     public void MoveCameraRight(int camIndex, float move)
     {
         cameras[camIndex].PositionsPerFrame[frameNumber] += cameras[camIndex].Right(frameNumber) * move;
@@ -273,7 +273,7 @@ public class CameraPoseSolver
             cameras[camIndex].Home();
         }
     }
-    
+
     public void MoveCameraUp(int camIndex, float move)
     {
         cameras[camIndex].PositionsPerFrame[frameNumber] += cameras[camIndex].Up(frameNumber) * move;
@@ -296,7 +296,7 @@ public class CameraPoseSolver
         {
             cameraSetup.CopyPositionsToNextFrame(frameNumber);
         }
-        
+
         return true;
     }
 
@@ -313,10 +313,25 @@ public class CameraPoseSolver
         float totalError = Calculate3DPosesAndTotalError();
 
         int iterationCount = 0;
-        while (totalError > 3f && iterationCount < 1000000)
+        while (iterationCount < 1000)
         {
-            totalError = Iterate(
-                totalError);
+            CameraSetup highestErrorCam = null;
+            float highestError = 0;
+            foreach (CameraSetup cameraSetup in cameras)
+            {
+                float error = cameraSetup.Error(merged3DPoseLeadPerFrame[0], merged3DPoseFollowPerFrame[0], 0);
+                if (error > highestError)
+                {
+                    highestError = error;
+                    highestErrorCam = cameraSetup;
+                }
+            }
+
+            if (highestErrorCam == null) break;
+
+            // TODO translate XYZ +/- .1m and determine which path has lowest error after homing
+
+
             iterationCount++;
         }
 
@@ -957,7 +972,7 @@ public class CameraPoseSolver
         return merged3DPoseLeadPerFrame[frameNumber].Any(vec => vec.Y > 2.5) ||
                merged3DPoseFollowPerFrame[frameNumber].Any(vec => vec.Y > 2.5);
     }
-    
+
     public int GetFrameNumber() => frameNumber;
     public int GetTotalFrameCount() => totalFrameCount;
 }
