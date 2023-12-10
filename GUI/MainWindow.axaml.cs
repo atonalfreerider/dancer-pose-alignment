@@ -690,6 +690,9 @@ public partial class MainWindow : Window
             cameraPoseSolver.AllPosesAtFramePerCamera(frameCount);
         List<Dictionary<int, List<Vector3>>> posesByPersonAtFrameByCameraDict =
             posesByPersonAtFrameByCamera.Select(list => list.ToDictionary(list.IndexOf, listVec => listVec)).ToList();
+        
+        List<List<Vector3>> otherCameraPositionsByFrame = cameraPoseSolver.AllVisibleCamerasAtFramePerCamera(frameCount);
+        List<List<Vector3>> otherMirroredCameraPositionsByFrame = cameraPoseSolver.AllMirrorVisibleCamerasAtFramePerCamera(frameCount);
 
         for (int i = 0; i < numCameras; i++)
         {
@@ -704,8 +707,8 @@ public partial class MainWindow : Window
                     1,
                     2,
                     3,
-                    [],
-                    [],
+                    otherCameraPositionsByFrame[i1],
+                    otherMirroredCameraPositionsByFrame[i1],
                     reverseProjectedOriginCrossPerCam[i1],
                     reverseProjectionsOfOtherCamerasPerCamera[i1],
                     leadReverseProjectedPerCamera[i1],

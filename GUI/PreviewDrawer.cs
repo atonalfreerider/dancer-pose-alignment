@@ -99,8 +99,8 @@ public static class PreviewDrawer
         int currentFollowIndex,
         int mirrorCurrentLeadIndex,
         int mirrorCurrentFollowIndex,
-        List<Tuple<int, bool>> currentSelectedCamerasAndPoseAnchor,
-        List<Tuple<int, bool>> mirrorCurrentSelectedCamerasAndPoseAnchor,
+        List<Vector3> currentSelectedCamerasAndPoseAnchor,
+        List<Vector3> mirrorCurrentSelectedCamerasAndPoseAnchor,
         List<Vector2> originCross,
         List<Vector2> otherCameras,
         List<Vector2> leadProjectionsAtFrame,
@@ -113,8 +113,8 @@ public static class PreviewDrawer
             currentFollowIndex,
             mirrorCurrentLeadIndex,
             mirrorCurrentFollowIndex,
-            currentSelectedCamerasAndPoseAnchor,
-            mirrorCurrentSelectedCamerasAndPoseAnchor);
+            [],
+            []);
 
         SolidColorBrush originBrush = new SolidColorBrush(Colors.Black);
         Pen originPen = new Pen(originBrush)
@@ -123,7 +123,7 @@ public static class PreviewDrawer
         };
         GeometryDrawing originGeometry = DrawPoint(originCross[0], originPen);
         drawingGroup.Children.Add(originGeometry);
-        
+
         // draw red line to positive xuint
         SolidColorBrush xBrush = new SolidColorBrush(Colors.Red);
         Pen xPen = new Pen(xBrush)
@@ -141,7 +141,7 @@ public static class PreviewDrawer
             Geometry = xLine
         };
         drawingGroup.Children.Add(xGeometry);
-        
+
         // draw green line to positive y
         SolidColorBrush yBrush = new SolidColorBrush(Colors.Green);
         Pen yPen = new Pen(yBrush)
@@ -159,7 +159,7 @@ public static class PreviewDrawer
             Geometry = yLine
         };
         drawingGroup.Children.Add(yGeometry);
-        
+
         // draw blue line to positive z
         SolidColorBrush zBrush = new SolidColorBrush(Colors.Blue);
         Pen zPen = new Pen(zBrush)
@@ -199,8 +199,9 @@ public static class PreviewDrawer
             GeometryDrawing poseGeometry = DrawPoint(point, pen);
             drawingGroup.Children.Add(poseGeometry);
         }
-        
-        drawingGroup = DrawHalpe(drawingGroup, leadProjectionsAtFrame.Select(x => new Vector3(x.X, x.Y, 1f)).ToList(), -1);
+
+        drawingGroup = DrawHalpe(drawingGroup, leadProjectionsAtFrame.Select(x => new Vector3(x.X, x.Y, 1f)).ToList(),
+            -1);
 
         SolidColorBrush followBrush = new SolidColorBrush(Colors.Gray);
         Pen followPen = new Pen(followBrush)
@@ -213,7 +214,33 @@ public static class PreviewDrawer
             drawingGroup.Children.Add(poseGeometry);
         }
 
-        drawingGroup = DrawHalpe(drawingGroup, followProjectionsAtFrame.Select(x => new Vector3(x.X, x.Y, 1f)).ToList(), -1);
+        drawingGroup = DrawHalpe(drawingGroup, followProjectionsAtFrame.Select(x => new Vector3(x.X, x.Y, 1f)).ToList(),
+            -1);
+
+        SolidColorBrush lightCamBrush = new SolidColorBrush(Colors.LightGreen);
+        Pen lightCamPen = new Pen(lightCamBrush)
+        {
+            Thickness = 10
+        };
+
+        foreach (Vector3 otherCam in currentSelectedCamerasAndPoseAnchor)
+        {
+            GeometryDrawing poseGeometry = DrawPoint(new Vector2(otherCam.X, otherCam.Y), lightCamPen);
+            drawingGroup.Children.Add(poseGeometry);
+        }
+
+        SolidColorBrush lightMirrorCamBrush = new SolidColorBrush(Colors.LightGray);
+        Pen lightMirrorCamPen = new Pen(lightMirrorCamBrush)
+        {
+            Thickness = 10
+        };
+
+        foreach (Vector3 otherCam in mirrorCurrentSelectedCamerasAndPoseAnchor)
+        {
+            GeometryDrawing poseGeometry = DrawPoint(new Vector2(otherCam.X, otherCam.Y), lightMirrorCamPen);
+            drawingGroup.Children.Add(poseGeometry);
+        }
+
 
         return drawingGroup;
     }

@@ -117,6 +117,16 @@ public class CameraPoseSolver
     {
         return cameras.Select(camera => camera.PosesPerDancerAtFrame(frameNumber).ToList()).ToList();
     }
+    
+    public List<List<Vector3>> AllVisibleCamerasAtFramePerCamera(int frameNumber)
+    {
+        return cameras.Select(camera => camera.OtherCamerasPositionAndConfidenceAtFrame(frameNumber).ToList()).ToList();
+    }
+    
+    public List<List<Vector3>> AllMirrorVisibleCamerasAtFramePerCamera(int frameNumber)
+    {
+        return cameras.Select(camera => camera.OtherMirrorCamerasPositionAndConfidenceAtFrame(frameNumber).ToList()).ToList();
+    }
 
     public List<List<Vector2>> ReverseProjectionOfLeadPosePerCamera(int frameNumber)
     {

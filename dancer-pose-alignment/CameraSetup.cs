@@ -194,6 +194,16 @@ public class CameraSetup
             mirrorFollowPoseAndConfidencePerFrame[frameNumber]
         ];
     }
+    
+    public List<Vector3> OtherCamerasPositionAndConfidenceAtFrame(int frameNumber)
+    {
+        return recenteredOtherCamerasPositionAndConfidencePerFrame[frameNumber];
+    }
+    
+    public List<Vector3> OtherMirrorCamerasPositionAndConfidenceAtFrame(int frameNumber)
+    {
+        return mirrorRecenteredOtherCamerasRotationAndConfidencePerFrame[frameNumber];
+    }
 
     List<Vector3> Adjusted(IEnumerable<Vector3> keypoints, int frame)
     {
