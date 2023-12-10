@@ -313,7 +313,7 @@ public class CameraPoseSolver
         float totalError = Calculate3DPosesAndTotalError();
 
         int iterationCount = 0;
-        while (iterationCount < 1000)
+        while (iterationCount < 10000)
         {
             CameraSetup highestErrorCam = null;
             float highestError = 0;
@@ -327,11 +327,21 @@ public class CameraPoseSolver
                 }
             }
 
-            if (highestErrorCam == null) break;
+            if (highestErrorCam == null)
+            {
+                Console.WriteLine("couldn't find highest error camera");
+                break;
+            }
 
             // TODO translate XYZ +/- .1m and determine which path has lowest error after homing
+            bool moved = highestErrorCam.TestSixTranslations(merged3DPoseLeadPerFrame[frameNumber], merged3DPoseFollowPerFrame[frameNumber], frameNumber);
+            if (!moved)
+            {
+                break;
+            }
 
-
+            totalError = Calculate3DPosesAndTotalError();
+            Console.WriteLine($"{iterationCount}:{totalError}");
             iterationCount++;
         }
 

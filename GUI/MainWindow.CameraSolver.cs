@@ -231,6 +231,7 @@ public partial class MainWindow
     void SolveButton_Click(object sender, RoutedEventArgs e)
     {
         cameraPoseSolver.IterationLoop();
+        SetPreviewsToFrame();
     }
 
     void Save3D_Click(object sender, RoutedEventArgs e)

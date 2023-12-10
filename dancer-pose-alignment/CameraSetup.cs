@@ -288,6 +288,163 @@ public class CameraSetup
         }
     }
 
+    public bool TestSixTranslations(List<Vector3> merged3DPoseLeadPerFrame, List<Vector3> merged3DPoseFollowPerFrame,
+        int frame)
+    {
+        float currentError = Error(
+            merged3DPoseLeadPerFrame,
+            merged3DPoseFollowPerFrame,
+            frame);
+
+        Vector3 currentCameraPosition = PositionsPerFrame[frame];
+        Quaternion currentCameraRotation = RotationsPerFrame[frame];
+
+        // translate left
+        PositionsPerFrame[frame] += Right(frame) * .05f;
+
+        if (frame == 0)
+        {
+            Home();
+        }
+
+        Vector3 leftCameraPosition = PositionsPerFrame[frame];
+        Quaternion leftCameraRotation = RotationsPerFrame[frame];
+        float leftError = Error(
+            merged3DPoseLeadPerFrame,
+            merged3DPoseFollowPerFrame,
+            frame);
+
+        PositionsPerFrame[frame] = currentCameraPosition;
+        RotationsPerFrame[frame] = currentCameraRotation;
+
+        // translate right
+        PositionsPerFrame[frame] -= Right(frame) * .05f;
+        if (frame == 0)
+        {
+            Home();
+        }
+
+        Vector3 rightCameraPosition = PositionsPerFrame[frame];
+        Quaternion rightCameraRotation = RotationsPerFrame[frame];
+
+        float rightError = Error(
+            merged3DPoseLeadPerFrame,
+            merged3DPoseFollowPerFrame,
+            frame);
+
+        PositionsPerFrame[frame] = currentCameraPosition;
+        RotationsPerFrame[frame] = currentCameraRotation;
+
+        // translate up
+        PositionsPerFrame[frame] += Up(frame) * .05f;
+
+        if (frame == 0)
+        {
+            Home();
+        }
+
+        Vector3 upCameraPosition = PositionsPerFrame[frame];
+        Quaternion upCameraRotation = RotationsPerFrame[frame];
+
+        float upError = Error(
+            merged3DPoseLeadPerFrame,
+            merged3DPoseFollowPerFrame,
+            frame);
+
+        // translate down
+        PositionsPerFrame[frame] -= Up(frame) * .05f;
+        if (frame == 0)
+        {
+            Home();
+        }
+        
+        Vector3 downCameraPosition = PositionsPerFrame[frame];
+        Quaternion downCameraRotation = RotationsPerFrame[frame];
+        
+        float downError = Error(
+            merged3DPoseLeadPerFrame,
+            merged3DPoseFollowPerFrame,
+            frame);
+        
+        PositionsPerFrame[frame] = currentCameraPosition;
+        RotationsPerFrame[frame] = currentCameraRotation;
+        
+        // translate forward
+        PositionsPerFrame[frame] += Forward(frame) * .05f;
+        if (frame == 0)
+        {
+            Home();
+        }
+        
+        Vector3 forwardCameraPosition = PositionsPerFrame[frame];
+        Quaternion forwardCameraRotation = RotationsPerFrame[frame];
+        
+        float forwardError = Error(
+            merged3DPoseLeadPerFrame,
+            merged3DPoseFollowPerFrame,
+            frame);
+        
+        PositionsPerFrame[frame] = currentCameraPosition;
+        RotationsPerFrame[frame] = currentCameraRotation;
+        
+        // translate backward
+        PositionsPerFrame[frame] -= Forward(frame) * .05f;
+        if (frame == 0)
+        {
+            Home();
+        }
+        
+        Vector3 backwardCameraPosition = PositionsPerFrame[frame];
+        Quaternion backwardCameraRotation = RotationsPerFrame[frame];
+        
+        float backwardError = Error(
+            merged3DPoseLeadPerFrame,
+            merged3DPoseFollowPerFrame,
+            frame);
+        
+        if(leftError < rightError && leftError < upError && leftError < downError && leftError < forwardError && leftError < backwardError)
+        {
+            PositionsPerFrame[frame] = leftCameraPosition;
+            RotationsPerFrame[frame] = leftCameraRotation;
+            return true;
+        }
+        if(rightError < leftError && rightError < upError && rightError < downError && rightError < forwardError && rightError < backwardError)
+        {
+            PositionsPerFrame[frame] = rightCameraPosition;
+            RotationsPerFrame[frame] = rightCameraRotation;
+            return true;
+        }
+        if(upError < leftError && upError < rightError && upError < downError && upError < forwardError && upError < backwardError)
+        {
+            PositionsPerFrame[frame] = upCameraPosition;
+            RotationsPerFrame[frame] = upCameraRotation;
+            return true;
+        }
+        if(downError < leftError && downError < rightError && downError < upError && downError < forwardError && downError < backwardError)
+        {
+            PositionsPerFrame[frame] = downCameraPosition;
+            RotationsPerFrame[frame] = downCameraRotation;
+            return true;
+        }
+        if(forwardError < leftError && forwardError < rightError && forwardError < upError && forwardError < downError && forwardError < backwardError)
+        {
+            PositionsPerFrame[frame] = forwardCameraPosition;
+            RotationsPerFrame[frame] = forwardCameraRotation;
+            return true;
+        }
+        if(backwardError < leftError && backwardError < rightError && backwardError < upError && backwardError < downError && backwardError < forwardError)
+        {
+            PositionsPerFrame[frame] = backwardCameraPosition;
+            RotationsPerFrame[frame] = backwardCameraRotation;
+            return true;
+        }
+
+        PositionsPerFrame[frame] = currentCameraPosition;
+        RotationsPerFrame[frame] = currentCameraRotation;
+        return false;
+
+    }
+
     public bool HasPoseAtFrame(int frameNumber, bool isLead)
     {
         return isLead
