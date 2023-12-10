@@ -107,6 +107,7 @@ public class CameraSetup
 
         for (int i = 0; i < merged3DPoseLead.Count; i++)
         {
+            if (leadProjectionsPerFrame[frameNumber].Count <= i) continue;
             Vector3 target = TargetAtFrame(merged3DPoseLead[i], frameNumber);
             Vector3 keypoint = TargetAtFrame(leadProjectionsPerFrame[frameNumber][i], frameNumber);
 
@@ -117,6 +118,7 @@ public class CameraSetup
 
         for (int i = 0; i < merged3DPoseFollow.Count; i++)
         {
+            if (followProjectionsPerFrame[frameNumber].Count <= i) continue;
             Vector3 target = TargetAtFrame(merged3DPoseFollow[i], frameNumber);
             Vector3 keypoint = TargetAtFrame(followProjectionsPerFrame[frameNumber][i], frameNumber);
 
@@ -164,24 +166,33 @@ public class CameraSetup
                     -(vec.Y - Size.Y / 2) * PixelToMeter, // flip
                     vec.Z)) // keep the confidence
             .ToList()).ToList();
-        
-        recenteredOtherCamerasPositionAndConfidencePerFrame = otherCamerasPositionAndConfidencePerFrame.Select(listVec => listVec.Select(vec =>
-                new Vector3(
-                    (vec.X - Size.X / 2) * PixelToMeter,
-                    -(vec.Y - Size.Y / 2) * PixelToMeter, // flip
-                    vec.Z)) // keep the confidence
-            .ToList()).ToList();
-        
-        mirrorRecenteredOtherCamerasRotationAndConfidencePerFrame = mirrorOtherCamerasRotationAndConfidencePerFrame.Select(listVec => listVec.Select(vec =>
-                new Vector3(
-                    (vec.X - Size.X / 2) * PixelToMeter,
-                    -(vec.Y - Size.Y / 2) * PixelToMeter, // flip
-                    vec.Z)) // keep the confidence
-            .ToList()).ToList();
-        
 
-        followProjectionsPerFrame.Add([]);
-        leadProjectionsPerFrame.Add([]);
+        recenteredOtherCamerasPositionAndConfidencePerFrame = otherCamerasPositionAndConfidencePerFrame.Select(
+            listVec => listVec.Select(vec =>
+                    new Vector3(
+                        (vec.X - Size.X / 2) * PixelToMeter,
+                        -(vec.Y - Size.Y / 2) * PixelToMeter, // flip
+                        vec.Z)) // keep the confidence
+                .ToList()).ToList();
+
+        mirrorRecenteredOtherCamerasRotationAndConfidencePerFrame = mirrorOtherCamerasRotationAndConfidencePerFrame
+            .Select(listVec => listVec.Select(vec =>
+                    new Vector3(
+                        (vec.X - Size.X / 2) * PixelToMeter,
+                        -(vec.Y - Size.Y / 2) * PixelToMeter, // flip
+                        vec.Z)) // keep the confidence
+                .ToList()).ToList();
+
+
+        for (int i = 0; i < lead2DPixelsAndConfidence.Count; i++)
+        {
+            leadProjectionsPerFrame.Add([]);
+        }
+
+        for (int i = 0; i < follow2PixelsAndConfidence.Count; i++)
+        {
+            followProjectionsPerFrame.Add([]);
+        }
     }
 
     public List<List<Vector3>> PosesPerDancerAtFrame(int frameNumber)
@@ -194,12 +205,12 @@ public class CameraSetup
             mirrorFollowPoseAndConfidencePerFrame[frameNumber]
         ];
     }
-    
+
     public List<Vector3> OtherCamerasPositionAndConfidenceAtFrame(int frameNumber)
     {
         return recenteredOtherCamerasPositionAndConfidencePerFrame[frameNumber];
     }
-    
+
     public List<Vector3> OtherMirrorCamerasPositionAndConfidenceAtFrame(int frameNumber)
     {
         return mirrorRecenteredOtherCamerasRotationAndConfidencePerFrame[frameNumber];
@@ -231,7 +242,7 @@ public class CameraSetup
         Vector2 leadHip = new Vector2(
             leadPoseAndConfidencePerFrame[0][(int)Halpe.LHip].X,
             leadPoseAndConfidencePerFrame[0][(int)Halpe.LHip].Y);
-        
+
         const float hipHeight = .75f;
 
         for (int j = 0; j < 4; j++)
@@ -299,6 +310,19 @@ public class CameraSetup
         return isLead
             ? recenteredLeadPoseAndConfidencePerFrame[frameNumber][jointNumber].Z
             : recenteredFollowPoseAndConfidencePerFrame[frameNumber][jointNumber].Z;
+    }
+
+    public void CopyPositionsToNextFrame(int frameNumber)
+    {
+        if (PositionsPerFrame.Count <= frameNumber + 1)
+        {
+            PositionsPerFrame.Add(PositionsPerFrame[frameNumber - 1]);
+        }
+
+        if (RotationsPerFrame.Count <= frameNumber + 1)
+        {
+            RotationsPerFrame.Add(RotationsPerFrame[frameNumber - 1]);
+        }
     }
 
     [Serializable]

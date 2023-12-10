@@ -429,8 +429,9 @@ public partial class MainWindow : Window
             JsonConvert.SerializeObject(finalDancerPoses.Select(x => x[3]), Formatting.Indented));
 
         List<List<Vector3>> otherCameraPositionsByFrame = ExtractCameraHandPositions(finalCamerasIndicesAndHandByFrame);
-        List<List<Vector3>> mirroredOtherCameraPositionsByFrame = ExtractCameraHandPositions(mirrorFinalCamerasIndicesAndHandByFrame);
-        
+        List<List<Vector3>> mirroredOtherCameraPositionsByFrame =
+            ExtractCameraHandPositions(mirrorFinalCamerasIndicesAndHandByFrame);
+
         File.WriteAllText(cameraSavePath,
             JsonConvert.SerializeObject(otherCameraPositionsByFrame, Formatting.Indented));
         File.WriteAllText(mirroredCameraSavePath,
@@ -474,6 +475,7 @@ public partial class MainWindow : Window
                     }
                 }
             }
+
             otherCameraPositionsByFrame.Add(otherCameraPositions);
         }
 
@@ -546,14 +548,14 @@ public partial class MainWindow : Window
     #region ROOM LAYOUT
 
     readonly List<Vector3> cameraPositions = [];
-    
+
     void LayoutCanvas_MouseDown(object sender, PointerPressedEventArgs args)
     {
         // Draw the triangle representing the camera position
         PointerPoint point = args.GetCurrentPoint(sender as Control);
 
         // Calculate the triangle size based on the focal length
-        
+
 
         // Create and add the triangle to the canvas
         Polygon triangle = CreateTriangle(point, .2f, LayoutCanvas.Width, LayoutCanvas.Height);
@@ -614,7 +616,7 @@ public partial class MainWindow : Window
         }
 
         string cameraSavePath = Path.Combine(saveDirectory, $"camera-positions-{cameraName}.json");
-        
+
         File.WriteAllText(cameraSavePath,
             JsonConvert.SerializeObject(cameraPositions, Formatting.Indented));
 
@@ -627,7 +629,7 @@ public partial class MainWindow : Window
 
     CameraPoseSolver cameraPoseSolver;
     int selectedCanvas = -1;
-    
+
     void LoadJsonForPerspectiveButton_Click(object sender, RoutedEventArgs e)
     {
         string directoryPath = DirectoryPathTextBox.Text;
@@ -638,15 +640,15 @@ public partial class MainWindow : Window
             Console.WriteLine("Directory does not exist.");
             return;
         }
-        
+
         string sizesJsonPath = Path.Combine(directoryPath, "cameraSizes.json");
         List<Vector2> cameraSizes = JsonConvert.DeserializeObject<List<Vector2>>(File.ReadAllText(sizesJsonPath));
 
         cameraPoseSolver = new CameraPoseSolver();
         cameraPoseSolver.LoadPoses(directoryPath);
-        
+
         cameraPoseSolver.HomeAllCameras();
-        
+
         numCameras = cameraSizes.Count;
         CanvasContainer.Items.Clear();
 
@@ -662,37 +664,37 @@ public partial class MainWindow : Window
             CanvasContainer.Items.Add(canvas);
         }
 
-        frameCount = 0;
         SetPreviewsToFrame();
     }
 
     void SetPreviewsToFrame()
     {
-        float error = cameraPoseSolver.Calculate3DPosesAndTotalError(frameCount);
+        float error = cameraPoseSolver.Calculate3DPosesAndTotalError();
         SolverErrorText.Text = error.ToString();
-        
-        List<List<Vector2>> reverseProjectedOriginCrossPerCam = cameraPoseSolver.ReverseProjectOriginCrossPerCamera(frameCount);
+
+        List<List<Vector2>> reverseProjectedOriginCrossPerCam = cameraPoseSolver.ReverseProjectOriginCrossPerCamera();
 
         List<List<Vector2>> reverseProjectionsOfOtherCamerasPerCamera = [];
         for (int i = 0; i < numCameras; i++)
         {
             reverseProjectionsOfOtherCamerasPerCamera.Add(cameraPoseSolver
-                .ReverseProjectionsOfOtherCamerasPerCamera(frameCount, i));
+                .ReverseProjectionsOfOtherCamerasPerCamera(i));
         }
 
-        List<List<Vector2>> leadReverseProjectedPerCamera = 
-            cameraPoseSolver.ReverseProjectionOfLeadPosePerCamera(frameCount);
-        List<List<Vector2>> followReverseProjectedPerCamera = 
-            cameraPoseSolver.ReverseProjectionOfFollowPosePerCamera(frameCount);
-        
-        SolverFrameNumberText.Text = $"{frameCount}:{totalFrameCount}";
+        List<List<Vector2>> leadReverseProjectedPerCamera =
+            cameraPoseSolver.ReverseProjectionOfLeadPosePerCamera();
+        List<List<Vector2>> followReverseProjectedPerCamera =
+            cameraPoseSolver.ReverseProjectionOfFollowPosePerCamera();
+
+        SolverFrameNumberText.Text = $"{cameraPoseSolver.GetFrameNumber()}:{cameraPoseSolver.GetTotalFrameCount()}";
         List<List<List<Vector3>>> posesByPersonAtFrameByCamera =
-            cameraPoseSolver.AllPosesAtFramePerCamera(frameCount);
+            cameraPoseSolver.AllPosesAtFramePerCamera();
         List<Dictionary<int, List<Vector3>>> posesByPersonAtFrameByCameraDict =
             posesByPersonAtFrameByCamera.Select(list => list.ToDictionary(list.IndexOf, listVec => listVec)).ToList();
-        
-        List<List<Vector3>> otherCameraPositionsByFrame = cameraPoseSolver.AllVisibleCamerasAtFramePerCamera(frameCount);
-        List<List<Vector3>> otherMirroredCameraPositionsByFrame = cameraPoseSolver.AllMirrorVisibleCamerasAtFramePerCamera(frameCount);
+
+        List<List<Vector3>> otherCameraPositionsByFrame = cameraPoseSolver.AllVisibleCamerasAtFramePerCamera();
+        List<List<Vector3>> otherMirroredCameraPositionsByFrame =
+            cameraPoseSolver.AllMirrorVisibleCamerasAtFramePerCamera();
 
         for (int i = 0; i < numCameras; i++)
         {
@@ -732,28 +734,28 @@ public partial class MainWindow : Window
     void YawLeftButton_Click(object sender, RoutedEventArgs e)
     {
         if (selectedCanvas == -1) return;
-        cameraPoseSolver.YawCamera(selectedCanvas, frameCount, -.01f);
+        cameraPoseSolver.YawCamera(selectedCanvas, -.01f);
         SetPreviewsToFrame();
     }
 
     void YawRightButton_Click(object sender, RoutedEventArgs e)
     {
         if (selectedCanvas == -1) return;
-        cameraPoseSolver.YawCamera(selectedCanvas, frameCount, .01f);
+        cameraPoseSolver.YawCamera(selectedCanvas, .01f);
         SetPreviewsToFrame();
     }
 
     void PitchUpButton_Click(object sender, RoutedEventArgs e)
     {
         if (selectedCanvas == -1) return;
-        cameraPoseSolver.PitchCamera(selectedCanvas, frameCount, -.01f);
+        cameraPoseSolver.PitchCamera(selectedCanvas, -.01f);
         SetPreviewsToFrame();
     }
 
     void PitchDownButton_Click(object sender, RoutedEventArgs e)
     {
         if (selectedCanvas == -1) return;
-        cameraPoseSolver.PitchCamera(selectedCanvas, frameCount, .01f);
+        cameraPoseSolver.PitchCamera(selectedCanvas, .01f);
         SetPreviewsToFrame();
     }
 
@@ -774,71 +776,79 @@ public partial class MainWindow : Window
     void RollLeftButton_Click(object sender, RoutedEventArgs e)
     {
         if (selectedCanvas == -1) return;
-        cameraPoseSolver.RollCamera(selectedCanvas, frameCount, .01f);
+        cameraPoseSolver.RollCamera(selectedCanvas, .01f);
         SetPreviewsToFrame();
     }
 
     void RollRightButton_Click(object sender, RoutedEventArgs e)
     {
         if (selectedCanvas == -1) return;
-        cameraPoseSolver.RollCamera(selectedCanvas, frameCount, -.01f);
+        cameraPoseSolver.RollCamera(selectedCanvas, -.01f);
         SetPreviewsToFrame();
     }
 
     void TranslateLeftButton_Click(object sender, RoutedEventArgs e)
     {
-        /* ... */
+        if (selectedCanvas == -1) return;
+        cameraPoseSolver.MoveCameraRight(selectedCanvas, -.01f);
+        SetPreviewsToFrame();
     }
 
     void TranslateRightButton_Click(object sender, RoutedEventArgs e)
     {
-        /* ... */
+        if (selectedCanvas == -1) return;
+        cameraPoseSolver.MoveCameraRight(selectedCanvas, .01f);
+        SetPreviewsToFrame();
     }
 
     void TranslateUpButton_Click(object sender, RoutedEventArgs e)
     {
-        /* ... */
+        if (selectedCanvas == -1) return;
+        cameraPoseSolver.MoveCameraUp(selectedCanvas, .01f);
+        SetPreviewsToFrame();
     }
 
     void TranslateDownButton_Click(object sender, RoutedEventArgs e)
     {
-        /* ... */
+        if (selectedCanvas == -1) return;
+        cameraPoseSolver.MoveCameraUp(selectedCanvas, -.01f);
+        SetPreviewsToFrame();
     }
 
     void TranslateForwardButton_Click(object sender, RoutedEventArgs e)
     {
-        /* ... */
+        if (selectedCanvas == -1) return;
+        cameraPoseSolver.MoveCameraForward(selectedCanvas, -.01f);
+        SetPreviewsToFrame();
     }
 
     void TranslateBackwardButton_Click(object sender, RoutedEventArgs e)
     {
-        /* ... */
+        if (selectedCanvas == -1) return;
+        cameraPoseSolver.MoveCameraForward(selectedCanvas, -.01f);
+        SetPreviewsToFrame();
     }
 
     void SolverNextFrameButton_Click(object sender, RoutedEventArgs e)
     {
-        if (frameCount >= totalFrameCount) return;
-
-        frameCount++;
+        if (!cameraPoseSolver.Advance()) return;
         SetPreviewsToFrame();
     }
 
     void SolverPreviousFrameButton_Click(object sender, RoutedEventArgs e)
     {
-        if (frameCount <= 0) return;
-
-        frameCount--;
+        if (!cameraPoseSolver.Rewind()) return;
         SetPreviewsToFrame();
     }
 
     void SolveButton_Click(object sender, RoutedEventArgs e)
     {
-        // Implement the solve logic
+        cameraPoseSolver.IterationLoop();
     }
 
     void Save3D_Click(object sender, RoutedEventArgs e)
     {
-        // Implement the save logic
+        cameraPoseSolver.SaveData();
     }
 
     #endregion

@@ -86,19 +86,6 @@
                         <Button Content="Roll Right" Margin="5" Click="RollRightButton_Click" />
                         <Button Content="Yaw Right" Margin="5" Click="YawRightButton_Click" />
                     </StackPanel>
-                </StackPanel>
-
-                <ScrollViewer HorizontalScrollBarVisibility="Auto" VerticalScrollBarVisibility="Auto">
-                    <ItemsControl x:Name="CanvasContainer">
-                        <ItemsControl.ItemsPanel>
-                            <ItemsPanelTemplate>
-                                <StackPanel Orientation="Horizontal" />
-                            </ItemsPanelTemplate>
-                        </ItemsControl.ItemsPanel>
-                    </ItemsControl>
-                </ScrollViewer>
-                
-                <StackPanel Orientation="Vertical" DockPanel.Dock="Bottom">
                     <StackPanel Orientation="Horizontal" HorizontalAlignment="Center">
                         <!-- Buttons for translation manipulation -->
                         <Button Content="Left" Margin="5" Click="TranslateLeftButton_Click" />
@@ -118,6 +105,16 @@
                         <Button Content="Save" Margin="5" Click="Save3D_Click" />
                     </StackPanel>
                 </StackPanel>
+
+                <ScrollViewer HorizontalScrollBarVisibility="Auto" VerticalScrollBarVisibility="Auto">
+                    <ItemsControl x:Name="CanvasContainer">
+                        <ItemsControl.ItemsPanel>
+                            <ItemsPanelTemplate>
+                                <StackPanel Orientation="Horizontal" />
+                            </ItemsPanelTemplate>
+                        </ItemsControl.ItemsPanel>
+                    </ItemsControl>
+                </ScrollViewer>
             </DockPanel>
 
         </TabItem>
