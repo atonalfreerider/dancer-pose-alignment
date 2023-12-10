@@ -20,6 +20,10 @@ public class CameraPoseSolver
         Dictionary<int, List<List<Vector3>>> allFollowPosesByCamera = [];
         Dictionary<int, List<List<Vector3>>> allMirrorLeadPosesByCamera = [];
         Dictionary<int, List<List<Vector3>>> allMirrorFollowPosesByCamera = [];
+
+        Dictionary<int, List<List<Vector3>>> allOtherCameraPositionsByFrameByCamera = [];
+        Dictionary<int, List<List<Vector3>>> mirrorAllOtherCameraPositionsByFrameByCamera = [];
+
         int totalFrameCount = 0;
 
         foreach (string file in Directory.GetFiles(directoryPath, "*.json"))
@@ -77,8 +81,17 @@ public class CameraPoseSolver
                 }
                 else
                 {
-                    List<List<Tuple<int, bool>>> cameraIndicesByFrame =
-                        JsonConvert.DeserializeObject<List<List<Tuple<int, bool>>>>(File.ReadAllText(file));
+                    int associatedCamera = int.Parse(fileName[^1].ToString());
+                    List<List<Vector3>> otherCameraPositionsByFrame =
+                        JsonConvert.DeserializeObject<List<List<Vector3>>>(File.ReadAllText(file));
+                    if (fileName.StartsWith("mirror"))
+                    {
+                        mirrorAllOtherCameraPositionsByFrameByCamera.Add(associatedCamera, otherCameraPositionsByFrame);
+                    }
+                    else
+                    {
+                        allOtherCameraPositionsByFrameByCamera.Add(associatedCamera, otherCameraPositionsByFrame);
+                    }
                 }
             }
         }
@@ -95,7 +108,9 @@ public class CameraPoseSolver
             allLeadPosesByCamera,
             allFollowPosesByCamera,
             allMirrorLeadPosesByCamera,
-            allMirrorFollowPosesByCamera);
+            allMirrorFollowPosesByCamera,
+            allOtherCameraPositionsByFrameByCamera,
+            mirrorAllOtherCameraPositionsByFrameByCamera);
     }
 
     public List<List<List<Vector3>>> AllPosesAtFramePerCamera(int frameNumber)
@@ -109,14 +124,14 @@ public class CameraPoseSolver
                 .Select(x => camera.ReverseProjectPoint(x, frameNumber)).ToList())
             .ToList();
     }
-    
+
     public List<List<Vector2>> ReverseProjectionOfFollowPosePerCamera(int frameNumber)
     {
         return cameras.Select(camera => merged3DPoseFollowPerFrame[frameNumber]
                 .Select(x => camera.ReverseProjectPoint(x, frameNumber)).ToList())
             .ToList();
     }
-    
+
     public List<List<Vector2>> ReverseProjectOriginCrossPerCamera(int frameNumber)
     {
         List<List<Vector2>> originCross = [];
@@ -132,11 +147,11 @@ public class CameraPoseSolver
 
         return originCross;
     }
-    
+
     public List<Vector2> ReverseProjectionsOfOtherCamerasPerCamera(int frameNumber, int cameraIndex)
     {
-        return cameras.Select((camera, index) => index == cameraIndex 
-            ? Vector2.Zero 
+        return cameras.Select((camera, index) => index == cameraIndex
+            ? Vector2.Zero
             : cameras[cameraIndex].ReverseProjectPoint(camera.PositionsPerFrame[frameNumber], frameNumber)).ToList();
     }
 
@@ -166,7 +181,7 @@ public class CameraPoseSolver
                     startingHeight,
                     MathF.Cos(angle) * radius));
             }
-            
+
             Quaternion centerLook = Transform.LookAt(
                 new Vector3(0, 1.5f, 0),
                 Quaternion.Identity,
@@ -181,7 +196,9 @@ public class CameraPoseSolver
         IReadOnlyDictionary<int, List<List<Vector3>>> allLeadPosesByCamera,
         IReadOnlyDictionary<int, List<List<Vector3>>> allFollowPosesByCamera,
         IReadOnlyDictionary<int, List<List<Vector3>>> allMirrorLeadPosesByCamera,
-        IReadOnlyDictionary<int, List<List<Vector3>>> allMirrorFollowPosesByCamera)
+        IReadOnlyDictionary<int, List<List<Vector3>>> allMirrorFollowPosesByCamera,
+        IReadOnlyDictionary<int, List<List<Vector3>>> allOtherCameraPositionsByFrameByCamera,
+        IReadOnlyDictionary<int, List<List<Vector3>>> mirrorAllOtherCameraPositionsByFrameByCamera)
     {
         int count = 0;
         foreach (CameraSetup camera in cameras)
@@ -190,7 +207,9 @@ public class CameraPoseSolver
                 allLeadPosesByCamera[count],
                 allFollowPosesByCamera[count],
                 allMirrorLeadPosesByCamera[count],
-                allMirrorFollowPosesByCamera[count]);
+                allMirrorFollowPosesByCamera[count],
+                allOtherCameraPositionsByFrameByCamera[count],
+                mirrorAllOtherCameraPositionsByFrameByCamera[count]);
             count++;
         }
     }
@@ -204,22 +223,22 @@ public class CameraPoseSolver
             camera.Home();
         }
     }
-    
+
     public void YawCamera(int camIndex, int frameNumber, float angle)
     {
         cameras[camIndex].RotationsPerFrame[frameNumber] *= Quaternion.CreateFromAxisAngle(Vector3.UnitY, angle);
     }
-    
+
     public void PitchCamera(int camIndex, int frameNumber, float angle)
     {
         cameras[camIndex].RotationsPerFrame[frameNumber] *= Quaternion.CreateFromAxisAngle(Vector3.UnitX, angle);
     }
-    
+
     public void RollCamera(int camIndex, int frameNumber, float angle)
     {
         cameras[camIndex].RotationsPerFrame[frameNumber] *= Quaternion.CreateFromAxisAngle(Vector3.UnitZ, angle);
     }
-    
+
     public void ZoomCamera(int camIndex, float zoom)
     {
         cameras[camIndex].FocalLength += zoom;
@@ -228,7 +247,7 @@ public class CameraPoseSolver
     #endregion
 
     #region ITERATORS
-    
+
     public void IterationLoop()
     {
         const int testingFrameNumber = 0;
@@ -328,7 +347,7 @@ public class CameraPoseSolver
 
         return previousError;
     }
-    
+
     float IterateYaw(int frameNumber, float yawStepSize)
     {
         foreach (CameraSetup camera in cameras)
@@ -785,7 +804,7 @@ public class CameraPoseSolver
 
         return Calculate3DPosesAndTotalError(frameNumber);
     }
-    
+
     #endregion
 
     public float Calculate3DPosesAndTotalError(int frameNumber)

@@ -30,11 +30,15 @@ public class CameraSetup
     List<List<Vector3>> followPoseAndConfidencePerFrame;
     List<List<Vector3>> mirrorLeadPoseAndConfidencePerFrame;
     List<List<Vector3>> mirrorFollowPoseAndConfidencePerFrame;
+    List<List<Vector3>> otherCamerasPositionAndConfidencePerFrame;
+    List<List<Vector3>> mirrorOtherCamerasRotationAndConfidencePerFrame;
 
     List<List<Vector3>> recenteredLeadPoseAndConfidencePerFrame;
     List<List<Vector3>> recenteredFollowPoseAndConfidencePerFrame;
     List<List<Vector3>> mirrorRecenteredLeadPoseAndConfidencePerFrame;
     List<List<Vector3>> mirrorRecenteredFollowPoseAndConfidencePerFrame;
+    List<List<Vector3>> recenteredOtherCamerasPositionAndConfidencePerFrame;
+    List<List<Vector3>> mirrorRecenteredOtherCamerasRotationAndConfidencePerFrame;
 
     public void Project(int frameNumber)
     {
@@ -136,12 +140,16 @@ public class CameraSetup
         List<List<Vector3>> lead2DPixelsAndConfidence,
         List<List<Vector3>> follow2PixelsAndConfidence,
         List<List<Vector3>> mirrorLead2DPixelsAndConfidence,
-        List<List<Vector3>> mirrorFollow2DPixelsAndConfidence)
+        List<List<Vector3>> mirrorFollow2DPixelsAndConfidence,
+        List<List<Vector3>> otherCamerasPositionAndConfidence,
+        List<List<Vector3>> mirrorOtherCamerasRotationAndConfidence)
     {
         leadPoseAndConfidencePerFrame = lead2DPixelsAndConfidence;
         followPoseAndConfidencePerFrame = follow2PixelsAndConfidence;
         mirrorLeadPoseAndConfidencePerFrame = mirrorLead2DPixelsAndConfidence;
         mirrorFollowPoseAndConfidencePerFrame = mirrorFollow2DPixelsAndConfidence;
+        otherCamerasPositionAndConfidencePerFrame = otherCamerasPositionAndConfidence;
+        mirrorOtherCamerasRotationAndConfidencePerFrame = mirrorOtherCamerasRotationAndConfidence;
 
         recenteredLeadPoseAndConfidencePerFrame = lead2DPixelsAndConfidence.Select(listVec => listVec.Select(vec =>
                 new Vector3(
@@ -156,6 +164,21 @@ public class CameraSetup
                     -(vec.Y - Size.Y / 2) * PixelToMeter, // flip
                     vec.Z)) // keep the confidence
             .ToList()).ToList();
+        
+        recenteredOtherCamerasPositionAndConfidencePerFrame = otherCamerasPositionAndConfidencePerFrame.Select(listVec => listVec.Select(vec =>
+                new Vector3(
+                    (vec.X - Size.X / 2) * PixelToMeter,
+                    -(vec.Y - Size.Y / 2) * PixelToMeter, // flip
+                    vec.Z)) // keep the confidence
+            .ToList()).ToList();
+        
+        mirrorRecenteredOtherCamerasRotationAndConfidencePerFrame = mirrorOtherCamerasRotationAndConfidencePerFrame.Select(listVec => listVec.Select(vec =>
+                new Vector3(
+                    (vec.X - Size.X / 2) * PixelToMeter,
+                    -(vec.Y - Size.Y / 2) * PixelToMeter, // flip
+                    vec.Z)) // keep the confidence
+            .ToList()).ToList();
+        
 
         followProjectionsPerFrame.Add([]);
         leadProjectionsPerFrame.Add([]);

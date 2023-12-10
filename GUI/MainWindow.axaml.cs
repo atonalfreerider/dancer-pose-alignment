@@ -37,16 +37,14 @@ public partial class MainWindow : Window
 
     // current state of frame
     Dictionary<int, List<Vector3>> posesByPersonAtFrame = new();
-    readonly List<Tuple<int, bool>> currentSelectedCamerasAndPoseAnchor = [];
-    readonly List<Tuple<int, bool>> mirrorCurrentSelectedCamerasAndPoseAnchor = [];
+    readonly List<Tuple<int, bool>> currentSelectedCamerasAndPoseAnchor = []; // right or left hand
+    readonly List<Tuple<int, bool>> mirrorCurrentSelectedCamerasAndPoseAnchor = []; // right or left hand
 
     // states to serialize
     // 0 - lead, 1 - follow, 2 - mirror lead, 3 - mirror follow. they are updated at every frame change
     readonly List<List<List<Vector3>>> finalDancerPoses = [];
-    readonly List<List<Tuple<int, bool>>> finalIndexCamerasAndPoseAnchor = [];
-    readonly List<List<Tuple<int, bool>>> finalIndexMirroredCamerasAndPoseAnchor = [];
-
-    readonly List<Vector3> cameraPositions = [];
+    readonly List<List<Tuple<int, bool>>> finalCamerasIndicesAndHandByFrame = [];
+    readonly List<List<Tuple<int, bool>>> mirrorFinalCamerasIndicesAndHandByFrame = [];
 
     public MainWindow()
     {
@@ -61,8 +59,8 @@ public partial class MainWindow : Window
             mirrorCurrentFollowIndex = -1;
             posesByPersonAtFrame = new Dictionary<int, List<Vector3>>();
             finalDancerPoses.Clear();
-            finalIndexCamerasAndPoseAnchor.Clear();
-            finalIndexMirroredCamerasAndPoseAnchor.Clear();
+            finalCamerasIndicesAndHandByFrame.Clear();
+            mirrorFinalCamerasIndicesAndHandByFrame.Clear();
             ClearCameraMarkers();
 
             alphaPosesByFrameByPerson = AlphaPose.PosesByFrameByPerson(GetAlphaPoseJsonPath());
@@ -77,8 +75,8 @@ public partial class MainWindow : Window
                 }
 
                 finalDancerPoses.Add(frameDancerPoses);
-                finalIndexCamerasAndPoseAnchor.Add([]);
-                finalIndexMirroredCamerasAndPoseAnchor.Add([]);
+                finalCamerasIndicesAndHandByFrame.Add([]);
+                mirrorFinalCamerasIndicesAndHandByFrame.Add([]);
             }
 
             frameSource = new VideoCapture(GetVideoPath());
@@ -265,12 +263,12 @@ public partial class MainWindow : Window
             : [];
 
         // save the camera indices from the last frame
-        finalIndexCamerasAndPoseAnchor[frameCount].Clear();
-        finalIndexMirroredCamerasAndPoseAnchor[frameCount].Clear();
+        finalCamerasIndicesAndHandByFrame[frameCount].Clear();
+        mirrorFinalCamerasIndicesAndHandByFrame[frameCount].Clear();
         for (int i = 0; i < numCameras; i++)
         {
-            finalIndexCamerasAndPoseAnchor[frameCount].Add(currentSelectedCamerasAndPoseAnchor[i]);
-            finalIndexMirroredCamerasAndPoseAnchor[frameCount].Add(mirrorCurrentSelectedCamerasAndPoseAnchor[i]);
+            finalCamerasIndicesAndHandByFrame[frameCount].Add(currentSelectedCamerasAndPoseAnchor[i]);
+            mirrorFinalCamerasIndicesAndHandByFrame[frameCount].Add(mirrorCurrentSelectedCamerasAndPoseAnchor[i]);
         }
     }
 
@@ -430,12 +428,56 @@ public partial class MainWindow : Window
         File.WriteAllText(mirroredFollowSavePath,
             JsonConvert.SerializeObject(finalDancerPoses.Select(x => x[3]), Formatting.Indented));
 
+        List<List<Vector3>> otherCameraPositionsByFrame = ExtractCameraHandPositions(finalCamerasIndicesAndHandByFrame);
+        List<List<Vector3>> mirroredOtherCameraPositionsByFrame = ExtractCameraHandPositions(mirrorFinalCamerasIndicesAndHandByFrame);
+        
         File.WriteAllText(cameraSavePath,
-            JsonConvert.SerializeObject(finalIndexCamerasAndPoseAnchor, Formatting.Indented));
+            JsonConvert.SerializeObject(otherCameraPositionsByFrame, Formatting.Indented));
         File.WriteAllText(mirroredCameraSavePath,
-            JsonConvert.SerializeObject(finalIndexMirroredCamerasAndPoseAnchor, Formatting.Indented));
+            JsonConvert.SerializeObject(mirroredOtherCameraPositionsByFrame, Formatting.Indented));
 
         Console.WriteLine($"Saved to: {directory})");
+    }
+
+    List<List<Vector3>> ExtractCameraHandPositions(IReadOnlyList<List<Tuple<int, bool>>> pass)
+    {
+        List<List<Vector3>> otherCameraPositionsByFrame = [];
+        for (int i = 0; i < totalFrameCount; i++)
+        {
+            List<Tuple<int, bool>> currentCamerasAndPoseAnchor = pass[i];
+            List<Vector3> otherCameraPositions = [];
+            for (int j = 0; j < numCameras; j++)
+            {
+                Tuple<int, bool> camAndHand = currentCamerasAndPoseAnchor[j];
+                if (camAndHand.Item1 == -1 || !alphaPosesByFrameByPerson[camAndHand.Item1].ContainsKey(i))
+                {
+                    otherCameraPositions.Add(new Vector3(-1, -1, 0));
+                }
+                else
+                {
+                    List<Vector3> cameraHolderPoses =
+                        alphaPosesByFrameByPerson[camAndHand.Item1][i];
+                    if (camAndHand.Item2)
+                    {
+                        // right hand
+                        otherCameraPositions.Add(new Vector3(
+                            cameraHolderPoses[(int)Halpe.RWrist].X,
+                            cameraHolderPoses[(int)Halpe.RWrist].Y,
+                            cameraHolderPoses[(int)Halpe.RWrist].Z));
+                    }
+                    else
+                    {
+                        otherCameraPositions.Add(new Vector3(
+                            cameraHolderPoses[(int)Halpe.LWrist].X,
+                            cameraHolderPoses[(int)Halpe.LWrist].Y,
+                            cameraHolderPoses[(int)Halpe.LWrist].Z));
+                    }
+                }
+            }
+            otherCameraPositionsByFrame.Add(otherCameraPositions);
+        }
+
+        return otherCameraPositionsByFrame;
     }
 
     float PoseError(int personIdx)
@@ -503,6 +545,8 @@ public partial class MainWindow : Window
 
     #region ROOM LAYOUT
 
+    readonly List<Vector3> cameraPositions = [];
+    
     void LayoutCanvas_MouseDown(object sender, PointerPressedEventArgs args)
     {
         // Draw the triangle representing the camera position
@@ -582,6 +626,8 @@ public partial class MainWindow : Window
     #region PERSPECTIVE
 
     CameraPoseSolver cameraPoseSolver;
+    int selectedCanvas = -1;
+    
     void LoadJsonForPerspectiveButton_Click(object sender, RoutedEventArgs e)
     {
         string directoryPath = DirectoryPathTextBox.Text;
@@ -671,8 +717,6 @@ public partial class MainWindow : Window
 
         Dispatcher.UIThread.RunJobs();
     }
-
-    int selectedCanvas = -1;
 
     void Canvas_PointerPressed(object sender, PointerPressedEventArgs e)
     {
