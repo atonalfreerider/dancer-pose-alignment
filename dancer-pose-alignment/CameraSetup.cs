@@ -233,6 +233,9 @@ public class CameraSetup
         return adjustedKeypoints.Select(t => t + Forward(frame) * FocalLength).ToList();
     }
 
+    /// <summary>
+    /// Should only be called on frame 0
+    /// </summary>
     public void Home()
     {
         Vector2 leadLeftAnkle = new Vector2(
@@ -288,163 +291,6 @@ public class CameraSetup
         }
     }
 
-    public bool TestSixTranslations(List<Vector3> merged3DPoseLeadPerFrame, List<Vector3> merged3DPoseFollowPerFrame,
-        int frame)
-    {
-        float currentError = Error(
-            merged3DPoseLeadPerFrame,
-            merged3DPoseFollowPerFrame,
-            frame);
-
-        Vector3 currentCameraPosition = PositionsPerFrame[frame];
-        Quaternion currentCameraRotation = RotationsPerFrame[frame];
-
-        // translate left
-        PositionsPerFrame[frame] += Right(frame) * .05f;
-
-        if (frame == 0)
-        {
-            Home();
-        }
-
-        Vector3 leftCameraPosition = PositionsPerFrame[frame];
-        Quaternion leftCameraRotation = RotationsPerFrame[frame];
-        float leftError = Error(
-            merged3DPoseLeadPerFrame,
-            merged3DPoseFollowPerFrame,
-            frame);
-
-        PositionsPerFrame[frame] = currentCameraPosition;
-        RotationsPerFrame[frame] = currentCameraRotation;
-
-        // translate right
-        PositionsPerFrame[frame] -= Right(frame) * .05f;
-        if (frame == 0)
-        {
-            Home();
-        }
-
-        Vector3 rightCameraPosition = PositionsPerFrame[frame];
-        Quaternion rightCameraRotation = RotationsPerFrame[frame];
-
-        float rightError = Error(
-            merged3DPoseLeadPerFrame,
-            merged3DPoseFollowPerFrame,
-            frame);
-
-        PositionsPerFrame[frame] = currentCameraPosition;
-        RotationsPerFrame[frame] = currentCameraRotation;
-
-        // translate up
-        PositionsPerFrame[frame] += Up(frame) * .05f;
-
-        if (frame == 0)
-        {
-            Home();
-        }
-
-        Vector3 upCameraPosition = PositionsPerFrame[frame];
-        Quaternion upCameraRotation = RotationsPerFrame[frame];
-
-        float upError = Error(
-            merged3DPoseLeadPerFrame,
-            merged3DPoseFollowPerFrame,
-            frame);
-
-        // translate down
-        PositionsPerFrame[frame] -= Up(frame) * .05f;
-        if (frame == 0)
-        {
-            Home();
-        }
-        
-        Vector3 downCameraPosition = PositionsPerFrame[frame];
-        Quaternion downCameraRotation = RotationsPerFrame[frame];
-        
-        float downError = Error(
-            merged3DPoseLeadPerFrame,
-            merged3DPoseFollowPerFrame,
-            frame);
-        
-        PositionsPerFrame[frame] = currentCameraPosition;
-        RotationsPerFrame[frame] = currentCameraRotation;
-        
-        // translate forward
-        PositionsPerFrame[frame] += Forward(frame) * .05f;
-        if (frame == 0)
-        {
-            Home();
-        }
-        
-        Vector3 forwardCameraPosition = PositionsPerFrame[frame];
-        Quaternion forwardCameraRotation = RotationsPerFrame[frame];
-        
-        float forwardError = Error(
-            merged3DPoseLeadPerFrame,
-            merged3DPoseFollowPerFrame,
-            frame);
-        
-        PositionsPerFrame[frame] = currentCameraPosition;
-        RotationsPerFrame[frame] = currentCameraRotation;
-        
-        // translate backward
-        PositionsPerFrame[frame] -= Forward(frame) * .05f;
-        if (frame == 0)
-        {
-            Home();
-        }
-        
-        Vector3 backwardCameraPosition = PositionsPerFrame[frame];
-        Quaternion backwardCameraRotation = RotationsPerFrame[frame];
-        
-        float backwardError = Error(
-            merged3DPoseLeadPerFrame,
-            merged3DPoseFollowPerFrame,
-            frame);
-        
-        if(leftError < rightError && leftError < upError && leftError < downError && leftError < forwardError && leftError < backwardError)
-        {
-            PositionsPerFrame[frame] = leftCameraPosition;
-            RotationsPerFrame[frame] = leftCameraRotation;
-            return true;
-        }
-        if(rightError < leftError && rightError < upError && rightError < downError && rightError < forwardError && rightError < backwardError)
-        {
-            PositionsPerFrame[frame] = rightCameraPosition;
-            RotationsPerFrame[frame] = rightCameraRotation;
-            return true;
-        }
-        if(upError < leftError && upError < rightError && upError < downError && upError < forwardError && upError < backwardError)
-        {
-            PositionsPerFrame[frame] = upCameraPosition;
-            RotationsPerFrame[frame] = upCameraRotation;
-            return true;
-        }
-        if(downError < leftError && downError < rightError && downError < upError && downError < forwardError && downError < backwardError)
-        {
-            PositionsPerFrame[frame] = downCameraPosition;
-            RotationsPerFrame[frame] = downCameraRotation;
-            return true;
-        }
-        if(forwardError < leftError && forwardError < rightError && forwardError < upError && forwardError < downError && forwardError < backwardError)
-        {
-            PositionsPerFrame[frame] = forwardCameraPosition;
-            RotationsPerFrame[frame] = forwardCameraRotation;
-            return true;
-        }
-        if(backwardError < leftError && backwardError < rightError && backwardError < upError && backwardError < downError && backwardError < forwardError)
-        {
-            PositionsPerFrame[frame] = backwardCameraPosition;
-            RotationsPerFrame[frame] = backwardCameraRotation;
-            return true;
-        }
-
-        PositionsPerFrame[frame] = currentCameraPosition;
-        RotationsPerFrame[frame] = currentCameraRotation;
-        return false;
-
-    }
-
     public bool HasPoseAtFrame(int frameNumber, bool isLead)
     {
         return isLead
@@ -480,6 +326,168 @@ public class CameraSetup
         {
             RotationsPerFrame.Add(RotationsPerFrame[frameNumber - 1]);
         }
+    }
+
+    public bool IterateOrientation(CameraPoseSolver poseSolver, int frameNumber)
+    {
+        bool yawed = IterateYaw(0.01f, poseSolver, frameNumber);
+        bool pitched = IteratePitch(0.01f, poseSolver, frameNumber);
+        bool rolled = IterateRoll(0.01f, poseSolver, frameNumber);
+
+        return yawed || pitched || rolled;
+    }
+
+    bool IterateYaw(float yawStepSize, CameraPoseSolver poseSolver, int frameNumber)
+    {
+        float currentError = poseSolver.Calculate3DPosesAndTotalError();
+
+        // yaw camera left and right
+        Quaternion originalRotation = RotationsPerFrame[frameNumber];
+
+        Quaternion leftYawRotation = originalRotation *
+                                     Quaternion.CreateFromAxisAngle(Vector3.UnitY, yawStepSize);
+        Quaternion rightYawRotation = originalRotation *
+                                      Quaternion.CreateFromAxisAngle(Vector3.UnitY, -yawStepSize);
+
+        RotationsPerFrame[frameNumber] = leftYawRotation;
+        float leftYawError = poseSolver.Calculate3DPosesAndTotalError();
+
+        RotationsPerFrame[frameNumber] = rightYawRotation;
+        float rightYawError = poseSolver.Calculate3DPosesAndTotalError();
+
+        if (leftYawError < rightYawError && leftYawError < currentError)
+        {
+            RotationsPerFrame[frameNumber] = leftYawRotation;
+            return true;
+        }
+
+        if (rightYawError < leftYawError && rightYawError < currentError)
+        {
+            RotationsPerFrame[frameNumber] = rightYawRotation;
+            return true;
+        }
+
+        // reset
+        RotationsPerFrame[frameNumber] = originalRotation;
+        return false;
+    }
+
+    bool IteratePitch(float pitchStepSize, CameraPoseSolver poseSolver, int frameNumber)
+    {
+        float currentError = poseSolver.Calculate3DPosesAndTotalError();
+
+        // pitch camera up and down
+        Quaternion originalRotation = RotationsPerFrame[frameNumber];
+        Quaternion upPitchRotation = originalRotation *
+                                     Quaternion.CreateFromAxisAngle(Vector3.UnitX, -pitchStepSize);
+
+        // check if the angle between the up pitch forward vector and the ground forward vector is greater than 15 degrees
+        Vector3 upPitchForward = Vector3.Normalize(Vector3.Transform(Vector3.UnitZ, upPitchRotation));
+
+        float angleBetween = MathF.Acos(Vector3.Dot(upPitchForward, Forward(frameNumber)));
+        if (angleBetween > MathF.PI / 12)
+        {
+            Console.WriteLine("pitch angle too high" + angleBetween);
+            RotationsPerFrame[frameNumber] = originalRotation;
+        }
+
+        Quaternion downPitchRotation = originalRotation *
+                                       Quaternion.CreateFromAxisAngle(Vector3.UnitZ, pitchStepSize);
+
+        // check if the angle between the down pitch forward vector and the ground forward vector is greater than 15 degrees
+        Vector3 downPitchForward = Vector3.Normalize(Vector3.Transform(Vector3.UnitZ, downPitchRotation));
+        angleBetween = MathF.Acos(Vector3.Dot(downPitchForward, Forward(frameNumber)));
+        if (angleBetween > MathF.PI / 12)
+        {
+            Console.WriteLine("pitch angle too low" + angleBetween);
+            RotationsPerFrame[frameNumber] = originalRotation;
+        }
+
+        RotationsPerFrame[frameNumber] = upPitchRotation;
+        float upPitchError = poseSolver.Calculate3DPosesAndTotalError();
+        if (poseSolver.AnyPointsHigherThan2pt5Meters() || poseSolver.LowestLeadAnkleIsMoreThan10CMAboveZero())
+        {
+            Console.WriteLine("up pitch too high");
+            //upPitchError = float.MaxValue;
+        }
+
+        RotationsPerFrame[frameNumber] = downPitchRotation;
+        float downPitchError = poseSolver.Calculate3DPosesAndTotalError();
+        if (poseSolver.AnyPointsBelowGround())
+        {
+            Console.WriteLine("down pitch too low - figure below ground");
+            //downPitchError = float.MaxValue;
+        }
+
+        if (upPitchError < downPitchError && upPitchError < currentError)
+        {
+            RotationsPerFrame[frameNumber] = upPitchRotation;
+            return true;
+        }
+
+        if (downPitchError < upPitchError && downPitchError < currentError)
+        {
+            RotationsPerFrame[frameNumber] = downPitchRotation;
+            return true;
+        }
+
+        // reset
+        RotationsPerFrame[frameNumber] = originalRotation;
+        return false;
+    }
+
+    bool IterateRoll(float rollStepSize, CameraPoseSolver poseSolver, int frameNumber)
+    {
+        float currentError = poseSolver.Calculate3DPosesAndTotalError();
+        // roll camera left and right
+        Quaternion originalRotation = RotationsPerFrame[frameNumber];
+
+        Quaternion leftRollRotation = originalRotation *
+                                      Quaternion.CreateFromAxisAngle(Vector3.UnitZ, rollStepSize);
+
+        // check if the up vector has rolled too far to the left relative to the ground up vector
+        Vector3 leftRollUp = Vector3.Normalize(Vector3.Transform(Vector3.UnitY, leftRollRotation));
+
+        float angleBetween = MathF.Acos(Vector3.Dot(leftRollUp, Up(frameNumber)));
+        if (angleBetween > MathF.PI / 12)
+        {
+            Console.WriteLine("roll angle too far to the left" + angleBetween);
+            RotationsPerFrame[frameNumber] = originalRotation;
+        }
+
+        Quaternion rightRollRotation = originalRotation *
+                                       Quaternion.CreateFromAxisAngle(Vector3.UnitZ, -rollStepSize);
+
+        // check if the up vector has rolled too far to the right relative to the ground up vector
+        Vector3 rightRollUp = Vector3.Transform(Vector3.UnitY, rightRollRotation);
+        angleBetween = MathF.Acos(Vector3.Dot(rightRollUp, Up(frameNumber)));
+        if (angleBetween > MathF.PI / 12)
+        {
+            Console.WriteLine("roll angle too far to the right" + angleBetween);
+            RotationsPerFrame[frameNumber] = originalRotation;
+        }
+
+        RotationsPerFrame[frameNumber] = leftRollRotation;
+        float leftRollError = poseSolver.Calculate3DPosesAndTotalError();
+
+        RotationsPerFrame[frameNumber] = rightRollRotation;
+        float rightRollError = poseSolver.Calculate3DPosesAndTotalError();
+
+        if (leftRollError < rightRollError && leftRollError < currentError)
+        {
+            RotationsPerFrame[frameNumber] = leftRollRotation;
+            return true;
+        }
+
+        if (rightRollError < leftRollError && rightRollError < currentError)
+        {
+            RotationsPerFrame[frameNumber] = rightRollRotation;
+            return true;
+        }
+
+        // reset
+        RotationsPerFrame[frameNumber] = originalRotation;
+        return false;
     }
 
     [Serializable]

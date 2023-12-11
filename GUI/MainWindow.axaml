@@ -101,7 +101,6 @@
                                  Watermark="Progress..." />
                         <TextBox Name="SolverErrorText" Height="30" Width="100" Margin="5" Watermark="Current Error..." />
                         <Button Content="Next" Margin="5" Click="SolverNextFrameButton_Click" />
-                        <Button Content="Solve" Margin="5" Click="SolveButton_Click" />
                         <Button Content="Save" Margin="5" Click="Save3D_Click" />
                     </StackPanel>
                 </StackPanel>

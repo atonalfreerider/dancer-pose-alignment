@@ -32,6 +32,7 @@ public partial class MainWindow
         cameraPoseSolver.LoadPoses(directoryPath);
 
         cameraPoseSolver.HomeAllCameras();
+        cameraPoseSolver.IterationLoop();
 
         numCameras = cameraSizes.Count;
         CanvasContainer.Items.Clear();
@@ -219,6 +220,7 @@ public partial class MainWindow
     void SolverNextFrameButton_Click(object sender, RoutedEventArgs e)
     {
         if (!cameraPoseSolver.Advance()) return;
+        cameraPoseSolver.IterationLoop();
         SetPreviewsToFrame();
     }
 
@@ -230,7 +232,7 @@ public partial class MainWindow
 
     void SolveButton_Click(object sender, RoutedEventArgs e)
     {
-        cameraPoseSolver.IterationLoop();
+        
         SetPreviewsToFrame();
     }
 
