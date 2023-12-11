@@ -36,9 +36,6 @@ static class Program
 
     static void Parse(Args args)
     {
-        CameraPoseSolver cameraPoseSolver = new();
-        cameraPoseSolver.LoadPoses(args.JsonInputDir);
-        cameraPoseSolver.IterationLoop();
-        cameraPoseSolver.SaveData();
+
     }
 }

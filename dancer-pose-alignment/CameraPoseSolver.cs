@@ -356,19 +356,16 @@ public class CameraPoseSolver
         Console.WriteLine(totalError);
     }
 
-    public void SaveData()
+    public void SaveData(string folder)
     {
-        string jsonCameras = JsonConvert.SerializeObject(cameras, Formatting.Indented);
-        File.WriteAllText(Path.Combine(@"C:\Users\john\Desktop", "cameras.json"), jsonCameras);
-        Console.WriteLine("wrote cameras.json");
-
         string jsonMerged3DPose = JsonConvert.SerializeObject(merged3DPoseLeadPerFrame, Formatting.Indented);
-        File.WriteAllText(Path.Combine(@"C:\Users\john\Desktop", "merged3DPoseLead.json"), jsonMerged3DPose);
-        Console.WriteLine("wrote merged3DPoseLead.json");
+        File.WriteAllText(Path.Combine(folder, "merged3DPoseLead.json"), jsonMerged3DPose);
 
         string jsonMerged3DPoseFollow = JsonConvert.SerializeObject(merged3DPoseFollowPerFrame, Formatting.Indented);
-        File.WriteAllText(Path.Combine(@"C:\Users\john\Desktop", "merged3DPoseFollow.json"), jsonMerged3DPoseFollow);
-        Console.WriteLine("wrote merged3DPoseFollow.json");
+        File.WriteAllText(Path.Combine(folder, "merged3DPoseFollow.json"), jsonMerged3DPoseFollow);
+
+        Console.WriteLine($"wrote 3d poses to {folder}");
+
     }
 
     #endregion

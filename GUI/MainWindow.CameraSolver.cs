@@ -230,16 +230,18 @@ public partial class MainWindow
         SetPreviewsToFrame();
     }
 
-    void SolveButton_Click(object sender, RoutedEventArgs e)
+    void RunUntilEnd_Click(object sender, RoutedEventArgs e)
     {
+        while (cameraPoseSolver.Advance())
+        {
+            cameraPoseSolver.IterationLoop();
+        }
         
         SetPreviewsToFrame();
     }
 
     void Save3D_Click(object sender, RoutedEventArgs e)
     {
-        cameraPoseSolver.SaveData();
+        cameraPoseSolver.SaveData(DirectoryPathTextBox.Text);
     }
-
-    
 }
