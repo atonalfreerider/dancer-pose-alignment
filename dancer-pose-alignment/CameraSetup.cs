@@ -42,6 +42,8 @@ public class CameraSetup
 
     public void Project(int frameNumber)
     {
+        if (recenteredLeadPoseAndConfidencePerFrame.Count <= frameNumber) return;
+        
         List<Vector3> flattenedLead = recenteredLeadPoseAndConfidencePerFrame[frameNumber]
             .Select(x => x with { Z = 0 }).ToList();
         List<Vector3> flattenedFollow = recenteredFollowPoseAndConfidencePerFrame[frameNumber]
@@ -104,6 +106,7 @@ public class CameraSetup
     public float Error(List<Vector3> merged3DPoseLead, List<Vector3> merged3DPoseFollow, int frameNumber)
     {
         float error = 0;
+        if(leadProjectionsPerFrame.Count <= frameNumber) return 0;
 
         for (int i = 0; i < merged3DPoseLead.Count; i++)
         {
@@ -293,6 +296,7 @@ public class CameraSetup
 
     public bool HasPoseAtFrame(int frameNumber, bool isLead)
     {
+        if (recenteredLeadPoseAndConfidencePerFrame.Count <= frameNumber) return false;
         return isLead
             ? recenteredLeadPoseAndConfidencePerFrame[frameNumber].Count > 0
             : recenteredFollowPoseAndConfidencePerFrame[frameNumber].Count > 0;

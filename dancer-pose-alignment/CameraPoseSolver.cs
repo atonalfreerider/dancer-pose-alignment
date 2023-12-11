@@ -1,4 +1,4 @@
-﻿using System.ComponentModel;
+using System.ComponentModel;
 using System.Numerics;
 using System.Reflection;
 using ComputeSharp;
@@ -14,7 +14,7 @@ public class CameraPoseSolver
     readonly int poseCount = 26; // Halpe
     readonly List<CameraSetup> cameras = [];
     int frameNumber = 0;
-    int totalFrameCount = 0;
+    int totalFrameCount = int.MaxValue;
 
     public void LoadPoses(string directoryPath)
     {
@@ -41,7 +41,7 @@ public class CameraPoseSolver
                 string jsonContent = File.ReadAllText(file);
                 List<List<Vector3>> dancerPosesByFrames =
                     JsonConvert.DeserializeObject<List<List<Vector3>>>(jsonContent);
-                totalFrameCount = dancerPosesByFrames.Count;
+                totalFrameCount = Math.Min(dancerPosesByFrames.Count, totalFrameCount);
 
                 int associatedCamera = int.Parse(fileName[^1].ToString());
                 if (fileName.StartsWith("lead"))
@@ -313,6 +313,7 @@ public class CameraPoseSolver
 
     public void IterationLoop()
     {
+        if(merged3DPoseFollowPerFrame.Count <= frameNumber) return;
         float totalError = Calculate3DPosesAndTotalError();
 
         int iterationCount = 0;
