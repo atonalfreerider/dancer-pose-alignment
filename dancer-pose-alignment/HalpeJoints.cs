@@ -3,7 +3,7 @@
 /// <summary>
 /// https://github.com/Fang-Haoshu/Halpe-FullBody
 /// </summary>
-public enum Halpe
+public enum HalpeJoints
 {
     Nose = 0,
     LEye = 1,
@@ -55,9 +55,9 @@ public enum Halpe
 
 public static class HalpeExtension
 {
-    public static bool IsRightSide(Halpe jointIdx)
+    public static bool IsRightSide(HalpeJoints jointIdx)
     {
-        return jointIdx is Halpe.RAnkle or Halpe.RBigToe or Halpe.REar or Halpe.RElbow or Halpe.REye or Halpe.RHeel
-            or Halpe.RHip or Halpe.RKnee or Halpe.RShoulder or Halpe.RSmallToe or Halpe.RWrist;
+        return jointIdx is HalpeJoints.RAnkle or HalpeJoints.RBigToe or HalpeJoints.REar or HalpeJoints.RElbow or HalpeJoints.REye or HalpeJoints.RHeel
+            or HalpeJoints.RHip or HalpeJoints.RKnee or HalpeJoints.RShoulder or HalpeJoints.RSmallToe or HalpeJoints.RWrist;
     }
 }

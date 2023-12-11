@@ -14,13 +14,15 @@ public partial class MainWindow
 {
     readonly List<Vector3> cameraPositions = [];
 
+    public MainWindow()
+    {
+        InitializeComponent();
+    }
+
     void LayoutCanvas_MouseDown(object sender, PointerPressedEventArgs args)
     {
         // Draw the triangle representing the camera position
         PointerPoint point = args.GetCurrentPoint(sender as Control);
-
-        // Calculate the triangle size based on the focal length
-
 
         // Create and add the triangle to the canvas
         Polygon triangle = CreateTriangle(point, .2f, LayoutCanvas.Width, LayoutCanvas.Height);
@@ -72,15 +74,9 @@ public partial class MainWindow
 
     void SaveLayoutButton_Click(object sender, RoutedEventArgs e)
     {
-        string saveDirectory = Environment.CurrentDirectory;
-        string cameraName = "0";
-        if (!string.IsNullOrEmpty(VideoInputPath.Text))
-        {
-            saveDirectory = Directory.GetParent(GetVideoPath()).FullName;
-            cameraName = Path.GetFileNameWithoutExtension(GetVideoPath());
-        }
+        string saveDirectory = VideoInputPath.Text;
 
-        string cameraSavePath = Path.Combine(saveDirectory, $"camera-positions-{cameraName}.json");
+        string cameraSavePath = Path.Combine(saveDirectory, $"camera-positions.json");
 
         File.WriteAllText(cameraSavePath,
             JsonConvert.SerializeObject(cameraPositions, Formatting.Indented));

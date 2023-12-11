@@ -20,9 +20,6 @@
     <ItemGroup>
     <Compile Update="App.axaml.cs">
       <DependentUpon>App.axaml</DependentUpon>
-    </Compile>    
-    <Compile Update="MainWindow.PoseRefiner.axaml.cs">
-      <DependentUpon>MainWindow.axaml</DependentUpon>
     </Compile>
     <Compile Update="MainWindow.CameraSolver.axaml.cs">
       <DependentUpon>MainWindow.axaml</DependentUpon>

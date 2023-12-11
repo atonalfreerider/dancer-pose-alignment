@@ -13,23 +13,14 @@ public class Yolo
         yolo = new YoloV8(modelSelector);
     }
 
-    public List<List<List<Vector3>>> CalculatePosesFromImages(string inputPath)
+    public List<List<Vector3>> CalculatePosesFromImage(Stream imageStream)
     {
-        List<List<List<Vector3>>> posesByCam = [];
+        ImageSelector imageSelector = new ImageSelector(imageStream);
+        IPoseResult result = yolo.Pose(imageSelector);
 
-        foreach (string filePath in Directory.EnumerateFiles(inputPath, "*.jpg"))
-        {
-            ImageSelector imageSelector = new ImageSelector(filePath);
-            IPoseResult result = yolo.Pose(imageSelector);
-
-            List<List<Vector3>> poses = result.Boxes
-                .Select(poseBoundingBox => poseBoundingBox.Keypoints
-                .Select(kp => new Vector3(kp.Point.X, kp.Point.Y, kp.Confidence))
-                .ToList()).ToList();
-
-            posesByCam.Add(poses);
-        }
-
-        return posesByCam;
+        return result.Boxes
+            .Select(poseBoundingBox => poseBoundingBox.Keypoints
+            .Select(kp => new Vector3(kp.Point.X, kp.Point.Y, kp.Confidence))
+            .ToList()).ToList();
     }
 }

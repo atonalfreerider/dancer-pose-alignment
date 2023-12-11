@@ -8,14 +8,11 @@ namespace GUI;
 public static class PreviewDrawer
 {
     public static DrawingGroup DrawGeometry(
-        Dictionary<int, List<Vector3>> posesByPersonAtFrame,
+        List<List<Vector3>> poses,
         Size imgSize,
         int currentLeadIndex,
         int currentFollowIndex,
-        int mirrorCurrentLeadIndex,
-        int mirrorCurrentFollowIndex,
-        List<Tuple<int, bool>> currentSelectedCamerasAndPoseAnchor,
-        List<Tuple<int, bool>> mirrorCurrentSelectedCamerasAndPoseAnchor)
+        PoseType poseType)
     {
         DrawingGroup drawingGroup = new DrawingGroup();
 
@@ -32,42 +29,17 @@ public static class PreviewDrawer
             DrawPoint(new Vector2((float)imgSize.Width, (float)imgSize.Height), dotPen);
         drawingGroup.Children.Add(lineGeometryDrawingBottomCorner);
 
-        foreach ((int personIdx, List<Vector3> pose) in posesByPersonAtFrame)
+        int poseCount = 0;
+        foreach (List<Vector3> pose in poses)
         {
             int role = -1;
-            if (currentLeadIndex > -1 && personIdx == currentLeadIndex)
+            if (currentLeadIndex > -1 && poseCount == currentLeadIndex)
             {
                 role = 0;
             }
-            else if (currentFollowIndex > -1 && personIdx == currentFollowIndex)
+            else if (currentFollowIndex > -1 && poseCount == currentFollowIndex)
             {
                 role = 1;
-            }
-            else if (mirrorCurrentLeadIndex > -1 && personIdx == mirrorCurrentLeadIndex)
-            {
-                role = 2;
-            }
-            else if (mirrorCurrentFollowIndex > -1 && personIdx == mirrorCurrentFollowIndex)
-            {
-                role = 3;
-            }
-            else
-            {
-                foreach (Tuple<int, bool> camAndHand in currentSelectedCamerasAndPoseAnchor)
-                {
-                    if (personIdx == camAndHand.Item1)
-                    {
-                        role = 4;
-                    }
-                }
-
-                foreach (Tuple<int, bool> camAndHand in mirrorCurrentSelectedCamerasAndPoseAnchor)
-                {
-                    if (personIdx == camAndHand.Item1)
-                    {
-                        role = 4;
-                    }
-                }
             }
 
             foreach (Vector3 joint in pose)
@@ -81,48 +53,36 @@ public static class PreviewDrawer
                 drawingGroup.Children.Add(poseGeometry);
             }
 
-            if (pose.Count == 0)
+            drawingGroup = poseType switch
             {
-                continue;
-            }
+                PoseType.Coco => DrawCoco(drawingGroup, pose, role),
+                PoseType.Halpe => DrawHalpe(drawingGroup, pose, role)
+            };
 
-            drawingGroup = DrawHalpe(drawingGroup, pose, role);
+            poseCount++;
         }
 
         return drawingGroup;
     }
 
     public static DrawingGroup DrawGeometry(
-        Dictionary<int, List<Vector3>> posesByPersonAtFrame,
+        List<List<Vector3>> poses,
         Size imgSize,
         int currentLeadIndex,
         int currentFollowIndex,
-        int mirrorCurrentLeadIndex,
-        int mirrorCurrentFollowIndex,
-        List<Vector3> currentSelectedCamerasAndPoseAnchor,
-        List<Vector3> mirrorCurrentSelectedCamerasAndPoseAnchor,
+        PoseType poseType,
         List<Vector2> originCross,
-        List<Vector2> otherCameras,
         List<Vector2> leadProjectionsAtFrame,
         List<Vector2> followProjectionsAtFrame)
     {
         DrawingGroup drawingGroup = DrawGeometry(
-            posesByPersonAtFrame,
+            poses,
             imgSize,
             currentLeadIndex,
             currentFollowIndex,
-            mirrorCurrentLeadIndex,
-            mirrorCurrentFollowIndex,
-            [],
-            []);
+            poseType);
 
-        SolidColorBrush originBrush = new SolidColorBrush(Colors.Black);
-        Pen originPen = new Pen(originBrush)
-        {
-            Thickness = 10
-        };
-        GeometryDrawing originGeometry = DrawPoint(originCross[0], originPen);
-        drawingGroup.Children.Add(originGeometry);
+        if (originCross.Count == 0) return drawingGroup;
 
         // draw red line to positive xuint
         SolidColorBrush xBrush = new SolidColorBrush(Colors.Red);
@@ -183,13 +143,8 @@ public static class PreviewDrawer
         {
             Thickness = 10
         };
-        foreach (Vector2 otherCamera in otherCameras)
-        {
-            GeometryDrawing poseGeometry = DrawPoint(otherCamera, camPen);
-            drawingGroup.Children.Add(poseGeometry);
-        }
 
-        SolidColorBrush brush = new SolidColorBrush(Colors.Black);
+        SolidColorBrush brush = new SolidColorBrush(Colors.DarkRed);
         Pen pen = new Pen(brush)
         {
             Thickness = 4
@@ -200,10 +155,15 @@ public static class PreviewDrawer
             drawingGroup.Children.Add(poseGeometry);
         }
 
-        drawingGroup = DrawHalpe(drawingGroup, leadProjectionsAtFrame.Select(x => new Vector3(x.X, x.Y, 1f)).ToList(),
-            -1);
+        drawingGroup = poseType switch
+        {
+            PoseType.Coco => DrawCoco(drawingGroup,
+                leadProjectionsAtFrame.Select(x => new Vector3(x.X, x.Y, 1f)).ToList(), -1),
+            PoseType.Halpe => DrawHalpe(drawingGroup,
+                leadProjectionsAtFrame.Select(x => new Vector3(x.X, x.Y, 1f)).ToList(), -1),
+        };
 
-        SolidColorBrush followBrush = new SolidColorBrush(Colors.Gray);
+        SolidColorBrush followBrush = new SolidColorBrush(Colors.DarkMagenta);
         Pen followPen = new Pen(followBrush)
         {
             Thickness = 4
@@ -214,79 +174,95 @@ public static class PreviewDrawer
             drawingGroup.Children.Add(poseGeometry);
         }
 
-        drawingGroup = DrawHalpe(drawingGroup, followProjectionsAtFrame.Select(x => new Vector3(x.X, x.Y, 1f)).ToList(),
-            -1);
-
-        SolidColorBrush lightCamBrush = new SolidColorBrush(Colors.LightGreen);
-        Pen lightCamPen = new Pen(lightCamBrush)
+        drawingGroup = poseType switch
         {
-            Thickness = 10
+            PoseType.Coco => DrawCoco(drawingGroup,
+                followProjectionsAtFrame.Select(x => new Vector3(x.X, x.Y, 1f)).ToList(), -1),
+            PoseType.Halpe => DrawHalpe(drawingGroup,
+                followProjectionsAtFrame.Select(x => new Vector3(x.X, x.Y, 1f)).ToList(), -1),
         };
 
-        foreach (Vector3 otherCam in currentSelectedCamerasAndPoseAnchor)
-        {
-            GeometryDrawing poseGeometry = DrawPoint(new Vector2(otherCam.X, otherCam.Y), lightCamPen);
-            drawingGroup.Children.Add(poseGeometry);
-        }
 
-        SolidColorBrush lightMirrorCamBrush = new SolidColorBrush(Colors.LightGray);
-        Pen lightMirrorCamPen = new Pen(lightMirrorCamBrush)
-        {
-            Thickness = 10
-        };
+        return drawingGroup;
+    }
 
-        foreach (Vector3 otherCam in mirrorCurrentSelectedCamerasAndPoseAnchor)
-        {
-            GeometryDrawing poseGeometry = DrawPoint(new Vector2(otherCam.X, otherCam.Y), lightMirrorCamPen);
-            drawingGroup.Children.Add(poseGeometry);
-        }
+    static DrawingGroup DrawCoco(DrawingGroup drawingGroup, List<Vector3> pose, int role)
+    {
+        GeometryDrawing leftCalf = DrawLine(pose[(int)CocoJoints.L_Ankle], pose[(int)CocoJoints.L_Knee], role);
+        drawingGroup.Children.Add(leftCalf);
 
+        GeometryDrawing leftThigh = DrawLine(pose[(int)CocoJoints.L_Knee], pose[(int)CocoJoints.L_Hip], role);
+        drawingGroup.Children.Add(leftThigh);
+
+        GeometryDrawing rightCalf = DrawLine(pose[(int)CocoJoints.R_Ankle], pose[(int)CocoJoints.R_Knee], role);
+        drawingGroup.Children.Add(rightCalf);
+
+        GeometryDrawing rightThigh = DrawLine(pose[(int)CocoJoints.R_Knee], pose[(int)CocoJoints.R_Hip], role);
+        drawingGroup.Children.Add(rightThigh);
+
+        GeometryDrawing leftUpperArm = DrawLine(pose[(int)CocoJoints.L_Shoulder], pose[(int)CocoJoints.L_Elbow], role);
+        drawingGroup.Children.Add(leftUpperArm);
+
+        GeometryDrawing leftForearm = DrawLine(pose[(int)CocoJoints.L_Elbow], pose[(int)CocoJoints.L_Wrist], role);
+        drawingGroup.Children.Add(leftForearm);
+
+        GeometryDrawing rightUpperArm = DrawLine(pose[(int)CocoJoints.R_Shoulder], pose[(int)CocoJoints.R_Elbow], role);
+        drawingGroup.Children.Add(rightUpperArm);
+
+        GeometryDrawing rightForearm = DrawLine(pose[(int)CocoJoints.R_Elbow], pose[(int)CocoJoints.R_Wrist], role);
+        drawingGroup.Children.Add(rightForearm);
+
+        GeometryDrawing hip = DrawLine(pose[(int)CocoJoints.L_Hip], pose[(int)CocoJoints.R_Hip], role);
+        drawingGroup.Children.Add(hip);
+
+        GeometryDrawing shoulders = DrawLine(pose[(int)CocoJoints.L_Shoulder], pose[(int)CocoJoints.R_Shoulder], role);
+        drawingGroup.Children.Add(shoulders);
 
         return drawingGroup;
     }
 
     static DrawingGroup DrawHalpe(DrawingGroup drawingGroup, List<Vector3> pose, int role)
     {
-        GeometryDrawing leftCalf = DrawLine(pose[(int)Halpe.LAnkle], pose[(int)Halpe.LKnee], role);
+        GeometryDrawing leftCalf = DrawLine(pose[(int)HalpeJoints.LAnkle], pose[(int)HalpeJoints.LKnee], role);
         drawingGroup.Children.Add(leftCalf);
 
-        GeometryDrawing leftThigh = DrawLine(pose[(int)Halpe.LKnee], pose[(int)Halpe.LHip], role);
+        GeometryDrawing leftThigh = DrawLine(pose[(int)HalpeJoints.LKnee], pose[(int)HalpeJoints.LHip], role);
         drawingGroup.Children.Add(leftThigh);
 
-        GeometryDrawing rightCalf = DrawLine(pose[(int)Halpe.RAnkle], pose[(int)Halpe.RKnee], role);
+        GeometryDrawing rightCalf = DrawLine(pose[(int)HalpeJoints.RAnkle], pose[(int)HalpeJoints.RKnee], role);
         drawingGroup.Children.Add(rightCalf);
 
-        GeometryDrawing rightThigh = DrawLine(pose[(int)Halpe.RKnee], pose[(int)Halpe.RHip], role);
+        GeometryDrawing rightThigh = DrawLine(pose[(int)HalpeJoints.RKnee], pose[(int)HalpeJoints.RHip], role);
         drawingGroup.Children.Add(rightThigh);
 
-        GeometryDrawing leftUpperArm = DrawLine(pose[(int)Halpe.LShoulder], pose[(int)Halpe.LElbow], role);
+        GeometryDrawing leftUpperArm = DrawLine(pose[(int)HalpeJoints.LShoulder], pose[(int)HalpeJoints.LElbow], role);
         drawingGroup.Children.Add(leftUpperArm);
 
-        GeometryDrawing leftForearm = DrawLine(pose[(int)Halpe.LElbow], pose[(int)Halpe.LWrist], role);
+        GeometryDrawing leftForearm = DrawLine(pose[(int)HalpeJoints.LElbow], pose[(int)HalpeJoints.LWrist], role);
         drawingGroup.Children.Add(leftForearm);
 
-        GeometryDrawing rightUpperArm = DrawLine(pose[(int)Halpe.RShoulder], pose[(int)Halpe.RElbow], role);
+        GeometryDrawing rightUpperArm = DrawLine(pose[(int)HalpeJoints.RShoulder], pose[(int)HalpeJoints.RElbow], role);
         drawingGroup.Children.Add(rightUpperArm);
 
-        GeometryDrawing rightForearm = DrawLine(pose[(int)Halpe.RElbow], pose[(int)Halpe.RWrist], role);
+        GeometryDrawing rightForearm = DrawLine(pose[(int)HalpeJoints.RElbow], pose[(int)HalpeJoints.RWrist], role);
         drawingGroup.Children.Add(rightForearm);
 
-        GeometryDrawing spine = DrawLine(pose[(int)Halpe.Neck], pose[(int)Halpe.Hip], role);
+        GeometryDrawing spine = DrawLine(pose[(int)HalpeJoints.Neck], pose[(int)HalpeJoints.Hip], role);
         drawingGroup.Children.Add(spine);
 
-        GeometryDrawing neck = DrawLine(pose[(int)Halpe.Head], pose[(int)Halpe.Neck], role);
+        GeometryDrawing neck = DrawLine(pose[(int)HalpeJoints.Head], pose[(int)HalpeJoints.Neck], role);
         drawingGroup.Children.Add(neck);
 
-        GeometryDrawing lHip = DrawLine(pose[(int)Halpe.Hip], pose[(int)Halpe.LHip], role);
+        GeometryDrawing lHip = DrawLine(pose[(int)HalpeJoints.Hip], pose[(int)HalpeJoints.LHip], role);
         drawingGroup.Children.Add(lHip);
 
-        GeometryDrawing rHip = DrawLine(pose[(int)Halpe.Hip], pose[(int)Halpe.RHip], role);
+        GeometryDrawing rHip = DrawLine(pose[(int)HalpeJoints.Hip], pose[(int)HalpeJoints.RHip], role);
         drawingGroup.Children.Add(rHip);
 
-        GeometryDrawing lShoulder = DrawLine(pose[(int)Halpe.Neck], pose[(int)Halpe.LShoulder], role);
+        GeometryDrawing lShoulder = DrawLine(pose[(int)HalpeJoints.Neck], pose[(int)HalpeJoints.LShoulder], role);
         drawingGroup.Children.Add(lShoulder);
 
-        GeometryDrawing rShoulder = DrawLine(pose[(int)Halpe.Neck], pose[(int)Halpe.RShoulder], role);
+        GeometryDrawing rShoulder = DrawLine(pose[(int)HalpeJoints.Neck], pose[(int)HalpeJoints.RShoulder], role);
         drawingGroup.Children.Add(rShoulder);
 
         return drawingGroup;
@@ -372,7 +348,7 @@ public static class PreviewDrawer
 
         EllipseGeometry ellipseGeometry = new EllipseGeometry
         {
-            Center = new Avalonia.Point(point.X, point.Y),
+            Center = new Point(point.X, point.Y),
             RadiusX = .2,
             RadiusY = .2
         };
@@ -380,17 +356,5 @@ public static class PreviewDrawer
         poseGeometry.Geometry = ellipseGeometry;
 
         return poseGeometry;
-    }
-
-    public class IntVector2
-    {
-        public readonly int x;
-        public readonly int y;
-
-        public IntVector2(int passX, int passY)
-        {
-            x = passX;
-            y = passY;
-        }
     }
 }
