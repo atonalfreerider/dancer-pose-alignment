@@ -27,6 +27,11 @@ public partial class MainWindow : Window
     
     double timeFromStart = 0;
 
+    public MainWindow()
+    {
+        InitializeComponent();
+    }
+
     void LoadVideosButton_Click(object sender, RoutedEventArgs e)
     {
         string? videoDirectory = VideoInputPath.Text;

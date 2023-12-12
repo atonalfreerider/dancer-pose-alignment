@@ -10,23 +10,6 @@
         <!-- Controls / Settings Tab -->
         <TabItem>
             <TabItem.Header>
-                <TextBlock VerticalAlignment="Center">Camera Positions</TextBlock>
-            </TabItem.Header>
-            <StackPanel>
-                <StackPanel Orientation="Horizontal" HorizontalAlignment="Center">
-                    <TextBox Name="HeightInputText" Text="1.5" />
-                </StackPanel>
-                <Canvas Name="LayoutCanvas" Background="White" PointerPressed="LayoutCanvas_MouseDown" Width="1000"
-                        Height="800">
-                    <Rectangle Width="1000" Height="800" Stroke="Black" />
-                    <Ellipse Fill="Red" Width="50" Height="50" Canvas.Left="525" Canvas.Top="375" />
-                    <Ellipse Fill="Magenta" Width="50" Height="50" Canvas.Left="475" Canvas.Top="375" />
-                </Canvas>
-                <Button Name="SaveLayoutButton" Content="Save" Click="SaveLayoutButton_Click" />
-            </StackPanel>
-        </TabItem>
-        <TabItem>
-            <TabItem.Header>
                 <TextBlock VerticalAlignment="Center">Camera Solver</TextBlock>
             </TabItem.Header>
 
