@@ -1,11 +1,17 @@
 ﻿using System.Numerics;
+using Aurio;
+using Aurio.FFmpeg;
+using Aurio.FFT;
+using Aurio.Matching;
+using Aurio.Project;
+using Aurio.Resampler;
+using Aurio.TaskMonitor;
 using Avalonia;
 using Avalonia.Controls;
 using Avalonia.Input;
 using Avalonia.Interactivity;
 using Avalonia.Media;
 using Avalonia.Media.Imaging;
-using Avalonia.Threading;
 using dancer_pose_alignment;
 using Newtonsoft.Json;
 using OpenCvSharp;
@@ -17,18 +23,29 @@ namespace GUI;
 public partial class MainWindow : Window
 {
     CameraPoseSolver cameraPoseSolver;
-    int selectedCanvas = -1;
-    int numCameras = 0;
+    string selectedCanvas = "";
 
-    readonly List<VideoCapture> videoFiles = [];
-    readonly List<double> videoFrameRates = [];
-    readonly List<Image> frameImages = [];
-    readonly List<Image> graphicsImages = [];
-    
+    readonly Dictionary<string, VideoCapture> videoFiles = [];
+    readonly Dictionary<string, double> videoFrameRates = [];
+    Dictionary<string, double> videoOffsets = [];
+    readonly Dictionary<string, Image> frameImages = [];
+    readonly Dictionary<string, Image> graphicsImages = [];
+    readonly Dictionary<int, string> indexToVideoFilePath = [];
+
     double timeFromStart = 0;
+    double highestPositiveOffsetSeconds = 0;
 
     public MainWindow()
     {
+        // clip alignment
+
+        // Use PFFFT as FFT implementation
+        FFTFactory.Factory = new Aurio.PFFFT.FFTFactory();
+        // Use Soxr as resampler implementation
+        ResamplerFactory.Factory = new Aurio.Soxr.ResamplerFactory();
+        // Use FFmpeg for file reading/decoding
+        AudioStreamFactory.AddFactory(new FFmpegAudioStreamFactory());
+
         InitializeComponent();
     }
 
@@ -43,23 +60,84 @@ public partial class MainWindow : Window
 
         if (!Directory.Exists(videoDirectory)) return;
 
-        List<string> videoFilePaths = Directory.EnumerateFiles(videoDirectory, "*.*", SearchOption.TopDirectoryOnly)
-            .Where(file => file.EndsWith(".mp4") || file.EndsWith(".avi") || file.EndsWith(".mkv")).ToList();
-        numCameras = videoFilePaths.Count;
-
-        string jsonContent = File.ReadAllText(Path.Combine(videoDirectory, "camera-positions.json"));
-        List<Vector3> cameraPositions = JsonConvert.DeserializeObject<List<Vector3>>(jsonContent);
-
-        // rescale and offset the camera Z and X, so that the origin is in the middle of the 10m x 8m dance floor. Also 1000 pixels = 10M
-        for (int i = 0; i < cameraPositions.Count; i++)
+        if (File.Exists(Path.Combine(videoDirectory, "camera-time-offsets.json")))
         {
-            cameraPositions[i] = cameraPositions[i] with
-            {
-                X = cameraPositions[i].X / 100 - 5,
-                Z = -(cameraPositions[i].Z / 100 - 4) // orient forward
-            };
+            videoOffsets = JsonConvert.DeserializeObject<Dictionary<string, double>>(
+                File.ReadAllText(Path.Combine(videoDirectory, "camera-time-offsets.json")));
+
+            LoadVideos(videoOffsets);
+            return;
         }
 
+        List<AudioTrack> audioTracks = [];
+        foreach (string videoPath in Directory.EnumerateFiles(videoDirectory, "*.mp4"))
+        {
+            AudioTrack audioTrack = new AudioTrack(new FileInfo(videoPath));
+            audioTracks.Add(audioTrack);
+        }
+
+        HaitsmaKalkerFingerprintingModel model = new HaitsmaKalkerFingerprintingModel();
+        model.FingerprintingFinished += delegate
+        {
+            model.FindAllMatches(
+                new ProgressMonitor(),
+                TrackTimingCallback
+            );
+        };
+
+        model.Reset();
+        model.Fingerprint(audioTracks, new ProgressMonitor());
+    }
+
+    void TrackTimingCallback(List<Match> matches)
+    {
+        Dictionary<string, Dictionary<string, List<double>>> trackAndOffsetsToOtherTracks = [];
+
+        foreach (Match match in matches)
+        {
+            string trackName = match.Track1.FileInfo.FullName;
+            string otherTrackName = match.Track2.FileInfo.FullName;
+            double offset = match.Offset.TotalSeconds;
+            trackAndOffsetsToOtherTracks.TryGetValue(trackName, out Dictionary<string, List<double>>? otherTracks);
+            if (otherTracks == null)
+            {
+                otherTracks = new Dictionary<string, List<double>>();
+                trackAndOffsetsToOtherTracks.Add(trackName, otherTracks);
+            }
+
+            otherTracks.TryGetValue(otherTrackName, out List<double>? offsets);
+            if (offsets == null)
+            {
+                offsets = new List<double>();
+                otherTracks.Add(otherTrackName, offsets);
+            }
+
+            offsets.Add(offset);
+        }
+
+        // get the median offset, incrementing from the first entry to the last
+        KeyValuePair<string, Dictionary<string, List<double>>> maxKeyValuePair =
+            trackAndOffsetsToOtherTracks.MaxBy(kv =>
+                kv.Value.Count); // Take the first item after ordering, which will have the maximum count
+
+        videoOffsets.Add(maxKeyValuePair.Key, 0);
+
+        foreach ((string other, List<double> offsets) in maxKeyValuePair.Value)
+        {
+            offsets.Sort();
+            double medianOffset = offsets[offsets.Count / 2];
+            videoOffsets.Add(other, medianOffset);
+        }
+
+        File.WriteAllText(
+            Path.Combine(VideoInputPath.Text, "camera-time-offsets.json"),
+            JsonConvert.SerializeObject(videoOffsets, Formatting.Indented));
+
+        LoadVideos(videoOffsets);
+    }
+
+    void LoadVideos(Dictionary<string, double> videoFilePathsAndOffsets)
+    {
         cameraPoseSolver = new CameraPoseSolver(PoseType.Coco);
 
         videoFiles.Clear();
@@ -67,27 +145,32 @@ public partial class MainWindow : Window
         graphicsImages.Clear();
         CanvasContainer.Items.Clear();
 
+        highestPositiveOffsetSeconds = videoFilePathsAndOffsets.Max(x => x.Value);
+        
         // SET FRAME ZERO FOR EACH CAMERA
         int camCount = 0;
-        foreach (string videoFilePath in videoFilePaths)
+        foreach ((string videoFilePath, double myOffset) in videoFilePathsAndOffsets)
         {
             // initialize video capture
             VideoCapture videoCapture = new VideoCapture(videoFilePath);
-            videoFiles.Add(videoCapture);
-            
+            videoFiles.Add(videoFilePath, videoCapture);
+            indexToVideoFilePath.Add(camCount, videoFilePath);
+
             int frameCount = (int)videoCapture.Get(VideoCaptureProperties.FrameCount);
             double fps = videoCapture.Get(VideoCaptureProperties.Fps);
-            videoFrameRates.Add(fps);
+            videoFrameRates.Add(videoFilePath, fps);
             double duration = frameCount / fps;
-            
+
             int framesAt30Fps = (int)(duration * 30);
-            
+
             if (cameraPoseSolver.MaximumFrameCount > framesAt30Fps)
             {
                 cameraPoseSolver.MaximumFrameCount = framesAt30Fps;
             }
 
-            videoCapture.Set(VideoCaptureProperties.PosFrames, 0);
+            int startingFrame = (int)((highestPositiveOffsetSeconds - myOffset) * fps);
+
+            videoCapture.Set(VideoCaptureProperties.PosFrames, startingFrame);
 
             OutputArray outputArray = new Mat();
             videoCapture.Read(outputArray);
@@ -105,7 +188,7 @@ public partial class MainWindow : Window
                 Console.WriteLine(openCvException.Message);
                 continue;
             }
-            
+
             Size size = new Size(frameMat.Width, frameMat.Height);
 
             // add buttons to select camera role
@@ -117,7 +200,7 @@ public partial class MainWindow : Window
             };
 
             DynamicRadioButtonsPanel.Children.Add(radioButton);
-            
+
             // add frame image to canvas
             Image frameImage = new Image
             {
@@ -125,8 +208,8 @@ public partial class MainWindow : Window
                 Height = size.Height,
                 Source = frame
             };
-            frameImages.Add(frameImage);
-            
+            frameImages.Add(videoFilePath, frameImage);
+
             Canvas canvas = new Canvas
             {
                 Width = size.Width,
@@ -134,18 +217,18 @@ public partial class MainWindow : Window
             };
             canvas.PointerPressed += Canvas_PointerPressed;
             canvas.Children.Add(frameImage);
-            
+
             // get yolo pose and draw
             cameraPoseSolver.CreateAndPlaceCamera(
+                videoFilePath,
                 new Vector2((float)size.Width, (float)size.Height),
-                framesAt30Fps,
-                cameraPositions[camCount]);
-            
-            cameraPoseSolver.PoseFromImage(frameMat.ToMemoryStream(), camCount);
-            
+                framesAt30Fps);
+
+            cameraPoseSolver.PoseFromImage(frameMat.ToMemoryStream(), videoFilePath);
+
             DrawingImage drawingImage = new DrawingImage();
             DrawingGroup drawingGroup = PreviewDrawer.DrawGeometry(
-                cameraPoseSolver.PosesAtFrameAtCamera(camCount),
+                cameraPoseSolver.PosesAtFrameAtCamera(videoFilePath),
                 size,
                 -1,
                 -1,
@@ -159,22 +242,24 @@ public partial class MainWindow : Window
                 Source = drawingImage
             };
 
-            graphicsImages.Add(poseDrawingImage);
+            graphicsImages.Add(videoFilePath, poseDrawingImage);
             canvas.Children.Add(poseDrawingImage);
 
             CanvasContainer.Items.Add(canvas);
-            
+
             camCount++;
         }
     }
 
     void SetPreviewsToFrame()
     {
-        for (int i = 0; i < numCameras; i++)
+        foreach ((string videoFilePath, VideoCapture videoCapture) in videoFiles)
         {
-            VideoCapture videoCapture = videoFiles[i];
-            videoCapture.Set(VideoCaptureProperties.PosFrames, (int)(timeFromStart * videoFrameRates[i]));
-            
+            videoCapture.Set(
+                VideoCaptureProperties.PosFrames,
+                (int)((highestPositiveOffsetSeconds - videoOffsets[videoFilePath] + timeFromStart)
+                      * videoFrameRates[videoFilePath]));
+
             OutputArray outputArray = new Mat();
             videoCapture.Read(outputArray);
 
@@ -191,31 +276,31 @@ public partial class MainWindow : Window
                 Console.WriteLine(openCvException.Message);
                 continue;
             }
-            
-            frameImages[i].Source = frame;
-            
-            cameraPoseSolver.PoseFromImage(frameMat.ToMemoryStream(), i);
-            
+
+            frameImages[videoFilePath].Source = frame;
+
+            cameraPoseSolver.PoseFromImage(frameMat.ToMemoryStream(), videoFilePath);
+
             DrawingImage drawingImage = new DrawingImage();
             DrawingGroup drawingGroup = PreviewDrawer.DrawGeometry(
-                cameraPoseSolver.PosesAtFrameAtCamera(i),
+                cameraPoseSolver.PosesAtFrameAtCamera(videoFilePath),
                 new Size(frameMat.Width, frameMat.Height),
                 -1,
                 -1,
                 PoseType.Coco);
             drawingImage.Drawing = drawingGroup;
-            
-            graphicsImages[i].Source = drawingImage;
+
+            graphicsImages[videoFilePath].Source = drawingImage;
         }
     }
 
     void Canvas_PointerPressed(object sender, PointerPressedEventArgs args)
     {
         // Mark this canvas as selected
-        selectedCanvas = CanvasContainer.Items.IndexOf(sender as Canvas);
-        
+        selectedCanvas = indexToVideoFilePath[CanvasContainer.Items.IndexOf(sender as Canvas)];
+
         PointerPoint point = args.GetCurrentPoint(sender as Control);
-        
+
         double x = point.Position.X;
         double y = point.Position.Y;
 
@@ -227,13 +312,13 @@ public partial class MainWindow : Window
         if (cameraPoseSolver.TryHomeAllCameras())
         {
             cameraPoseSolver.Calculate3DPosesAndTotalError();
-            for (int i = 0; i < numCameras; i++)
+            foreach (string videoFilesKey in videoFiles.Keys)
             {
-                RedrawCamera(i);
+                RedrawCamera(videoFilesKey);
             }
         }
     }
-    
+
     string GetSelectedButton()
     {
         foreach (Control? child in DynamicRadioButtonsPanel.Children)
@@ -246,30 +331,30 @@ public partial class MainWindow : Window
 
         return "0";
     }
-    
-    void SetDancer(Vector2 position, int camIndex)
+
+    void SetDancer(Vector2 position, string camName)
     {
         string selectedButton = GetSelectedButton();
         cameraPoseSolver.MarkDancerAtCam(
-            camIndex, 
-            position, 
+            camName,
+            position,
             selectedButton);
-        
-        RedrawCamera(camIndex);
+
+        RedrawCamera(camName);
     }
 
-    void RedrawCamera(int camIndex)
+    void RedrawCamera(string camName)
     {
-        Tuple<int, int> leadAndFollowIndex = cameraPoseSolver.LeadAndFollowIndicesAtCameraAtFrame(camIndex);
+        Tuple<int, int> leadAndFollowIndex = cameraPoseSolver.LeadAndFollowIndicesAtCameraAtFrame(camName);
 
-        List<Vector2> leadProjectionsAtFrame = cameraPoseSolver.ReverseProjectionOfLeadPoseAtCamera(camIndex);
-        List<Vector2> followProjectionsAtFrame = cameraPoseSolver.ReverseProjectionOfFollowPoseAtCamera(camIndex);
-        List<Vector2> originCross = cameraPoseSolver.ReverseProjectOriginCrossAtCamera(camIndex);
-        
+        List<Vector2> leadProjectionsAtFrame = cameraPoseSolver.ReverseProjectionOfLeadPoseAtCamera(camName);
+        List<Vector2> followProjectionsAtFrame = cameraPoseSolver.ReverseProjectionOfFollowPoseAtCamera(camName);
+        List<Vector2> originCross = cameraPoseSolver.ReverseProjectOriginCrossAtCamera(camName);
+
         DrawingImage drawingImage = new DrawingImage();
         DrawingGroup drawingGroup = PreviewDrawer.DrawGeometry(
-            cameraPoseSolver.PosesAtFrameAtCamera(camIndex),
-            new Size(graphicsImages[camIndex].Width, graphicsImages[camIndex].Height),
+            cameraPoseSolver.PosesAtFrameAtCamera(camName),
+            new Size(graphicsImages[camName].Width, graphicsImages[camName].Height),
             leadAndFollowIndex.Item1,
             leadAndFollowIndex.Item2,
             PoseType.Coco,
@@ -277,107 +362,107 @@ public partial class MainWindow : Window
             leadProjectionsAtFrame,
             followProjectionsAtFrame);
         drawingImage.Drawing = drawingGroup;
-        
-        graphicsImages[camIndex].Source = drawingImage;
+
+        graphicsImages[camName].Source = drawingImage;
     }
-    
+
 
     #region PERSPECTIVE
 
     void YawLeftButton_Click(object sender, RoutedEventArgs e)
     {
-        if (selectedCanvas == -1) return;
+        if (string.IsNullOrEmpty(selectedCanvas)) return;
         cameraPoseSolver.YawCamera(selectedCanvas, -.01f);
         SetPreviewsToFrame();
     }
 
     void YawRightButton_Click(object sender, RoutedEventArgs e)
     {
-        if (selectedCanvas == -1) return;
+        if (string.IsNullOrEmpty(selectedCanvas)) return;
         cameraPoseSolver.YawCamera(selectedCanvas, .01f);
         SetPreviewsToFrame();
     }
 
     void PitchUpButton_Click(object sender, RoutedEventArgs e)
     {
-        if (selectedCanvas == -1) return;
+        if (string.IsNullOrEmpty(selectedCanvas)) return;
         cameraPoseSolver.PitchCamera(selectedCanvas, -.01f);
         SetPreviewsToFrame();
     }
 
     void PitchDownButton_Click(object sender, RoutedEventArgs e)
     {
-        if (selectedCanvas == -1) return;
+        if (string.IsNullOrEmpty(selectedCanvas)) return;
         cameraPoseSolver.PitchCamera(selectedCanvas, .01f);
         SetPreviewsToFrame();
     }
 
     void ZoomInButton_Click(object sender, RoutedEventArgs e)
     {
-        if (selectedCanvas == -1) return;
+        if (string.IsNullOrEmpty(selectedCanvas)) return;
         cameraPoseSolver.ZoomCamera(selectedCanvas, .01f);
         SetPreviewsToFrame();
     }
 
     void ZoomOutButton_Click(object sender, RoutedEventArgs e)
     {
-        if (selectedCanvas == -1) return;
+        if (string.IsNullOrEmpty(selectedCanvas)) return;
         cameraPoseSolver.ZoomCamera(selectedCanvas, -.01f);
         SetPreviewsToFrame();
     }
 
     void RollLeftButton_Click(object sender, RoutedEventArgs e)
     {
-        if (selectedCanvas == -1) return;
+        if (string.IsNullOrEmpty(selectedCanvas)) return;
         cameraPoseSolver.RollCamera(selectedCanvas, .01f);
         SetPreviewsToFrame();
     }
 
     void RollRightButton_Click(object sender, RoutedEventArgs e)
     {
-        if (selectedCanvas == -1) return;
+        if (string.IsNullOrEmpty(selectedCanvas)) return;
         cameraPoseSolver.RollCamera(selectedCanvas, -.01f);
         SetPreviewsToFrame();
     }
 
     void TranslateLeftButton_Click(object sender, RoutedEventArgs e)
     {
-        if (selectedCanvas == -1) return;
+        if (string.IsNullOrEmpty(selectedCanvas)) return;
         cameraPoseSolver.MoveCameraRight(selectedCanvas, -.01f);
         SetPreviewsToFrame();
     }
 
     void TranslateRightButton_Click(object sender, RoutedEventArgs e)
     {
-        if (selectedCanvas == -1) return;
+        if (string.IsNullOrEmpty(selectedCanvas)) return;
         cameraPoseSolver.MoveCameraRight(selectedCanvas, .01f);
         SetPreviewsToFrame();
     }
 
     void TranslateUpButton_Click(object sender, RoutedEventArgs e)
     {
-        if (selectedCanvas == -1) return;
+        if (string.IsNullOrEmpty(selectedCanvas)) return;
         cameraPoseSolver.MoveCameraUp(selectedCanvas, .01f);
         SetPreviewsToFrame();
     }
 
     void TranslateDownButton_Click(object sender, RoutedEventArgs e)
     {
-        if (selectedCanvas == -1) return;
+        if (string.IsNullOrEmpty(selectedCanvas)) return;
         cameraPoseSolver.MoveCameraUp(selectedCanvas, -.01f);
         SetPreviewsToFrame();
     }
 
     void TranslateForwardButton_Click(object sender, RoutedEventArgs e)
     {
-        if (selectedCanvas == -1) return;
+        if (string.IsNullOrEmpty(selectedCanvas)) return;
         cameraPoseSolver.MoveCameraForward(selectedCanvas, -.01f);
         SetPreviewsToFrame();
     }
 
     void TranslateBackwardButton_Click(object sender, RoutedEventArgs e)
     {
-        if (selectedCanvas == -1) return;
+        if (string.IsNullOrEmpty(selectedCanvas)) return;
         cameraPoseSolver.MoveCameraForward(selectedCanvas, -.01f);
         SetPreviewsToFrame();
     }
@@ -387,9 +472,9 @@ public partial class MainWindow : Window
     void SolverNextFrameButton_Click(object sender, RoutedEventArgs e)
     {
         if (!cameraPoseSolver.Advance()) return;
-        
+
         timeFromStart += 1d / 30d;
-        
+
         cameraPoseSolver.IterationLoop();
         SetPreviewsToFrame();
     }
@@ -397,9 +482,9 @@ public partial class MainWindow : Window
     void SolverPreviousFrameButton_Click(object sender, RoutedEventArgs e)
     {
         if (!cameraPoseSolver.Rewind()) return;
-        
+
         timeFromStart -= 1d / 30d;
-        
+
         SetPreviewsToFrame();
     }
 

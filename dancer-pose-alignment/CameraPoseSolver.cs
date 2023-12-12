@@ -21,20 +21,19 @@ public class CameraPoseSolver(PoseType poseType)
         ? Enum.GetNames<CocoJoints>().Length
         : 26; // Halpe
 
-    readonly List<CameraSetup> cameras = [];
+    readonly Dictionary<string, CameraSetup> cameras = [];
     int frameNumber = 0;
     public int MaximumFrameCount = int.MaxValue;
+    double timeOffset;
 
     Yolo yolo = new("yolov8x-pose.onnx"); // this is in the assembly dir 
 
     public void CreateAndPlaceCamera(
+        string name,
         Vector2 imageSize,
-        int frameCount,
-        Vector3 position)
+        int frameCount)
     {
         CameraSetup camera = new(imageSize, frameCount);
-
-        camera.PositionsPerFrame[0] = position;
 
         Quaternion centerLook = Transform.LookAt(
             new Vector3(0, 1.5f, 0),
@@ -42,48 +41,48 @@ public class CameraPoseSolver(PoseType poseType)
             camera.PositionsPerFrame[0]);
         camera.RotationsPerFrame[0] = centerLook;
 
-        cameras.Add(camera);
+        cameras.Add(name, camera);
     }
 
-    public void PoseFromImage(MemoryStream imageStream, int camIndex)
+    public void PoseFromImage(MemoryStream imageStream, string camName)
     {
         List<List<Vector3>> poses = yolo.CalculatePosesFromImage(imageStream);
-        cameras[camIndex].SetAllPosesAtFrame(poses, frameNumber);
+        cameras[camName].SetAllPosesAtFrame(poses, frameNumber);
     }
 
-    public List<List<Vector3>> PosesAtFrameAtCamera(int camIndex)
+    public List<List<Vector3>> PosesAtFrameAtCamera(string camName)
     {
-        return cameras[camIndex].PosesPerDancerAtFrame(frameNumber);
+        return cameras[camName].PosesPerDancerAtFrame(frameNumber);
     }
 
-    public Tuple<int, int> LeadAndFollowIndicesAtCameraAtFrame(int camIndex)
+    public Tuple<int, int> LeadAndFollowIndicesAtCameraAtFrame(string camName)
     {
-        return cameras[camIndex].LeadAndFollowIndexForFrame(frameNumber);
+        return cameras[camName].LeadAndFollowIndexForFrame(frameNumber);
     }
 
-    public void MarkDancerAtCam(int camIndex, Vector2 click, string selectedButton)
+    public void MarkDancerAtCam(string camName, Vector2 click, string selectedButton)
     {
-        cameras[camIndex].MarkDancer(click, frameNumber, selectedButton);
+        cameras[camName].MarkDancer(click, frameNumber, selectedButton);
     }
 
-    public List<Vector2> ReverseProjectionOfLeadPoseAtCamera(int cameraIndex)
+    public List<Vector2> ReverseProjectionOfLeadPoseAtCamera(string camName)
     {
         if (merged3DPoseLeadPerFrame.Count <= frameNumber) return [];
         return merged3DPoseLeadPerFrame[frameNumber]
-            .Select(x => cameras[cameraIndex].ReverseProjectPoint(x, frameNumber)).ToList();
+            .Select(x => cameras[camName].ReverseProjectPoint(x, frameNumber)).ToList();
     }
 
-    public List<Vector2> ReverseProjectionOfFollowPoseAtCamera(int cameraIndex)
+    public List<Vector2> ReverseProjectionOfFollowPoseAtCamera(string camName)
     {
         if (merged3DPoseFollowPerFrame.Count <= frameNumber) return [];
         return merged3DPoseFollowPerFrame[frameNumber]
-            .Select(x => cameras[cameraIndex].ReverseProjectPoint(x, frameNumber)).ToList();
+            .Select(x => cameras[camName].ReverseProjectPoint(x, frameNumber)).ToList();
     }
 
-    public List<Vector2> ReverseProjectOriginCrossAtCamera(int cameraIndex)
+    public List<Vector2> ReverseProjectOriginCrossAtCamera(string camName)
     {
         if (merged3DPoseFollowPerFrame.Count <= frameNumber || merged3DPoseLeadPerFrame.Count <= frameNumber) return [];
-        CameraSetup cameraSetup = cameras[cameraIndex];
+        CameraSetup cameraSetup = cameras[camName];
 
         return
         [
@@ -98,14 +97,14 @@ public class CameraPoseSolver(PoseType poseType)
 
     public bool TryHomeAllCameras()
     {
-        if (cameras.Any(cam =>
+        if (cameras.Values.Any(cam =>
                 cam.LeadAndFollowIndexForFrame(frameNumber).Item1 == -1 ||
                 cam.LeadAndFollowIndexForFrame(frameNumber).Item2 == -1))
         {
             return false;
         }
 
-        foreach (CameraSetup camera in cameras)
+        foreach (CameraSetup camera in cameras.Values)
         {
             camera.Home();
         }
@@ -113,50 +112,50 @@ public class CameraPoseSolver(PoseType poseType)
         return true;
     }
 
-    public void YawCamera(int camIndex, float angle)
+    public void YawCamera(string camName, float angle)
     {
-        cameras[camIndex].RotationsPerFrame[frameNumber] *= Quaternion.CreateFromAxisAngle(Vector3.UnitY, angle);
+        cameras[camName].RotationsPerFrame[frameNumber] *= Quaternion.CreateFromAxisAngle(Vector3.UnitY, angle);
     }
 
-    public void PitchCamera(int camIndex, float angle)
+    public void PitchCamera(string camName, float angle)
     {
-        cameras[camIndex].RotationsPerFrame[frameNumber] *= Quaternion.CreateFromAxisAngle(Vector3.UnitX, angle);
+        cameras[camName].RotationsPerFrame[frameNumber] *= Quaternion.CreateFromAxisAngle(Vector3.UnitX, angle);
     }
 
-    public void RollCamera(int camIndex, float angle)
+    public void RollCamera(string camName, float angle)
     {
-        cameras[camIndex].RotationsPerFrame[frameNumber] *= Quaternion.CreateFromAxisAngle(Vector3.UnitZ, angle);
+        cameras[camName].RotationsPerFrame[frameNumber] *= Quaternion.CreateFromAxisAngle(Vector3.UnitZ, angle);
     }
 
-    public void ZoomCamera(int camIndex, float zoom)
+    public void ZoomCamera(string camName, float zoom)
     {
-        cameras[camIndex].FocalLength += zoom;
+        cameras[camName].FocalLength += zoom;
     }
 
-    public void MoveCameraForward(int camIndex, float move)
+    public void MoveCameraForward(string camName, float move)
     {
-        cameras[camIndex].PositionsPerFrame[frameNumber] += cameras[camIndex].Forward(frameNumber) * move;
+        cameras[camName].PositionsPerFrame[frameNumber] += cameras[camName].Forward(frameNumber) * move;
         if (frameNumber == 0)
         {
-            cameras[camIndex].Home();
+            cameras[camName].Home();
         }
     }
 
-    public void MoveCameraRight(int camIndex, float move)
+    public void MoveCameraRight(string camName, float move)
     {
-        cameras[camIndex].PositionsPerFrame[frameNumber] += cameras[camIndex].Right(frameNumber) * move;
+        cameras[camName].PositionsPerFrame[frameNumber] += cameras[camName].Right(frameNumber) * move;
         if (frameNumber == 0)
         {
-            cameras[camIndex].Home();
+            cameras[camName].Home();
         }
     }
 
-    public void MoveCameraUp(int camIndex, float move)
+    public void MoveCameraUp(string camName, float move)
     {
-        cameras[camIndex].PositionsPerFrame[frameNumber] += cameras[camIndex].Up(frameNumber) * move;
+        cameras[camName].PositionsPerFrame[frameNumber] += cameras[camName].Up(frameNumber) * move;
         if (frameNumber == 0)
         {
-            cameras[camIndex].Home();
+            cameras[camName].Home();
         }
     }
 
@@ -169,7 +168,7 @@ public class CameraPoseSolver(PoseType poseType)
         if (frameNumber >= MaximumFrameCount - 1) return false;
 
         frameNumber++;
-        foreach (CameraSetup cameraSetup in cameras)
+        foreach (CameraSetup cameraSetup in cameras.Values)
         {
             cameraSetup.CopyPositionsToNextFrame(frameNumber);
         }
@@ -195,7 +194,7 @@ public class CameraPoseSolver(PoseType poseType)
         {
             CameraSetup highestErrorCam = null;
             float highestError = 0;
-            foreach (CameraSetup cameraSetup in cameras)
+            foreach (CameraSetup cameraSetup in cameras.Values)
             {
                 float error = cameraSetup.Error(
                     merged3DPoseLeadPerFrame[frameNumber],
@@ -246,7 +245,7 @@ public class CameraPoseSolver(PoseType poseType)
 
     public float Calculate3DPosesAndTotalError()
     {
-        foreach (CameraSetup cameraSetup in cameras)
+        foreach (CameraSetup cameraSetup in cameras.Values)
         {
             cameraSetup.Project(frameNumber);
         }
@@ -271,7 +270,7 @@ public class CameraPoseSolver(PoseType poseType)
 
         for (int i = 0; i < poseCount; i++)
         {
-            foreach (CameraSetup cameraSetup in cameras)
+            foreach (CameraSetup cameraSetup in cameras.Values)
             {
                 if (cameraSetup.HasPoseAtFrame(frameNumber, true))
                 {
@@ -370,7 +369,7 @@ public class CameraPoseSolver(PoseType poseType)
         }
 
         float totalError = 0;
-        foreach (CameraSetup cameraSetup in cameras)
+        foreach (CameraSetup cameraSetup in cameras.Values)
         {
             totalError += cameraSetup.Error(merged3DPoseLeadPerFrame[frameNumber],
                 merged3DPoseFollowPerFrame[frameNumber], frameNumber);

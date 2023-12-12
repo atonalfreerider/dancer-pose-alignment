@@ -16,7 +16,7 @@
             <DockPanel>
                 <StackPanel Orientation="Vertical" DockPanel.Dock="Top">
                     <StackPanel Orientation="Horizontal" HorizontalAlignment="Center">
-                        <TextBox Name="VideoInputPath" Text="C:\Users\john\Desktop\Larissa-Kadu-Recap\output\yolo"
+                        <TextBox Name="VideoInputPath" Text="C:\Users\john\Desktop\Larissa-Kadu-Recap"
                                  Width="300" Margin="5" />
                         <Button Name="LoadVideosButton" Content="Load Videos" Margin="5" Click="LoadVideosButton_Click" />
                     </StackPanel>

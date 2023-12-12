@@ -1,4 +1,4 @@
-﻿<Project Sdk="Microsoft.NET.Sdk">
+<Project Sdk="Microsoft.NET.Sdk">
 
     <PropertyGroup>
         <OutputType>Exe</OutputType>
@@ -9,6 +9,10 @@
     </PropertyGroup>
     
   <ItemGroup>
+    <PackageReference Include="Aurio" Version="4.1.0" />
+    <PackageReference Include="Aurio.FFmpeg" Version="4.1.0" />
+    <PackageReference Include="Aurio.PFFFT" Version="4.1.0" />
+    <PackageReference Include="Aurio.Soxr" Version="4.1.0" />
     <PackageReference Include="Avalonia" Version="11.0.5" />
     <PackageReference Include="Avalonia.Desktop" Version="11.0.5" />
     <PackageReference Include="Avalonia.ReactiveUI" Version="11.0.5" />
