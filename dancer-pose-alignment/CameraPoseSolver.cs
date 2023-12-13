@@ -60,9 +60,14 @@ public class CameraPoseSolver(PoseType poseType)
         return cameras[camName].LeadAndFollowIndexForFrame(frameNumber);
     }
 
-    public void MarkDancerAtCam(string camName, Vector2 click, string selectedButton)
+    public Tuple<int, int> MarkDancerAtCam(string camName, Vector2 click, string selectedButton)
     {
-        cameras[camName].MarkDancer(click, frameNumber, selectedButton);
+        return cameras[camName].MarkDancer(click, frameNumber, selectedButton);
+    }
+    
+    public void MoveKeypointAtCam(string camName, Vector2 click, Tuple<int, int> selectedPoseAndKeypoint)
+    {
+        cameras[camName].MoveKeypoint(click, frameNumber, selectedPoseAndKeypoint);
     }
 
     public List<Vector2> ReverseProjectionOfLeadPoseAtCamera(string camName)

@@ -45,7 +45,7 @@ public class CameraSetup(Vector2 size, int frameCount)
         followIndicesPerFrame[frameNumber] = -1;
     }
 
-    public void MarkDancer(Vector2 click, int frameNumber, string selectedButton)
+    public Tuple<int,int> MarkDancer(Vector2 click, int frameNumber, string selectedButton)
     {
         int closestIndex = -1;
         int jointSelected = -1;
@@ -74,7 +74,23 @@ public class CameraSetup(Vector2 size, int frameCount)
             case "Follow":
                 followIndicesPerFrame[frameNumber] = closestIndex; // select
                 break;
+            case "Move":
+                allPosesAndConfidencesPerFrame[frameNumber][closestIndex][jointSelected] = new Vector3(
+                    click.X,
+                    click.Y,
+                    allPosesAndConfidencesPerFrame[frameNumber][closestIndex][jointSelected].Z); // move
+                break;
         }
+
+        return new Tuple<int, int>(closestIndex, jointSelected);
+    }
+    
+    public void MoveKeypoint(Vector2 click, int frameNumber, Tuple<int, int> closestIndexAndJointSelected)
+    {
+        allPosesAndConfidencesPerFrame[frameNumber][closestIndexAndJointSelected.Item1][closestIndexAndJointSelected.Item2] = new Vector3(
+            click.X,
+            click.Y,
+           1); // 100% confidence
     }
 
     public Tuple<int, int> LeadAndFollowIndexForFrame(int frameNumber)

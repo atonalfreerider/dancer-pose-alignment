@@ -25,6 +25,7 @@
                                     HorizontalAlignment="Center">
                             <RadioButton GroupName="Role" Content="Lead" Margin="5" IsChecked="True" IsDefault="True" />
                             <RadioButton GroupName="Role" Content="Follow" Margin="5" />
+                            <RadioButton GroupName="Role" Content="Move" Margin="5" />
                         </StackPanel>
                     </StackPanel>
                     <StackPanel Orientation="Horizontal" HorizontalAlignment="Center">
