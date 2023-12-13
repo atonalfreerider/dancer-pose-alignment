@@ -33,7 +33,7 @@ public class CameraPoseSolver(PoseType poseType)
         Vector2 imageSize,
         int frameCount)
     {
-        CameraSetup camera = new(imageSize, frameCount);
+        CameraSetup camera = new(imageSize, frameCount, poseType);
 
         Quaternion centerLook = Transform.LookAt(
             new Vector3(0, 1.5f, 0),
@@ -86,7 +86,6 @@ public class CameraPoseSolver(PoseType poseType)
 
     public List<Vector2> ReverseProjectOriginCrossAtCamera(string camName)
     {
-        if (merged3DPoseFollowPerFrame.Count <= frameNumber || merged3DPoseLeadPerFrame.Count <= frameNumber) return [];
         CameraSetup cameraSetup = cameras[camName];
 
         return
@@ -100,21 +99,16 @@ public class CameraPoseSolver(PoseType poseType)
 
     #region SET CAM ORIENTATION
 
-    public bool TryHomeAllCameras()
+    public bool AreAllCamerasOriented()
     {
-        if (cameras.Values.Any(cam =>
-                cam.LeadAndFollowIndexForFrame(frameNumber).Item1 == -1 ||
-                cam.LeadAndFollowIndexForFrame(frameNumber).Item2 == -1))
-        {
-            return false;
-        }
-
-        foreach (CameraSetup camera in cameras.Values)
-        {
-            camera.Home();
-        }
-
-        return true;
+        return !cameras.Values.Any(cam =>
+            cam.LeadAndFollowIndexForFrame(frameNumber).Item1 == -1 ||
+            cam.LeadAndFollowIndexForFrame(frameNumber).Item2 == -1);
+    }
+    
+    public void TryHomeCamera(string camName)
+    {
+        cameras[camName].Home();
     }
 
     public void YawCamera(string camName, float angle)

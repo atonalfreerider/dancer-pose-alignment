@@ -144,6 +144,8 @@ public static class PreviewDrawer
             Thickness = 10
         };
 
+        if(leadProjectionsAtFrame.Count == 0 || followProjectionsAtFrame.Count == 0) return drawingGroup;
+        
         SolidColorBrush brush = new SolidColorBrush(Colors.DarkRed);
         Pen pen = new Pen(brush)
         {

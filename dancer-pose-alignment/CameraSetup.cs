@@ -2,7 +2,7 @@
 
 namespace dancer_pose_alignment;
 
-public class CameraSetup(Vector2 size, int frameCount)
+public class CameraSetup(Vector2 size, int frameCount, PoseType poseType)
 {
     public readonly Vector3[] PositionsPerFrame = new Vector3[frameCount];
     public readonly Quaternion[] RotationsPerFrame = new Quaternion[frameCount];
@@ -40,12 +40,12 @@ public class CameraSetup(Vector2 size, int frameCount)
                     -(vec.Y - size.Y / 2) * PixelToMeter, // flip
                     vec.Z)) // keep the confidence
             .ToList()).ToList();
-        
+
         leadIndicesPerFrame[frameNumber] = -1;
         followIndicesPerFrame[frameNumber] = -1;
     }
 
-    public Tuple<int,int> MarkDancer(Vector2 click, int frameNumber, string selectedButton)
+    public Tuple<int, int> MarkDancer(Vector2 click, int frameNumber, string selectedButton)
     {
         int closestIndex = -1;
         int jointSelected = -1;
@@ -63,6 +63,7 @@ public class CameraSetup(Vector2 size, int frameCount)
                     closestDistance = Vector2.Distance(click, new Vector2(joint.X, joint.Y));
                 }
             }
+
             counter++;
         }
 
@@ -84,13 +85,14 @@ public class CameraSetup(Vector2 size, int frameCount)
 
         return new Tuple<int, int>(closestIndex, jointSelected);
     }
-    
+
     public void MoveKeypoint(Vector2 click, int frameNumber, Tuple<int, int> closestIndexAndJointSelected)
     {
-        allPosesAndConfidencesPerFrame[frameNumber][closestIndexAndJointSelected.Item1][closestIndexAndJointSelected.Item2] = new Vector3(
+        allPosesAndConfidencesPerFrame[frameNumber][closestIndexAndJointSelected.Item1][
+            closestIndexAndJointSelected.Item2] = new Vector3(
             click.X,
             click.Y,
-           1); // 100% confidence
+            1); // 100% confidence
     }
 
     public Tuple<int, int> LeadAndFollowIndexForFrame(int frameNumber)
@@ -102,8 +104,9 @@ public class CameraSetup(Vector2 size, int frameCount)
     {
         List<Vector3> flattenedLead = recenteredRescaledAllPosesPerFrame[frameNumber][leadIndicesPerFrame[frameNumber]]
             .Select(x => x with { Z = 0 }).ToList();
-        List<Vector3> flattenedFollow = recenteredRescaledAllPosesPerFrame[frameNumber][followIndicesPerFrame[frameNumber]]
-            .Select(x => x with { Z = 0 }).ToList();
+        List<Vector3> flattenedFollow =
+            recenteredRescaledAllPosesPerFrame[frameNumber][followIndicesPerFrame[frameNumber]]
+                .Select(x => x with { Z = 0 }).ToList();
 
         List<Vector3> leadProjectionsAtThisFrame = Adjusted(flattenedLead, frameNumber);
         leadProjectionsPerFrame[frameNumber] = leadProjectionsAtThisFrame;
@@ -172,7 +175,8 @@ public class CameraSetup(Vector2 size, int frameCount)
 
             // find the angle between the vectors
             error += MathF.Acos(Vector3.Dot(target, keypoint)) *
-                     recenteredRescaledAllPosesPerFrame[frameNumber][leadIndicesPerFrame[frameNumber]][i].Z; // confidence
+                     recenteredRescaledAllPosesPerFrame[frameNumber][leadIndicesPerFrame[frameNumber]][i]
+                         .Z; // confidence
         }
 
         for (int i = 0; i < merged3DPoseFollow.Count; i++)
@@ -225,56 +229,118 @@ public class CameraSetup(Vector2 size, int frameCount)
     /// </summary>
     public void Home()
     {
+        if (leadIndicesPerFrame[0] == -1 || followIndicesPerFrame[0] == -1) return;
+
         Vector2 leadLeftAnkle = new Vector2(
-            allPosesAndConfidencesPerFrame[0][leadIndicesPerFrame[0]][(int)HalpeJoints.LAnkle].X,
-            allPosesAndConfidencesPerFrame[0][leadIndicesPerFrame[0]][(int)HalpeJoints.LAnkle].Y);
+            allPosesAndConfidencesPerFrame[0][leadIndicesPerFrame[0]][LAnkleIndex].X,
+            allPosesAndConfidencesPerFrame[0][leadIndicesPerFrame[0]][LAnkleIndex].Y);
 
-        Vector2 leadHip = new Vector2(
-            allPosesAndConfidencesPerFrame[0][followIndicesPerFrame[0]][(int)HalpeJoints.LHip].X,
-            allPosesAndConfidencesPerFrame[0][followIndicesPerFrame[0]][(int)HalpeJoints.LHip].Y);
+        Vector2 leadRightAnkle = new Vector2(
+            allPosesAndConfidencesPerFrame[0][leadIndicesPerFrame[0]][RAnkleIndex].X,
+            allPosesAndConfidencesPerFrame[0][leadIndicesPerFrame[0]][RAnkleIndex].Y);
 
-        const float hipHeight = .75f;
+        Vector2 leadRightHip = new Vector2(
+            allPosesAndConfidencesPerFrame[0][leadIndicesPerFrame[0]][RHipIndex].X,
+            allPosesAndConfidencesPerFrame[0][leadIndicesPerFrame[0]][RHipIndex].Y);
 
-        for (int j = 0; j < 4; j++)
+        Vector2 followLeftAnkle = new Vector2(
+            allPosesAndConfidencesPerFrame[0][followIndicesPerFrame[0]][LAnkleIndex].X,
+            allPosesAndConfidencesPerFrame[0][followIndicesPerFrame[0]][LAnkleIndex].Y);
+
+        Vector2 followRightAnkle = new Vector2(
+            allPosesAndConfidencesPerFrame[0][followIndicesPerFrame[0]][RAnkleIndex].X,
+            allPosesAndConfidencesPerFrame[0][followIndicesPerFrame[0]][RAnkleIndex].Y);
+
+        Vector3 hipHeight = new Vector3(0, .7f, 0);
+        Vector3 stanceWidth = new Vector3(-.3f, 0f, 0f);
+        const float camRadius = 5f;
+        const float camHeight = 1.5f;
+
+        // calculate slope and orientation of lead ankle stance, so that iteration can match it
+        float leadPoseAnkleSlope = (leadLeftAnkle.Y - leadRightAnkle.Y) / (leadLeftAnkle.X - leadRightAnkle.X);
+        bool isFacingLead = leadRightAnkle.X < leadLeftAnkle.X;
+        if (!isFacingLead)
         {
-            Vector2 origin = ReverseProjectPoint(Vector3.Zero, 0);
-            while (leadLeftAnkle.X < origin.X)
+            leadPoseAnkleSlope = (leadRightAnkle.Y - leadLeftAnkle.Y) / (leadRightAnkle.X - leadLeftAnkle.X);
+        }
+
+        Vector2 origin;
+        // rotate camera in circle at 5m radius and 1.5m elevation pointed at origin until orientation and slope matches
+        for (float alpha = 0; alpha < 2 * MathF.PI; alpha += .001f)
+        {
+            PositionsPerFrame[0] = new Vector3(
+                camRadius * MathF.Sin(alpha),
+                camHeight,
+                camRadius * MathF.Cos(alpha));
+
+            RotationsPerFrame[0] = Transform.LookAt(
+                Vector3.Zero,
+                Quaternion.Identity,
+                PositionsPerFrame[0]);
+
+            origin = ReverseProjectPoint(Vector3.Zero, 0); // lead right ankle
+            Vector2 leadStance = ReverseProjectPoint(stanceWidth, 0); // lead left ankle
+            
+            float slopeOfCamera = (leadStance.Y - origin.Y) / (leadStance.X - origin.X);
+            bool isFacingLeadInCamera = origin.X < leadStance.X;
+            if (!isFacingLeadInCamera)
             {
-                RotationsPerFrame[0] *= Quaternion.CreateFromAxisAngle(Vector3.UnitY, .001f);
-                origin = ReverseProjectPoint(Vector3.Zero, 0);
+                slopeOfCamera = (origin.Y - leadStance.Y) / (origin.X - leadStance.X);
             }
 
-            while (leadLeftAnkle.X > origin.X)
+            if (isFacingLead == isFacingLeadInCamera && MathF.Abs(leadPoseAnkleSlope - slopeOfCamera) < .01f)
             {
-                RotationsPerFrame[0] *= Quaternion.CreateFromAxisAngle(Vector3.UnitY, -.001f);
-                origin = ReverseProjectPoint(Vector3.Zero, 0);
+                break;
             }
+        }
 
-            Vector2 worldHip = ReverseProjectPoint(new Vector3(0, hipHeight, 0), 0);
-            for (int i = 0; i < 500; i++)
-            {
-                if (leadLeftAnkle.Y > origin.Y && leadHip.Y > worldHip.Y)
-                {
-                    // pitch up
-                    RotationsPerFrame[0] *= Quaternion.CreateFromAxisAngle(Vector3.UnitX, -.001f);
-                }
-                else if (leadLeftAnkle.Y < origin.Y && leadHip.Y < worldHip.Y)
-                {
-                    // pitch down
-                    RotationsPerFrame[0] *= Quaternion.CreateFromAxisAngle(Vector3.UnitX, .001f);
-                }
-                else if (leadLeftAnkle.Y > origin.Y && leadHip.Y < worldHip.Y)
-                {
-                    FocalLength += .001f;
-                }
-                else if (leadLeftAnkle.Y < origin.Y && leadHip.Y > worldHip.Y)
-                {
-                    FocalLength -= .001f;
-                }
+        // adjust the focal length until the world stance and the pose stance match
+        float stanceDistance = Vector2.Distance(leadLeftAnkle, leadRightAnkle);
+        while (Vector2.Distance(
+                   ReverseProjectPoint(Vector3.Zero, 0),
+                   ReverseProjectPoint(stanceWidth, 0)) < stanceDistance)
+        {
+            FocalLength += .0001f;
+            CenterRightLeadAnkleOnOrigin(leadRightAnkle);
+        }
 
-                origin = ReverseProjectPoint(Vector3.Zero, 0);
-                worldHip = ReverseProjectPoint(new Vector3(0, hipHeight, 0), 0);
-            }
+        while (Vector2.Distance(
+                   ReverseProjectPoint(Vector3.Zero, 0),
+                   ReverseProjectPoint(stanceWidth, 0)) > stanceDistance)
+        {
+            FocalLength -= .0001f;
+            CenterRightLeadAnkleOnOrigin(leadRightAnkle);
+        }
+    }
+
+    void CenterRightLeadAnkleOnOrigin(Vector2 leadRightAnkle)
+    {
+        // yaw and pitch the camera until the origin is centered at the lead right ankle
+        Vector2 origin = ReverseProjectPoint(Vector3.Zero, 0);
+        while (leadRightAnkle.X < origin.X)
+        {
+            RotationsPerFrame[0] *= Quaternion.CreateFromAxisAngle(Vector3.UnitY, .001f);
+            origin = ReverseProjectPoint(Vector3.Zero, 0);
+        }
+
+        while (leadRightAnkle.X > origin.X)
+        {
+            RotationsPerFrame[0] *= Quaternion.CreateFromAxisAngle(Vector3.UnitY, -.001f);
+            origin = ReverseProjectPoint(Vector3.Zero, 0);
+        }
+
+        while (leadRightAnkle.Y > origin.Y)
+        {
+            // pitch up 
+            RotationsPerFrame[0] *= Quaternion.CreateFromAxisAngle(Vector3.UnitX, -.001f);
+            origin = ReverseProjectPoint(Vector3.Zero, 0);
+        }
+
+        while (leadRightAnkle.Y < origin.Y)
+        {
+            // pitch down 
+            RotationsPerFrame[0] *= Quaternion.CreateFromAxisAngle(Vector3.UnitX, .001f);
+            origin = ReverseProjectPoint(Vector3.Zero, 0);
         }
     }
 
@@ -476,7 +542,28 @@ public class CameraSetup(Vector2 size, int frameCount)
         RotationsPerFrame[frameNumber] = originalRotation;
         return false;
     }
-    
+
+    int LAnkleIndex => poseType switch
+    {
+        PoseType.Coco => (int)CocoJoints.L_Ankle,
+        PoseType.Halpe => (int)HalpeJoints.LAnkle,
+        _ => -1
+    };
+
+    int RAnkleIndex => poseType switch
+    {
+        PoseType.Coco => (int)CocoJoints.R_Ankle,
+        PoseType.Halpe => (int)HalpeJoints.RAnkle,
+        _ => -1
+    };
+
+    int RHipIndex => poseType switch
+    {
+        PoseType.Coco => (int)CocoJoints.R_Hip,
+        PoseType.Halpe => (int)HalpeJoints.RHip,
+        _ => -1
+    };
+
     [Serializable]
     public class PositionAndRotation
     {

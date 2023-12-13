@@ -311,8 +311,11 @@ public partial class MainWindow : Window
         {
             SetDancer(new Vector2((float)x, (float)y), selectedCamera);
         }
+        
+        cameraPoseSolver.TryHomeCamera(selectedCamera);
+        RedrawCamera(selectedCamera);
 
-        if (cameraPoseSolver.TryHomeAllCameras())
+        if (cameraPoseSolver.AreAllCamerasOriented())
         {
             cameraPoseSolver.Calculate3DPosesAndTotalError();
             foreach (string videoFilesKey in videoFiles.Keys)
