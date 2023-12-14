@@ -99,7 +99,14 @@ public class CameraSetup(Vector2 size, int totalFrameCount, PoseType poseType)
     {
         return new Tuple<int, int>(leadIndicesPerFrame[frameNumber], followIndicesPerFrame[frameNumber]);
     }
+    
+    public List<List<Vector3>> PosesPerDancerAtFrame(int frameNumber)
+    {
+        return allPosesAndConfidencesPerFrame[frameNumber];
+    }
 
+    #region PROJECTION
+    
     public void Project(int frameNumber)
     {
         // two things happening here: 
@@ -117,6 +124,23 @@ public class CameraSetup(Vector2 size, int totalFrameCount, PoseType poseType)
 
         List<Vector3> followProjectionsAtThisFrame = Adjusted(flattenedFollow, frameNumber);
         followProjectionsPerFrame[frameNumber] = followProjectionsAtThisFrame;
+    }
+    
+    List<Vector3> Adjusted(IEnumerable<Vector3> keypoints, int frame)
+    {
+        // Translate keypoints to the camera center 
+        Vector3 cameraCenter = PositionsPerFrame[frame];
+        List<Vector3> adjustedKeypoints = keypoints.Select(vec => cameraCenter + vec).ToList();
+
+        // Rotate keypoints around the camera center by the camera's rotation quaternion 
+        Quaternion rotation = RotationsPerFrame[frame];
+        for (int i = 0; i < adjustedKeypoints.Count; i++)
+        {
+            adjustedKeypoints[i] = Vector3.Transform(adjustedKeypoints[i] - cameraCenter, rotation) + cameraCenter;
+        }
+
+        // Translate keypoints to the camera's focal length 
+        return adjustedKeypoints.Select(vec => vec + Forward(frame) * FocalLength).ToList();
     }
 
     public Vector2 ReverseProjectPoint(Vector3 worldPoint, int frameNumber)
@@ -205,28 +229,10 @@ public class CameraSetup(Vector2 size, int totalFrameCount, PoseType poseType)
     {
         return Vector3.Normalize(vector3 - PositionsPerFrame[frameNumber]);
     }
+    
+    #endregion
 
-    public List<List<Vector3>> PosesPerDancerAtFrame(int frameNumber)
-    {
-        return allPosesAndConfidencesPerFrame[frameNumber];
-    }
-
-    List<Vector3> Adjusted(IEnumerable<Vector3> keypoints, int frame)
-    {
-        // Translate keypoints to the camera center 
-        Vector3 cameraCenter = PositionsPerFrame[frame];
-        List<Vector3> adjustedKeypoints = keypoints.Select(vec => cameraCenter + vec).ToList();
-
-        // Rotate keypoints around the camera center by the camera's rotation quaternion 
-        Quaternion rotation = RotationsPerFrame[frame];
-        for (int i = 0; i < adjustedKeypoints.Count; i++)
-        {
-            adjustedKeypoints[i] = Vector3.Transform(adjustedKeypoints[i] - cameraCenter, rotation) + cameraCenter;
-        }
-
-        // Translate keypoints to the camera's focal length 
-        return adjustedKeypoints.Select(vec => vec + Forward(frame) * FocalLength).ToList();
-    }
+    #region ITERATION
 
     /// <summary>
     /// Should only be called on frame 0
@@ -365,43 +371,6 @@ public class CameraSetup(Vector2 size, int totalFrameCount, PoseType poseType)
             RotationsPerFrame[0] *= Quaternion.CreateFromAxisAngle(Vector3.UnitZ, -.001f);
             origin = ReverseProjectPoint(Vector3.Zero, 0);
             unitY = ReverseProjectPoint(Vector3.UnitY, 0);
-        }
-    }
-
-    public bool HasPoseAtFrame(int frameNumber, bool isLead)
-    {
-        return isLead
-            ? recenteredRescaledAllPosesPerFrame[frameNumber][leadIndicesPerFrame[frameNumber]].Count > 0
-            : recenteredRescaledAllPosesPerFrame[frameNumber][followIndicesPerFrame[frameNumber]].Count > 0;
-    }
-
-    public Ray PoseRay(int frameNumber, int jointNumber, bool isLead)
-    {
-        Ray rayToJoint = new Ray(
-            PositionsPerFrame[frameNumber],
-            Vector3.Normalize(isLead
-                ? leadProjectionsPerFrame[frameNumber][jointNumber] - PositionsPerFrame[frameNumber]
-                : followProjectionsPerFrame[frameNumber][jointNumber] - PositionsPerFrame[frameNumber]));
-        return rayToJoint;
-    }
-
-    public float JointConfidence(int frameNumber, int jointNumber, bool isLead)
-    {
-        return isLead
-            ? recenteredRescaledAllPosesPerFrame[frameNumber][leadIndicesPerFrame[frameNumber]][jointNumber].Z
-            : recenteredRescaledAllPosesPerFrame[frameNumber][followIndicesPerFrame[frameNumber]][jointNumber].Z;
-    }
-
-    public void CopyPositionsToNextFrame(int frameNumber)
-    {
-        if (PositionsPerFrame.Length <= frameNumber + 1)
-        {
-            PositionsPerFrame[frameNumber] = PositionsPerFrame[frameNumber - 1];
-        }
-
-        if (RotationsPerFrame.Length <= frameNumber + 1)
-        {
-            RotationsPerFrame[frameNumber] = RotationsPerFrame[frameNumber - 1];
         }
     }
 
@@ -566,4 +535,47 @@ public class CameraSetup(Vector2 size, int totalFrameCount, PoseType poseType)
         RotationsPerFrame[frameNumber] = originalRotation;
         return false;
     }
+    
+    #endregion
+
+    #region REFERENCE
+    
+    public bool HasPoseAtFrame(int frameNumber, bool isLead)
+    {
+        return isLead
+            ? recenteredRescaledAllPosesPerFrame[frameNumber][leadIndicesPerFrame[frameNumber]].Count > 0
+            : recenteredRescaledAllPosesPerFrame[frameNumber][followIndicesPerFrame[frameNumber]].Count > 0;
+    }
+
+    public Ray PoseRay(int frameNumber, int jointNumber, bool isLead)
+    {
+        Ray rayToJoint = new Ray(
+            PositionsPerFrame[frameNumber],
+            Vector3.Normalize(isLead
+                ? leadProjectionsPerFrame[frameNumber][jointNumber] - PositionsPerFrame[frameNumber]
+                : followProjectionsPerFrame[frameNumber][jointNumber] - PositionsPerFrame[frameNumber]));
+        return rayToJoint;
+    }
+
+    public float JointConfidence(int frameNumber, int jointNumber, bool isLead)
+    {
+        return isLead
+            ? recenteredRescaledAllPosesPerFrame[frameNumber][leadIndicesPerFrame[frameNumber]][jointNumber].Z
+            : recenteredRescaledAllPosesPerFrame[frameNumber][followIndicesPerFrame[frameNumber]][jointNumber].Z;
+    }
+
+    public void CopyPositionsToNextFrame(int frameNumber)
+    {
+        if (PositionsPerFrame.Length <= frameNumber + 1)
+        {
+            PositionsPerFrame[frameNumber] = PositionsPerFrame[frameNumber - 1];
+        }
+
+        if (RotationsPerFrame.Length <= frameNumber + 1)
+        {
+            RotationsPerFrame[frameNumber] = RotationsPerFrame[frameNumber - 1];
+        }
+    }
+    
+    #endregion
 }

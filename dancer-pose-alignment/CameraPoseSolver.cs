@@ -33,7 +33,7 @@ public class CameraPoseSolver(PoseType poseType)
         cameras.Add(name, camera);
     }
 
-    public void PoseFromImage(MemoryStream imageStream, string camName)
+    public void SetPoseFromImage(MemoryStream imageStream, string camName)
     {
         List<List<Vector3>> poses = yolo.CalculatePosesFromImage(imageStream);
         cameras[camName].SetAllPosesAtFrame(poses, frameNumber);
@@ -43,101 +43,6 @@ public class CameraPoseSolver(PoseType poseType)
     {
         return cameras[camName].PosesPerDancerAtFrame(frameNumber);
     }
-
-    public Tuple<int, int> LeadAndFollowIndicesAtCameraAtFrame(string camName)
-    {
-        return cameras[camName].LeadAndFollowIndexForFrame(frameNumber);
-    }
-
-    public Tuple<int, int> MarkDancerAtCam(string camName, Vector2 click, string selectedButton)
-    {
-        return cameras[camName].MarkDancer(click, frameNumber, selectedButton);
-    }
-
-    public void MoveKeypointAtCam(string camName, Vector2 click, Tuple<int, int> selectedPoseAndKeypoint)
-    {
-        cameras[camName].MoveKeypoint(click, frameNumber, selectedPoseAndKeypoint);
-    }
-
-    public List<Vector2> ReverseProjectionOfLeadPoseAtCamera(string camName)
-    {
-        if (merged3DPoseLeadPerFrame.Count <= frameNumber) return [];
-        return merged3DPoseLeadPerFrame[frameNumber]
-            .Select(x => cameras[camName].ReverseProjectPoint(x, frameNumber)).ToList();
-    }
-
-    public List<Vector2> ReverseProjectionOfFollowPoseAtCamera(string camName)
-    {
-        if (merged3DPoseFollowPerFrame.Count <= frameNumber) return [];
-        return merged3DPoseFollowPerFrame[frameNumber]
-            .Select(x => cameras[camName].ReverseProjectPoint(x, frameNumber)).ToList();
-    }
-
-    public List<Vector2> ReverseProjectOriginCrossAtCamera(string camName)
-    {
-        CameraSetup cameraSetup = cameras[camName];
-
-        return
-        [
-            cameraSetup.ReverseProjectPoint(Vector3.Zero, frameNumber),
-            cameraSetup.ReverseProjectPoint(Vector3.UnitX, frameNumber),
-            cameraSetup.ReverseProjectPoint(Vector3.UnitY, frameNumber),
-            cameraSetup.ReverseProjectPoint(Vector3.UnitZ, frameNumber)
-        ];
-    }
-
-    #region SET CAM ORIENTATION
-
-    public bool AreAllCamerasOriented()
-    {
-        return !cameras.Values.Any(cam =>
-            cam.LeadAndFollowIndexForFrame(frameNumber).Item1 == -1 ||
-            cam.LeadAndFollowIndexForFrame(frameNumber).Item2 == -1);
-    }
-
-    public void TryHomeCamera(string camName)
-    {
-        cameras[camName].Home();
-    }
-
-    public void YawCamera(string camName, float angle)
-    {
-        cameras[camName].RotationsPerFrame[frameNumber] *= Quaternion.CreateFromAxisAngle(Vector3.UnitY, angle);
-    }
-
-    public void PitchCamera(string camName, float angle)
-    {
-        cameras[camName].RotationsPerFrame[frameNumber] *= Quaternion.CreateFromAxisAngle(Vector3.UnitX, angle);
-    }
-
-    public void RollCamera(string camName, float angle)
-    {
-        cameras[camName].RotationsPerFrame[frameNumber] *= Quaternion.CreateFromAxisAngle(Vector3.UnitZ, angle);
-    }
-
-    public void ZoomCamera(string camName, float zoom)
-    {
-        cameras[camName].FocalLength += zoom;
-    }
-
-    public void MoveCameraForward(string camName, float move)
-    {
-        cameras[camName].PositionsPerFrame[frameNumber] += cameras[camName].Forward(frameNumber) * move;
-    }
-
-    public void MoveCameraRight(string camName, float move)
-    {
-        cameras[camName].PositionsPerFrame[frameNumber] += cameras[camName].Right(frameNumber) * move;
-    }
-
-    public void MoveCameraUp(string camName, float move)
-    {
-        cameras[camName].PositionsPerFrame[frameNumber] += cameras[camName].Up(frameNumber) * move;
-    }
-
-    #endregion
-
-    #region ITERATORS
 
     public bool Advance()
     {
@@ -158,6 +63,77 @@ public class CameraPoseSolver(PoseType poseType)
 
         frameNumber--;
         return true;
+    }
+
+    public Tuple<int, int> LeadAndFollowIndicesAtCameraAtFrame(string camName)
+    {
+        return cameras[camName].LeadAndFollowIndexForFrame(frameNumber);
+    }
+
+    /// <summary>
+    /// For the selected camera, attempt to select the figure from the closes joint
+    /// </summary>
+    /// <returns>The index of the dancer and the index of the joint</returns>
+    public Tuple<int, int> MarkDancerAtCam(string camName, Vector2 click, string selectedButton)
+    {
+        return cameras[camName].MarkDancer(click, frameNumber, selectedButton);
+    }
+
+    public void MoveKeypointAtCam(string camName, Vector2 click, Tuple<int, int> selectedPoseAndKeypoint)
+    {
+        cameras[camName].MoveKeypoint(click, frameNumber, selectedPoseAndKeypoint);
+    }
+
+    public List<Vector2> ReverseProjectionOfPoseAtCamera(string camName, bool isLead)
+    {
+        if (isLead)
+        {
+            if (merged3DPoseLeadPerFrame.Count <= frameNumber) return [];
+            return merged3DPoseLeadPerFrame[frameNumber]
+                .Select(vec => cameras[camName].ReverseProjectPoint(vec, frameNumber)).ToList();
+        }
+
+        if (merged3DPoseFollowPerFrame.Count <= frameNumber) return [];
+        return merged3DPoseFollowPerFrame[frameNumber]
+            .Select(vec => cameras[camName].ReverseProjectPoint(vec, frameNumber)).ToList();
+    }
+
+    public List<Vector2> ReverseProjectOriginCrossAtCamera(string camName)
+    {
+        CameraSetup cameraSetup = cameras[camName];
+
+        return
+        [
+            cameraSetup.ReverseProjectPoint(Vector3.Zero, frameNumber),
+            cameraSetup.ReverseProjectPoint(Vector3.UnitX, frameNumber),
+            cameraSetup.ReverseProjectPoint(Vector3.UnitY, frameNumber),
+            cameraSetup.ReverseProjectPoint(Vector3.UnitZ, frameNumber)
+        ];
+    }
+
+    public void SaveData(string folder)
+    {
+        string jsonMerged3DPose = JsonConvert.SerializeObject(merged3DPoseLeadPerFrame, Formatting.Indented);
+        File.WriteAllText(Path.Combine(folder, "figure1.json"), jsonMerged3DPose);
+
+        string jsonMerged3DPoseFollow = JsonConvert.SerializeObject(merged3DPoseFollowPerFrame, Formatting.Indented);
+        File.WriteAllText(Path.Combine(folder, "figure2.json"), jsonMerged3DPoseFollow);
+
+        Console.WriteLine($"wrote 3d poses to {folder}");
+    }
+
+    #region ITERATORS
+
+    public bool AreAllCamerasOriented()
+    {
+        return !cameras.Values.Any(cam =>
+            cam.LeadAndFollowIndexForFrame(frameNumber).Item1 == -1 ||
+            cam.LeadAndFollowIndexForFrame(frameNumber).Item2 == -1);
+    }
+
+    public void TryHomeCamera(string camName)
+    {
+        cameras[camName].Home();
     }
 
     public void IterationLoop()
@@ -206,19 +182,6 @@ public class CameraPoseSolver(PoseType poseType)
         Console.WriteLine(totalError);
     }
 
-    public void SaveData(string folder)
-    {
-        string jsonMerged3DPose = JsonConvert.SerializeObject(merged3DPoseLeadPerFrame, Formatting.Indented);
-        File.WriteAllText(Path.Combine(folder, "merged3DPoseLead.json"), jsonMerged3DPose);
-
-        string jsonMerged3DPoseFollow = JsonConvert.SerializeObject(merged3DPoseFollowPerFrame, Formatting.Indented);
-        File.WriteAllText(Path.Combine(folder, "merged3DPoseFollow.json"), jsonMerged3DPoseFollow);
-
-        Console.WriteLine($"wrote 3d poses to {folder}");
-    }
-
-    #endregion
-
     public float Calculate3DPosesAndTotalError()
     {
         foreach (CameraSetup cameraSetup in cameras.Values)
@@ -228,19 +191,35 @@ public class CameraPoseSolver(PoseType poseType)
 
         if (merged3DPoseLeadPerFrame.Count <= frameNumber)
         {
+            // add a new frame
             merged3DPoseLeadPerFrame.Add([]);
+        }
+
+        if (merged3DPoseFollowPerFrame.Count <= frameNumber)
+        {
             merged3DPoseFollowPerFrame.Add([]);
         }
 
         merged3DPoseLeadPerFrame[frameNumber].Clear();
         merged3DPoseFollowPerFrame[frameNumber].Clear();
 
-        List<float3> leadRayOriginPerCameraPerJoint = []; // in batches of camera count
-        List<float3> leadRayDirectionPerCameraPerJoint = []; // in batches of camera count
-        List<float> leadJointConfidencePerCameraPerJoint = []; // in batches of camera count
-        List<float3> followRayOriginPerCameraPerJoint = []; // in batches of camera count
-        List<float3> followRayDirectionPerCameraPerJoint = []; // in batches of camera count
-        List<float> followJointConfidencePerCameraPerJoint = []; // in batches of camera count
+        List<Vector3> merged3DPoseLead = Calculate3DPose(true);
+        List<Vector3> merged3DPoseFollow = Calculate3DPose(false);
+
+        merged3DPoseLeadPerFrame[frameNumber] = merged3DPoseLead;
+        merged3DPoseFollowPerFrame[frameNumber] = merged3DPoseFollow;
+
+        return cameras.Values.Sum(cameraSetup =>
+            cameraSetup.Error(
+                merged3DPoseLeadPerFrame[frameNumber],
+                merged3DPoseFollowPerFrame[frameNumber], frameNumber));
+    }
+
+    List<Vector3> Calculate3DPose(bool isLead)
+    {
+        List<float3> rayOriginPerCameraPerJoint = []; // in batches of camera count
+        List<float3> rayDirectionPerCameraPerJoint = []; // in batches of camera count
+        List<float> jointConfidencePerCameraPerJoint = []; // in batches of camera count
 
         int arrayLength = JointExtension.PoseCount(poseType) * cameras.Count;
 
@@ -248,116 +227,96 @@ public class CameraPoseSolver(PoseType poseType)
         {
             foreach (CameraSetup cameraSetup in cameras.Values)
             {
-                if (cameraSetup.HasPoseAtFrame(frameNumber, true))
+                if (cameraSetup.HasPoseAtFrame(frameNumber, isLead))
                 {
-                    Ray ray = cameraSetup.PoseRay(frameNumber, i, true);
-                    leadRayOriginPerCameraPerJoint.Add(ray.Origin);
-                    leadRayDirectionPerCameraPerJoint.Add(ray.Direction);
-                    leadJointConfidencePerCameraPerJoint.Add(cameraSetup.JointConfidence(frameNumber, i, true));
+                    Ray ray = cameraSetup.PoseRay(frameNumber, i, isLead);
+                    rayOriginPerCameraPerJoint.Add(ray.Origin);
+                    rayDirectionPerCameraPerJoint.Add(ray.Direction);
+                    jointConfidencePerCameraPerJoint.Add(cameraSetup.JointConfidence(frameNumber, i, isLead));
                 }
                 else
                 {
-                    leadRayOriginPerCameraPerJoint.Add(float3.Zero);
-                    leadRayDirectionPerCameraPerJoint.Add(float3.UnitZ);
-                    leadJointConfidencePerCameraPerJoint.Add(0);
-                }
-
-                if (cameraSetup.HasPoseAtFrame(frameNumber, false))
-                {
-                    Ray ray = cameraSetup.PoseRay(frameNumber, i, false);
-                    followRayOriginPerCameraPerJoint.Add(ray.Origin);
-                    followRayDirectionPerCameraPerJoint.Add(ray.Direction);
-                    followJointConfidencePerCameraPerJoint.Add(cameraSetup.JointConfidence(frameNumber, i, false));
-                }
-                else
-                {
-                    followRayOriginPerCameraPerJoint.Add(float3.Zero);
-                    followRayDirectionPerCameraPerJoint.Add(float3.UnitZ);
-                    followJointConfidencePerCameraPerJoint.Add(0);
+                    rayOriginPerCameraPerJoint.Add(float3.Zero);
+                    rayDirectionPerCameraPerJoint.Add(float3.UnitZ);
+                    jointConfidencePerCameraPerJoint.Add(0);
                 }
             }
         }
 
-        float3[] leadJointMidpoints = new float3[JointExtension.PoseCount(poseType)];
+        float3[] jointMidpoints = new float3[JointExtension.PoseCount(poseType)];
 
-        using ReadWriteBuffer<float3> leadMinMidpointBuffer =
-            GraphicsDevice.GetDefault().AllocateReadWriteBuffer(leadJointMidpoints);
-        using ReadOnlyBuffer<float3> leadRayOriginBuffer =
-            GraphicsDevice.GetDefault().AllocateReadOnlyBuffer(leadRayOriginPerCameraPerJoint.ToArray());
-        using ReadOnlyBuffer<float3> leadRayDirectionBuffer = GraphicsDevice.GetDefault()
-            .AllocateReadOnlyBuffer(leadRayDirectionPerCameraPerJoint.ToArray());
-        using ReadOnlyBuffer<float> leadJointConfidenceBuffer = GraphicsDevice.GetDefault()
-            .AllocateReadOnlyBuffer(leadJointConfidencePerCameraPerJoint.ToArray());
+        using ReadWriteBuffer<float3> minMidpointBuffer =
+            GraphicsDevice.GetDefault().AllocateReadWriteBuffer(jointMidpoints);
+        using ReadOnlyBuffer<float3> rayOriginBuffer =
+            GraphicsDevice.GetDefault().AllocateReadOnlyBuffer(rayOriginPerCameraPerJoint.ToArray());
+        using ReadOnlyBuffer<float3> rayDirectionBuffer = GraphicsDevice.GetDefault()
+            .AllocateReadOnlyBuffer(rayDirectionPerCameraPerJoint.ToArray());
+        using ReadOnlyBuffer<float> jointConfidenceBuffer = GraphicsDevice.GetDefault()
+            .AllocateReadOnlyBuffer(jointConfidencePerCameraPerJoint.ToArray());
 
-        MidpointFinder leadMidpointFinder = new MidpointFinder(
-            leadMinMidpointBuffer,
-            leadRayOriginBuffer,
-            leadRayDirectionBuffer,
-            leadJointConfidenceBuffer,
+        MidpointFinder midpointFinder = new MidpointFinder(
+            minMidpointBuffer,
+            rayOriginBuffer,
+            rayDirectionBuffer,
+            jointConfidenceBuffer,
             cameras.Count);
 
         try
         {
-            GraphicsDevice.GetDefault().For(arrayLength, leadMidpointFinder);
+            GraphicsDevice.GetDefault().For(arrayLength, midpointFinder);
         }
         catch (TargetInvocationException e)
         {
             Console.WriteLine(e);
         }
 
-        float3[] leadResults = leadMinMidpointBuffer.ToArray();
-        foreach (float3 result in leadResults)
-        {
-            merged3DPoseLeadPerFrame[frameNumber].Add(new Vector3(result.X, result.Y, result.Z));
-        }
-
-        float3[] followJointMidpoints = new float3[JointExtension.PoseCount(poseType)];
-
-        using ReadWriteBuffer<float3> followMinMidpointBuffer =
-            GraphicsDevice.GetDefault().AllocateReadWriteBuffer(followJointMidpoints);
-        using ReadOnlyBuffer<float3> followRayOriginBuffer = GraphicsDevice.GetDefault()
-            .AllocateReadOnlyBuffer(followRayOriginPerCameraPerJoint.ToArray());
-        using ReadOnlyBuffer<float3> followRayDirectionBuffer = GraphicsDevice.GetDefault()
-            .AllocateReadOnlyBuffer(followRayDirectionPerCameraPerJoint.ToArray());
-        using ReadOnlyBuffer<float> followJointConfidenceBuffer = GraphicsDevice.GetDefault()
-            .AllocateReadOnlyBuffer(followJointConfidencePerCameraPerJoint.ToArray());
-
-        MidpointFinder followMidpointFinder = new MidpointFinder(
-            followMinMidpointBuffer,
-            followRayOriginBuffer,
-            followRayDirectionBuffer,
-            followJointConfidenceBuffer,
-            cameras.Count);
-
-        try
-        {
-            GraphicsDevice.GetDefault().For(arrayLength, followMidpointFinder);
-        }
-        catch (TargetInvocationException e)
-        {
-            Console.WriteLine(e);
-        }
-
-        float3[] followResults = followMinMidpointBuffer.ToArray();
-        foreach (float3 result in followResults)
-        {
-            merged3DPoseFollowPerFrame[frameNumber].Add(new Vector3(result.X, result.Y, result.Z));
-        }
-
-        float totalError = 0;
-        foreach (CameraSetup cameraSetup in cameras.Values)
-        {
-            totalError += cameraSetup.Error(merged3DPoseLeadPerFrame[frameNumber],
-                merged3DPoseFollowPerFrame[frameNumber], frameNumber);
-        }
-
-        return totalError;
+        return minMidpointBuffer.ToArray()
+            .Select(result => new Vector3(result.X, result.Y, result.Z))
+            .ToList();
     }
 
-    static float Confidence(IEnumerable<Vector3> lead, IEnumerable<Vector3> follow)
+    #endregion
+
+    #region CAMERA MOTION
+
+    public void YawCamera(string camName, float angle)
     {
-        return lead.Sum(vector3 => vector3.Z) + follow.Sum(vector3 => vector3.Z);
+        cameras[camName].RotationsPerFrame[frameNumber] *= Quaternion.CreateFromAxisAngle(Vector3.UnitY, angle);
     }
+
+    public void PitchCamera(string camName, float angle)
+    {
+        cameras[camName].RotationsPerFrame[frameNumber] *= Quaternion.CreateFromAxisAngle(Vector3.UnitX, angle);
+    }
+
+    public void RollCamera(string camName, float angle)
+    {
+        cameras[camName].RotationsPerFrame[frameNumber] *= Quaternion.CreateFromAxisAngle(Vector3.UnitZ, angle);
+    }
+
+    public void ZoomCamera(string camName, float zoom)
+    {
+        cameras[camName].FocalLength += zoom;
+    }
+
+    public void MoveCameraForward(string camName, float move)
+    {
+        cameras[camName].PositionsPerFrame[frameNumber] += cameras[camName].Forward(frameNumber) * move;
+    }
+
+    public void MoveCameraRight(string camName, float move)
+    {
+        cameras[camName].PositionsPerFrame[frameNumber] += cameras[camName].Right(frameNumber) * move;
+    }
+
+    public void MoveCameraUp(string camName, float move)
+    {
+        cameras[camName].PositionsPerFrame[frameNumber] += cameras[camName].Up(frameNumber) * move;
+    }
+
+    #endregion
+
+    #region TEST POINT
 
     public bool AnyPointsBelowGround() => merged3DPoseLeadPerFrame[frameNumber].Any(vec => vec.Y < -.1f) ||
                                           merged3DPoseFollowPerFrame[frameNumber].Any(vec => vec.Y < -.1f);
@@ -377,4 +336,6 @@ public class CameraPoseSolver(PoseType poseType)
         return merged3DPoseLeadPerFrame[frameNumber].Any(vec => vec.Y > 2.5) ||
                merged3DPoseFollowPerFrame[frameNumber].Any(vec => vec.Y > 2.5);
     }
+
+    #endregion
 }

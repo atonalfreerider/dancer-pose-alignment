@@ -146,7 +146,7 @@ public partial class MainWindow : Window
         graphicsImages.Clear();
         CanvasContainer.Items.Clear();
 
-        highestPositiveOffsetSeconds = videoFilePathsAndOffsets.Max(x => x.Value);
+        highestPositiveOffsetSeconds = videoFilePathsAndOffsets.Max(kvp => kvp.Value);
 
         // SET FRAME ZERO FOR EACH CAMERA
         int camCount = 0;
@@ -227,7 +227,7 @@ public partial class MainWindow : Window
                 new Vector2((float)size.Width, (float)size.Height),
                 framesAt30Fps);
 
-            cameraPoseSolver.PoseFromImage(frameMat.ToMemoryStream(), videoFilePath);
+            cameraPoseSolver.SetPoseFromImage(frameMat.ToMemoryStream(), videoFilePath);
 
             DrawingImage drawingImage = new DrawingImage();
             DrawingGroup drawingGroup = PreviewDrawer.DrawGeometry(
@@ -282,7 +282,7 @@ public partial class MainWindow : Window
 
             frameImages[videoFilePath].Source = frame;
 
-            cameraPoseSolver.PoseFromImage(frameMat.ToMemoryStream(), videoFilePath);
+            cameraPoseSolver.SetPoseFromImage(frameMat.ToMemoryStream(), videoFilePath);
 
             DrawingImage drawingImage = new DrawingImage();
             DrawingGroup drawingGroup = PreviewDrawer.DrawGeometry(
@@ -373,8 +373,8 @@ public partial class MainWindow : Window
     {
         Tuple<int, int> leadAndFollowIndex = cameraPoseSolver.LeadAndFollowIndicesAtCameraAtFrame(camName);
 
-        List<Vector2> leadProjectionsAtFrame = cameraPoseSolver.ReverseProjectionOfLeadPoseAtCamera(camName);
-        List<Vector2> followProjectionsAtFrame = cameraPoseSolver.ReverseProjectionOfFollowPoseAtCamera(camName);
+        List<Vector2> leadProjectionsAtFrame = cameraPoseSolver.ReverseProjectionOfPoseAtCamera(camName, true);
+        List<Vector2> followProjectionsAtFrame = cameraPoseSolver.ReverseProjectionOfPoseAtCamera(camName, false);
         List<Vector2> originCross = cameraPoseSolver.ReverseProjectOriginCrossAtCamera(camName);
 
         DrawingImage drawingImage = new DrawingImage();
