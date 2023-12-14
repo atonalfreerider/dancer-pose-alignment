@@ -311,7 +311,7 @@ public partial class MainWindow : Window
         {
             SetDancer(new Vector2((float)x, (float)y), selectedCamera);
         }
-        
+
         cameraPoseSolver.TryHomeCamera(selectedCamera);
         RedrawCamera(selectedCamera);
 
@@ -334,9 +334,11 @@ public partial class MainWindow : Window
 
         double x = point.Position.X;
         double y = point.Position.Y;
-        if (selectedPoseAndJointAtCamera.Item1 > -1 && selectedPoseAndJointAtCamera.Item2 > -1 && GetSelectedButton() == "Move")
+        if (selectedPoseAndJointAtCamera.Item1 > -1 && selectedPoseAndJointAtCamera.Item2 > -1 &&
+            GetSelectedButton() == "Move")
         {
-            cameraPoseSolver.MoveKeypointAtCam(selectedCamera, new Vector2((float)x, (float)y), selectedPoseAndJointAtCamera);
+            cameraPoseSolver.MoveKeypointAtCam(selectedCamera, new Vector2((float)x, (float)y),
+                selectedPoseAndJointAtCamera);
             RedrawCamera(selectedCamera);
         }
 
@@ -396,98 +398,98 @@ public partial class MainWindow : Window
     {
         if (string.IsNullOrEmpty(selectedCamera)) return;
         cameraPoseSolver.YawCamera(selectedCamera, -.01f);
-        SetPreviewsToFrame();
+        RedrawCamera(selectedCamera);
     }
 
     void YawRightButton_Click(object sender, RoutedEventArgs e)
     {
         if (string.IsNullOrEmpty(selectedCamera)) return;
         cameraPoseSolver.YawCamera(selectedCamera, .01f);
-        SetPreviewsToFrame();
+        RedrawCamera(selectedCamera);
     }
 
     void PitchUpButton_Click(object sender, RoutedEventArgs e)
     {
         if (string.IsNullOrEmpty(selectedCamera)) return;
         cameraPoseSolver.PitchCamera(selectedCamera, -.01f);
-        SetPreviewsToFrame();
+        RedrawCamera(selectedCamera);
     }
 
     void PitchDownButton_Click(object sender, RoutedEventArgs e)
     {
         if (string.IsNullOrEmpty(selectedCamera)) return;
         cameraPoseSolver.PitchCamera(selectedCamera, .01f);
-        SetPreviewsToFrame();
+        RedrawCamera(selectedCamera);
     }
 
     void ZoomInButton_Click(object sender, RoutedEventArgs e)
     {
         if (string.IsNullOrEmpty(selectedCamera)) return;
         cameraPoseSolver.ZoomCamera(selectedCamera, .01f);
-        SetPreviewsToFrame();
+        RedrawCamera(selectedCamera);
     }
 
     void ZoomOutButton_Click(object sender, RoutedEventArgs e)
     {
         if (string.IsNullOrEmpty(selectedCamera)) return;
         cameraPoseSolver.ZoomCamera(selectedCamera, -.01f);
-        SetPreviewsToFrame();
+        RedrawCamera(selectedCamera);
     }
 
     void RollLeftButton_Click(object sender, RoutedEventArgs e)
     {
         if (string.IsNullOrEmpty(selectedCamera)) return;
         cameraPoseSolver.RollCamera(selectedCamera, .01f);
-        SetPreviewsToFrame();
+        RedrawCamera(selectedCamera);
     }
 
     void RollRightButton_Click(object sender, RoutedEventArgs e)
     {
         if (string.IsNullOrEmpty(selectedCamera)) return;
         cameraPoseSolver.RollCamera(selectedCamera, -.01f);
-        SetPreviewsToFrame();
+        RedrawCamera(selectedCamera);
     }
 
     void TranslateLeftButton_Click(object sender, RoutedEventArgs e)
     {
         if (string.IsNullOrEmpty(selectedCamera)) return;
         cameraPoseSolver.MoveCameraRight(selectedCamera, -.01f);
-        SetPreviewsToFrame();
+        RedrawCamera(selectedCamera);
     }
 
     void TranslateRightButton_Click(object sender, RoutedEventArgs e)
     {
         if (string.IsNullOrEmpty(selectedCamera)) return;
         cameraPoseSolver.MoveCameraRight(selectedCamera, .01f);
-        SetPreviewsToFrame();
+        RedrawCamera(selectedCamera);
     }
 
     void TranslateUpButton_Click(object sender, RoutedEventArgs e)
     {
         if (string.IsNullOrEmpty(selectedCamera)) return;
         cameraPoseSolver.MoveCameraUp(selectedCamera, .01f);
-        SetPreviewsToFrame();
+        RedrawCamera(selectedCamera);
     }
 
     void TranslateDownButton_Click(object sender, RoutedEventArgs e)
     {
         if (string.IsNullOrEmpty(selectedCamera)) return;
         cameraPoseSolver.MoveCameraUp(selectedCamera, -.01f);
-        SetPreviewsToFrame();
+        RedrawCamera(selectedCamera);
     }
 
     void TranslateForwardButton_Click(object sender, RoutedEventArgs e)
     {
         if (string.IsNullOrEmpty(selectedCamera)) return;
         cameraPoseSolver.MoveCameraForward(selectedCamera, -.01f);
-        SetPreviewsToFrame();
+        RedrawCamera(selectedCamera);
     }
 
     void TranslateBackwardButton_Click(object sender, RoutedEventArgs e)
     {
         if (string.IsNullOrEmpty(selectedCamera)) return;
         cameraPoseSolver.MoveCameraForward(selectedCamera, -.01f);
-        SetPreviewsToFrame();
+        RedrawCamera(selectedCamera);
     }
 
     #endregion

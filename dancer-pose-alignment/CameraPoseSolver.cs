@@ -64,7 +64,7 @@ public class CameraPoseSolver(PoseType poseType)
     {
         return cameras[camName].MarkDancer(click, frameNumber, selectedButton);
     }
-    
+
     public void MoveKeypointAtCam(string camName, Vector2 click, Tuple<int, int> selectedPoseAndKeypoint)
     {
         cameras[camName].MoveKeypoint(click, frameNumber, selectedPoseAndKeypoint);
@@ -105,7 +105,7 @@ public class CameraPoseSolver(PoseType poseType)
             cam.LeadAndFollowIndexForFrame(frameNumber).Item1 == -1 ||
             cam.LeadAndFollowIndexForFrame(frameNumber).Item2 == -1);
     }
-    
+
     public void TryHomeCamera(string camName)
     {
         cameras[camName].Home();
@@ -134,28 +134,16 @@ public class CameraPoseSolver(PoseType poseType)
     public void MoveCameraForward(string camName, float move)
     {
         cameras[camName].PositionsPerFrame[frameNumber] += cameras[camName].Forward(frameNumber) * move;
-        if (frameNumber == 0)
-        {
-            cameras[camName].Home();
-        }
     }
 
     public void MoveCameraRight(string camName, float move)
     {
         cameras[camName].PositionsPerFrame[frameNumber] += cameras[camName].Right(frameNumber) * move;
-        if (frameNumber == 0)
-        {
-            cameras[camName].Home();
-        }
     }
 
     public void MoveCameraUp(string camName, float move)
     {
         cameras[camName].PositionsPerFrame[frameNumber] += cameras[camName].Up(frameNumber) * move;
-        if (frameNumber == 0)
-        {
-            cameras[camName].Home();
-        }
     }
 
     #endregion

@@ -2,10 +2,10 @@
 
 namespace dancer_pose_alignment;
 
-public class CameraSetup(Vector2 size, int frameCount, PoseType poseType)
+public class CameraSetup(Vector2 size, int totalFrameCount, PoseType poseType)
 {
-    public readonly Vector3[] PositionsPerFrame = new Vector3[frameCount];
-    public readonly Quaternion[] RotationsPerFrame = new Quaternion[frameCount];
+    public readonly Vector3[] PositionsPerFrame = new Vector3[totalFrameCount];
+    public readonly Quaternion[] RotationsPerFrame = new Quaternion[totalFrameCount];
     public float FocalLength = .05f;
 
     const float PixelToMeter = 0.000264583f;
@@ -22,14 +22,15 @@ public class CameraSetup(Vector2 size, int frameCount, PoseType poseType)
         Vector3.UnitX,
         RotationsPerFrame[frame]);
 
-    readonly List<Vector3>[] leadProjectionsPerFrame = new List<Vector3>[frameCount];
-    readonly List<Vector3>[] followProjectionsPerFrame = new List<Vector3>[frameCount];
+    readonly List<Vector3>[] leadProjectionsPerFrame = new List<Vector3>[totalFrameCount];
+    readonly List<Vector3>[] followProjectionsPerFrame = new List<Vector3>[totalFrameCount];
 
-    readonly List<List<Vector3>>[] allPosesAndConfidencesPerFrame = new List<List<Vector3>>[frameCount];
-    readonly List<List<Vector3>>[] recenteredRescaledAllPosesPerFrame = new List<List<Vector3>>[frameCount];
+    readonly List<List<Vector3>>[] allPosesAndConfidencesPerFrame = new List<List<Vector3>>[totalFrameCount];
+    readonly List<List<Vector3>>[] recenteredRescaledAllPosesPerFrame = new List<List<Vector3>>[totalFrameCount];
 
-    readonly int[] leadIndicesPerFrame = new int[frameCount];
-    readonly int[] followIndicesPerFrame = new int[frameCount];
+    readonly int[] leadIndicesPerFrame = new int[totalFrameCount];
+    readonly int[] followIndicesPerFrame = new int[totalFrameCount];
+
 
     public void SetAllPosesAtFrame(List<List<Vector3>> allPoses, int frameNumber)
     {
@@ -102,11 +103,15 @@ public class CameraSetup(Vector2 size, int frameCount, PoseType poseType)
 
     public void Project(int frameNumber)
     {
+        // two things happening here: 
+        // 1 the vector2 is transformed to a vector 3 where x and y on the image correspond to x and y on the 3D camera 
+        // plane 
+        // 2 the z confidence value is overwritten with 0, which is also the z value of the camera position 
         List<Vector3> flattenedLead = recenteredRescaledAllPosesPerFrame[frameNumber][leadIndicesPerFrame[frameNumber]]
-            .Select(x => x with { Z = 0 }).ToList();
+            .Select(vec => vec with { Z = 0 }).ToList();
         List<Vector3> flattenedFollow =
             recenteredRescaledAllPosesPerFrame[frameNumber][followIndicesPerFrame[frameNumber]]
-                .Select(x => x with { Z = 0 }).ToList();
+                .Select(vec => vec with { Z = 0 }).ToList();
 
         List<Vector3> leadProjectionsAtThisFrame = Adjusted(flattenedLead, frameNumber);
         leadProjectionsPerFrame[frameNumber] = leadProjectionsAtThisFrame;
@@ -209,28 +214,32 @@ public class CameraSetup(Vector2 size, int frameCount, PoseType poseType)
 
     List<Vector3> Adjusted(IEnumerable<Vector3> keypoints, int frame)
     {
-        // Translate keypoints to the camera center
+        // Translate keypoints to the camera center 
         Vector3 cameraCenter = PositionsPerFrame[frame];
-        List<Vector3> adjustedKeypoints = keypoints.Select(t => cameraCenter + t).ToList();
+        List<Vector3> adjustedKeypoints = keypoints.Select(vec => cameraCenter + vec).ToList();
 
-        // Rotate keypoints around the camera center by the camera's rotation quaternion
+        // Rotate keypoints around the camera center by the camera's rotation quaternion 
         Quaternion rotation = RotationsPerFrame[frame];
         for (int i = 0; i < adjustedKeypoints.Count; i++)
         {
             adjustedKeypoints[i] = Vector3.Transform(adjustedKeypoints[i] - cameraCenter, rotation) + cameraCenter;
         }
 
-        // Translate keypoints to the camera's focal length
-        return adjustedKeypoints.Select(t => t + Forward(frame) * FocalLength).ToList();
+        // Translate keypoints to the camera's focal length 
+        return adjustedKeypoints.Select(vec => vec + Forward(frame) * FocalLength).ToList();
     }
 
     /// <summary>
     /// Should only be called on frame 0
     /// </summary>
+    /// <summary> 
+    /// Should only be called on frame 0 
+    /// </summary> 
     public void Home()
     {
-        if (leadIndicesPerFrame[0] == -1 || followIndicesPerFrame[0] == -1) return;
+        if (leadIndicesPerFrame[0] == -1) return;
 
+        // 1 - ORBIT 
         Vector2 leadLeftAnkle = new Vector2(
             allPosesAndConfidencesPerFrame[0][leadIndicesPerFrame[0]][LAnkleIndex].X,
             allPosesAndConfidencesPerFrame[0][leadIndicesPerFrame[0]][LAnkleIndex].Y);
@@ -239,24 +248,11 @@ public class CameraSetup(Vector2 size, int frameCount, PoseType poseType)
             allPosesAndConfidencesPerFrame[0][leadIndicesPerFrame[0]][RAnkleIndex].X,
             allPosesAndConfidencesPerFrame[0][leadIndicesPerFrame[0]][RAnkleIndex].Y);
 
-        Vector2 leadRightHip = new Vector2(
-            allPosesAndConfidencesPerFrame[0][leadIndicesPerFrame[0]][RHipIndex].X,
-            allPosesAndConfidencesPerFrame[0][leadIndicesPerFrame[0]][RHipIndex].Y);
-
-        Vector2 followLeftAnkle = new Vector2(
-            allPosesAndConfidencesPerFrame[0][followIndicesPerFrame[0]][LAnkleIndex].X,
-            allPosesAndConfidencesPerFrame[0][followIndicesPerFrame[0]][LAnkleIndex].Y);
-
-        Vector2 followRightAnkle = new Vector2(
-            allPosesAndConfidencesPerFrame[0][followIndicesPerFrame[0]][RAnkleIndex].X,
-            allPosesAndConfidencesPerFrame[0][followIndicesPerFrame[0]][RAnkleIndex].Y);
-
-        Vector3 hipHeight = new Vector3(0, .7f, 0);
         Vector3 stanceWidth = new Vector3(-.3f, 0f, 0f);
         const float camRadius = 5f;
         const float camHeight = 1.5f;
 
-        // calculate slope and orientation of lead ankle stance, so that iteration can match it
+        // calculate slope and orientation of lead ankle stance, so that iteration can match it 
         float leadPoseAnkleSlope = (leadLeftAnkle.Y - leadRightAnkle.Y) / (leadLeftAnkle.X - leadRightAnkle.X);
         bool isFacingLead = leadRightAnkle.X < leadLeftAnkle.X;
         if (!isFacingLead)
@@ -264,8 +260,7 @@ public class CameraSetup(Vector2 size, int frameCount, PoseType poseType)
             leadPoseAnkleSlope = (leadRightAnkle.Y - leadLeftAnkle.Y) / (leadRightAnkle.X - leadLeftAnkle.X);
         }
 
-        Vector2 origin;
-        // rotate camera in circle at 5m radius and 1.5m elevation pointed at origin until orientation and slope matches
+        // rotate camera in circle at 5m radius and 1.5m elevation pointed at origin until orientation and slope matches 
         for (float alpha = 0; alpha < 2 * MathF.PI; alpha += .001f)
         {
             PositionsPerFrame[0] = new Vector3(
@@ -278,9 +273,9 @@ public class CameraSetup(Vector2 size, int frameCount, PoseType poseType)
                 Quaternion.Identity,
                 PositionsPerFrame[0]);
 
-            origin = ReverseProjectPoint(Vector3.Zero, 0); // lead right ankle
-            Vector2 leadStance = ReverseProjectPoint(stanceWidth, 0); // lead left ankle
-            
+            Vector2 origin = ReverseProjectPoint(Vector3.Zero, 0);
+            Vector2 leadStance = ReverseProjectPoint(stanceWidth, 0); // lead left ankle 
+
             float slopeOfCamera = (leadStance.Y - origin.Y) / (leadStance.X - origin.X);
             bool isFacingLeadInCamera = origin.X < leadStance.X;
             if (!isFacingLeadInCamera)
@@ -341,6 +336,28 @@ public class CameraSetup(Vector2 size, int frameCount, PoseType poseType)
             // pitch down 
             RotationsPerFrame[0] *= Quaternion.CreateFromAxisAngle(Vector3.UnitX, .001f);
             origin = ReverseProjectPoint(Vector3.Zero, 0);
+        }
+    }
+
+    void CenterRoll()
+    {
+        Vector2 unitY = ReverseProjectPoint(Vector3.UnitY, 0);
+        Vector2 origin = ReverseProjectPoint(Vector3.Zero, 0);
+
+        while (unitY.X < origin.X)
+        {
+            // roll left 
+            RotationsPerFrame[0] *= Quaternion.CreateFromAxisAngle(Vector3.UnitZ, .001f);
+            origin = ReverseProjectPoint(Vector3.Zero, 0);
+            unitY = ReverseProjectPoint(Vector3.UnitY, 0);
+        }
+
+        while (unitY.X > origin.X)
+        {
+            // roll right 
+            RotationsPerFrame[0] *= Quaternion.CreateFromAxisAngle(Vector3.UnitZ, -.001f);
+            origin = ReverseProjectPoint(Vector3.Zero, 0);
+            unitY = ReverseProjectPoint(Vector3.UnitY, 0);
         }
     }
 
