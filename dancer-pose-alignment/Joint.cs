@@ -105,11 +105,109 @@ public static class JointExtension
         PoseType.Halpe => (int)HalpeJoint.RAnkle,
         _ => -1
     };
+    
+    public static int LKneeIndex(PoseType poseType) => poseType switch
+    {
+        PoseType.Coco => (int)CocoJoint.L_Knee,
+        PoseType.Halpe => (int)HalpeJoint.LKnee,
+        _ => -1
+    };
+    
+    public static int RKneeIndex(PoseType poseType) => poseType switch
+    {
+        PoseType.Coco => (int)CocoJoint.R_Knee,
+        PoseType.Halpe => (int)HalpeJoint.RKnee,
+        _ => -1
+    };
 
     public static int RHipIndex(PoseType poseType) => poseType switch
     {
         PoseType.Coco => (int)CocoJoint.R_Hip,
         PoseType.Halpe => (int)HalpeJoint.RHip,
+        _ => -1
+    };
+    
+    public static int LHipIndex(PoseType poseType) => poseType switch
+    {
+        PoseType.Coco => (int)CocoJoint.L_Hip,
+        PoseType.Halpe => (int)HalpeJoint.LHip,
+        _ => -1
+    };
+    
+    public static int RShoulderIndex(PoseType poseType) => poseType switch
+    {
+        PoseType.Coco => (int)CocoJoint.R_Shoulder,
+        PoseType.Halpe => (int)HalpeJoint.RShoulder,
+        _ => -1
+    };
+    
+    public static int LShoulderIndex(PoseType poseType) => poseType switch
+    {
+        PoseType.Coco => (int)CocoJoint.L_Shoulder,
+        PoseType.Halpe => (int)HalpeJoint.LShoulder,
+        _ => -1
+    };
+    
+    public static int RElbowIndex(PoseType poseType) => poseType switch
+    {
+        PoseType.Coco => (int)CocoJoint.R_Elbow,
+        PoseType.Halpe => (int)HalpeJoint.RElbow,
+        _ => -1
+    };
+    
+    public static int LElbowIndex(PoseType poseType) => poseType switch
+    {
+        PoseType.Coco => (int)CocoJoint.L_Elbow,
+        PoseType.Halpe => (int)HalpeJoint.LElbow,
+        _ => -1
+    };
+    
+    public static int RWristIndex(PoseType poseType) => poseType switch
+    {
+        PoseType.Coco => (int)CocoJoint.R_Wrist,
+        PoseType.Halpe => (int)HalpeJoint.RWrist,
+        _ => -1
+    };
+    
+    public static int LWristIndex(PoseType poseType) => poseType switch
+    {
+        PoseType.Coco => (int)CocoJoint.L_Wrist,
+        PoseType.Halpe => (int)HalpeJoint.LWrist,
+        _ => -1
+    };
+    
+    public static int REyeIndex(PoseType poseType) => poseType switch
+    {
+        PoseType.Coco => (int)CocoJoint.R_Eye,
+        PoseType.Halpe => (int)HalpeJoint.REye,
+        _ => -1
+    };
+    
+    public static int LEyeIndex(PoseType poseType) => poseType switch
+    {
+        PoseType.Coco => (int)CocoJoint.L_Eye,
+        PoseType.Halpe => (int)HalpeJoint.LEye,
+        _ => -1
+    };
+    
+    public static int REarIndex(PoseType poseType) => poseType switch
+    {
+        PoseType.Coco => (int)CocoJoint.R_Ear,
+        PoseType.Halpe => (int)HalpeJoint.REar,
+        _ => -1
+    };
+    
+    public static int LEarIndex(PoseType poseType) => poseType switch
+    {
+        PoseType.Coco => (int)CocoJoint.L_Ear,
+        PoseType.Halpe => (int)HalpeJoint.LEar,
+        _ => -1
+    };
+    
+    public static int NoseIndex(PoseType poseType) => poseType switch
+    {
+        PoseType.Coco => (int)CocoJoint.Nose,
+        PoseType.Halpe => (int)HalpeJoint.Nose,
         _ => -1
     };
 
