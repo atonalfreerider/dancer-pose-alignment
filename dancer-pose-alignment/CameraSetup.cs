@@ -190,36 +190,16 @@ public class CameraSetup(Vector2 size, int totalFrameCount, PoseType poseType)
         return imagePlaneCoordinates;
     }
 
-    public float Error(List<Vector3> merged3DPoseLead, List<Vector3> merged3DPoseFollow, int frameNumber)
+    public float Error(IEnumerable<Vector3> pose3D, bool isLead, int frameNumber)
     {
-        float error = 0;
-        if (leadProjectionsPerFrame.Length <= frameNumber) return 0;
+        List<Vector3> comparePose = isLead 
+            ? recenteredRescaledAllPosesPerFrame[frameNumber][leadIndicesPerFrame[frameNumber]]
+            : recenteredRescaledAllPosesPerFrame[frameNumber][followIndicesPerFrame[frameNumber]];
 
-        for (int i = 0; i < merged3DPoseLead.Count; i++)
-        {
-            if (leadProjectionsPerFrame[frameNumber].Count <= i) continue;
-            Vector3 target = TargetAtFrame(merged3DPoseLead[i], frameNumber);
-            Vector3 keypoint = TargetAtFrame(leadProjectionsPerFrame[frameNumber][i], frameNumber);
-
-            // find the angle between the vectors
-            error += MathF.Acos(Vector3.Dot(target, keypoint)) *
-                     recenteredRescaledAllPosesPerFrame[frameNumber][leadIndicesPerFrame[frameNumber]][i]
-                         .Z; // confidence
-        }
-
-        for (int i = 0; i < merged3DPoseFollow.Count; i++)
-        {
-            if (followProjectionsPerFrame[frameNumber].Count <= i) continue;
-            Vector3 target = TargetAtFrame(merged3DPoseFollow[i], frameNumber);
-            Vector3 keypoint = TargetAtFrame(followProjectionsPerFrame[frameNumber][i], frameNumber);
-
-            // find the angle between the vectors
-            error += MathF.Acos(Vector3.Dot(target, keypoint)) *
-                     recenteredRescaledAllPosesPerFrame[frameNumber][followIndicesPerFrame[frameNumber]][i]
-                         .Z; // confidence
-        }
-
-        return error;
+        return pose3D.Select(vec => ReverseProjectPoint(vec, frameNumber))
+            .Select((target, i) => Vector2.Distance(
+                target, 
+                new Vector2(comparePose[i].X, comparePose[i].Y)) * comparePose[i].Z).Sum();
     }
 
     /// <summary>
@@ -237,9 +217,6 @@ public class CameraSetup(Vector2 size, int totalFrameCount, PoseType poseType)
     /// <summary>
     /// Should only be called on frame 0
     /// </summary>
-    /// <summary> 
-    /// Should only be called on frame 0 
-    /// </summary> 
     public void Home()
     {
         if (leadIndicesPerFrame[0] == -1) return;
@@ -372,6 +349,66 @@ public class CameraSetup(Vector2 size, int totalFrameCount, PoseType poseType)
             origin = ReverseProjectPoint(Vector3.Zero, 0);
             unitY = ReverseProjectPoint(Vector3.UnitY, 0);
         }
+    }
+
+    /// <summary>
+    /// Should only be called on frame 0
+    /// </summary>
+    public bool IterateHeight(CameraPoseSolver poseSolver)
+    {
+        const float delta = 0.5f;
+        if (PositionsPerFrame[0].Y + delta > 2.5 || PositionsPerFrame[0].Y - delta < 0.05f) return false;
+        
+        float currentError = poseSolver.Calculate3DPosesAndTotalError();
+        
+        Vector2 leadRightAnkle = new Vector2(
+            allPosesAndConfidencesPerFrame[0][leadIndicesPerFrame[0]][JointExtension.RAnkleIndex(poseType)].X,
+            allPosesAndConfidencesPerFrame[0][leadIndicesPerFrame[0]][JointExtension.RAnkleIndex(poseType)].Y);
+
+        // yaw camera left and right
+        float originalHeight = PositionsPerFrame[0].Y;
+        Quaternion originalRotation = RotationsPerFrame[0];
+
+        
+        
+        PositionsPerFrame[0] = new Vector3(
+            PositionsPerFrame[0].X,
+            PositionsPerFrame[0].Y + delta,
+            PositionsPerFrame[0].Z);
+        
+        CenterRightLeadAnkleOnOrigin(leadRightAnkle);
+        float upError = poseSolver.Calculate3DPosesAndTotalError();
+        
+        PositionsPerFrame[0] = new Vector3(
+            PositionsPerFrame[0].X,
+            originalHeight -  delta,
+            PositionsPerFrame[0].Z);
+        
+        CenterRightLeadAnkleOnOrigin(leadRightAnkle);
+        float downError = poseSolver.Calculate3DPosesAndTotalError();
+
+        if (upError < downError && upError < currentError)
+        {
+            PositionsPerFrame[0] = new Vector3(
+                PositionsPerFrame[0].X,
+                originalHeight + delta,
+                PositionsPerFrame[0].Z);
+            CenterRightLeadAnkleOnOrigin(leadRightAnkle);
+            return true;
+        }
+
+        if (downError < upError && downError < currentError)
+        {
+            return true;
+        }
+
+        // reset
+        PositionsPerFrame[0] = new Vector3(
+            PositionsPerFrame[0].X,
+            originalHeight,
+            PositionsPerFrame[0].Z);
+        RotationsPerFrame[0] = originalRotation;
+        return false;
     }
 
     public bool IterateOrientation(CameraPoseSolver poseSolver, int frameNumber)

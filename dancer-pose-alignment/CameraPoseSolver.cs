@@ -138,7 +138,8 @@ public class CameraPoseSolver(PoseType poseType)
 
     public void IterationLoop()
     {
-        if (merged3DPoseFollowPerFrame.Count <= frameNumber) return;
+        if (!AreAllCamerasOriented()) return;
+        
         float totalError = Calculate3DPosesAndTotalError();
 
         int iterationCount = 0;
@@ -148,10 +149,8 @@ public class CameraPoseSolver(PoseType poseType)
             float highestError = 0;
             foreach (CameraSetup cameraSetup in cameras.Values)
             {
-                float error = cameraSetup.Error(
-                    merged3DPoseLeadPerFrame[frameNumber],
-                    merged3DPoseFollowPerFrame[frameNumber],
-                    frameNumber);
+                float error = cameraSetup.Error(merged3DPoseLeadPerFrame[frameNumber], true, frameNumber) +
+                              cameraSetup.Error(merged3DPoseFollowPerFrame[frameNumber], false, frameNumber);
 
                 if (error > highestError)
                 {
@@ -166,11 +165,23 @@ public class CameraPoseSolver(PoseType poseType)
                 break;
             }
 
-            // TODO translate XYZ +/- .1m and determine which path has lowest error after homing
-            bool moved = highestErrorCam.IterateOrientation(this, frameNumber);
-            if (!moved)
+            if (frameNumber == 0)
             {
-                break;
+                // lead right ankle is pinned to origin
+                // move camera up and down
+                bool moved = highestErrorCam.IterateHeight(this);
+                if (!moved)
+                {
+                    break;
+                }
+            }
+            else
+            {
+                bool moved = highestErrorCam.IterateOrientation(this, frameNumber);
+                if (!moved)
+                {
+                    break;
+                }
             }
 
             totalError = Calculate3DPosesAndTotalError();
@@ -210,9 +221,8 @@ public class CameraPoseSolver(PoseType poseType)
         merged3DPoseFollowPerFrame[frameNumber] = merged3DPoseFollow;
 
         return cameras.Values.Sum(cameraSetup =>
-            cameraSetup.Error(
-                merged3DPoseLeadPerFrame[frameNumber],
-                merged3DPoseFollowPerFrame[frameNumber], frameNumber));
+            cameraSetup.Error(merged3DPoseLeadPerFrame[frameNumber], true, frameNumber) +
+            cameraSetup.Error(merged3DPoseFollowPerFrame[frameNumber], false, frameNumber));
     }
 
     List<Vector3> Calculate3DPose(bool isLead)

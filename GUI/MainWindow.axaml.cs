@@ -313,6 +313,7 @@ public partial class MainWindow : Window
         }
 
         cameraPoseSolver.TryHomeCamera(selectedCamera);
+        cameraPoseSolver.IterationLoop();
         RedrawCamera(selectedCamera);
 
         if (cameraPoseSolver.AreAllCamerasOriented())
