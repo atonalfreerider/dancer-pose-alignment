@@ -2,24 +2,13 @@ using System.Numerics;
 using System.Reflection;
 using ComputeSharp;
 using Newtonsoft.Json;
-using SixLabors.ImageSharp;
 
 namespace dancer_pose_alignment;
-
-public enum PoseType
-{
-    Coco = 0,
-    Halpe = 1
-}
 
 public class CameraPoseSolver(PoseType poseType)
 {
     readonly List<List<Vector3>> merged3DPoseLeadPerFrame = [];
     readonly List<List<Vector3>> merged3DPoseFollowPerFrame = [];
-
-    int poseCount => poseType == PoseType.Coco
-        ? Enum.GetNames<CocoJoints>().Length
-        : 26; // Halpe
 
     readonly Dictionary<string, CameraSetup> cameras = [];
     int frameNumber = 0;
@@ -253,9 +242,9 @@ public class CameraPoseSolver(PoseType poseType)
         List<float3> followRayDirectionPerCameraPerJoint = []; // in batches of camera count
         List<float> followJointConfidencePerCameraPerJoint = []; // in batches of camera count
 
-        int arrayLength = poseCount * cameras.Count;
+        int arrayLength = JointExtension.PoseCount(poseType) * cameras.Count;
 
-        for (int i = 0; i < poseCount; i++)
+        for (int i = 0; i < JointExtension.PoseCount(poseType); i++)
         {
             foreach (CameraSetup cameraSetup in cameras.Values)
             {
@@ -289,7 +278,7 @@ public class CameraPoseSolver(PoseType poseType)
             }
         }
 
-        float3[] leadJointMidpoints = new float3[poseCount];
+        float3[] leadJointMidpoints = new float3[JointExtension.PoseCount(poseType)];
 
         using ReadWriteBuffer<float3> leadMinMidpointBuffer =
             GraphicsDevice.GetDefault().AllocateReadWriteBuffer(leadJointMidpoints);
@@ -322,7 +311,7 @@ public class CameraPoseSolver(PoseType poseType)
             merged3DPoseLeadPerFrame[frameNumber].Add(new Vector3(result.X, result.Y, result.Z));
         }
 
-        float3[] followJointMidpoints = new float3[poseCount];
+        float3[] followJointMidpoints = new float3[JointExtension.PoseCount(poseType)];
 
         using ReadWriteBuffer<float3> followMinMidpointBuffer =
             GraphicsDevice.GetDefault().AllocateReadWriteBuffer(followJointMidpoints);
@@ -377,9 +366,9 @@ public class CameraPoseSolver(PoseType poseType)
     {
         float lowestLeadAnkle = Math.Min(
             merged3DPoseLeadPerFrame[frameNumber][
-                poseType == PoseType.Coco ? (int)CocoJoints.L_Ankle : (int)HalpeJoints.LAnkle].Y,
+                poseType == PoseType.Coco ? (int)CocoJoint.L_Ankle : (int)HalpeJoint.LAnkle].Y,
             merged3DPoseLeadPerFrame[frameNumber][
-                poseType == PoseType.Coco ? (int)CocoJoints.R_Ankle : (int)HalpeJoints.RAnkle].Y);
+                poseType == PoseType.Coco ? (int)CocoJoint.R_Ankle : (int)HalpeJoint.RAnkle].Y);
         return lowestLeadAnkle > 0.1f; // 10cm above ground
     }
 

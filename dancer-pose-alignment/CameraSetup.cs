@@ -240,12 +240,12 @@ public class CameraSetup(Vector2 size, int totalFrameCount, PoseType poseType)
 
         // 1 - ORBIT 
         Vector2 leadLeftAnkle = new Vector2(
-            allPosesAndConfidencesPerFrame[0][leadIndicesPerFrame[0]][LAnkleIndex].X,
-            allPosesAndConfidencesPerFrame[0][leadIndicesPerFrame[0]][LAnkleIndex].Y);
+            allPosesAndConfidencesPerFrame[0][leadIndicesPerFrame[0]][JointExtension.LAnkleIndex(poseType)].X,
+            allPosesAndConfidencesPerFrame[0][leadIndicesPerFrame[0]][JointExtension.LAnkleIndex(poseType)].Y);
 
         Vector2 leadRightAnkle = new Vector2(
-            allPosesAndConfidencesPerFrame[0][leadIndicesPerFrame[0]][RAnkleIndex].X,
-            allPosesAndConfidencesPerFrame[0][leadIndicesPerFrame[0]][RAnkleIndex].Y);
+            allPosesAndConfidencesPerFrame[0][leadIndicesPerFrame[0]][JointExtension.RAnkleIndex(poseType)].X,
+            allPosesAndConfidencesPerFrame[0][leadIndicesPerFrame[0]][JointExtension.RAnkleIndex(poseType)].Y);
 
         Vector3 stanceWidth = new Vector3(-.3f, 0f, 0f);
         const float camRadius = 5f;
@@ -294,7 +294,7 @@ public class CameraSetup(Vector2 size, int totalFrameCount, PoseType poseType)
         CenterRightLeadAnkleOnOrigin(leadRightAnkle);
         
         const float hipHeight = .75f; 
-        float leadHipY = allPosesAndConfidencesPerFrame[0][leadIndicesPerFrame[0]][RHipIndex].Y;
+        float leadHipY = allPosesAndConfidencesPerFrame[0][leadIndicesPerFrame[0]][JointExtension.RHipIndex(poseType)].Y;
         
         while (leadHipY < ReverseProjectPoint(new Vector3(0, hipHeight, 0), 0).Y) 
         { 
@@ -565,41 +565,5 @@ public class CameraSetup(Vector2 size, int totalFrameCount, PoseType poseType)
         // reset
         RotationsPerFrame[frameNumber] = originalRotation;
         return false;
-    }
-
-    int LAnkleIndex => poseType switch
-    {
-        PoseType.Coco => (int)CocoJoints.L_Ankle,
-        PoseType.Halpe => (int)HalpeJoints.LAnkle,
-        _ => -1
-    };
-
-    int RAnkleIndex => poseType switch
-    {
-        PoseType.Coco => (int)CocoJoints.R_Ankle,
-        PoseType.Halpe => (int)HalpeJoints.RAnkle,
-        _ => -1
-    };
-
-    int RHipIndex => poseType switch
-    {
-        PoseType.Coco => (int)CocoJoints.R_Hip,
-        PoseType.Halpe => (int)HalpeJoints.RHip,
-        _ => -1
-    };
-
-    [Serializable]
-    public class PositionAndRotation
-    {
-        public float positionX;
-        public float positionY;
-        public float positionZ;
-
-        public float rotationX;
-        public float rotationY;
-        public float rotationZ;
-        public float rotationW;
-
-        public float focal;
     }
 }

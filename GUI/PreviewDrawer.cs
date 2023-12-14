@@ -190,34 +190,34 @@ public static class PreviewDrawer
 
     static DrawingGroup DrawCoco(DrawingGroup drawingGroup, List<Vector3> pose, int role)
     {
-        GeometryDrawing leftCalf = DrawLine(pose[(int)CocoJoints.L_Ankle], pose[(int)CocoJoints.L_Knee], role);
+        GeometryDrawing leftCalf = DrawLine(pose[(int)CocoJoint.L_Ankle], pose[(int)CocoJoint.L_Knee], role);
         drawingGroup.Children.Add(leftCalf);
 
-        GeometryDrawing leftThigh = DrawLine(pose[(int)CocoJoints.L_Knee], pose[(int)CocoJoints.L_Hip], role);
+        GeometryDrawing leftThigh = DrawLine(pose[(int)CocoJoint.L_Knee], pose[(int)CocoJoint.L_Hip], role);
         drawingGroup.Children.Add(leftThigh);
 
-        GeometryDrawing rightCalf = DrawLine(pose[(int)CocoJoints.R_Ankle], pose[(int)CocoJoints.R_Knee], role);
+        GeometryDrawing rightCalf = DrawLine(pose[(int)CocoJoint.R_Ankle], pose[(int)CocoJoint.R_Knee], role);
         drawingGroup.Children.Add(rightCalf);
 
-        GeometryDrawing rightThigh = DrawLine(pose[(int)CocoJoints.R_Knee], pose[(int)CocoJoints.R_Hip], role);
+        GeometryDrawing rightThigh = DrawLine(pose[(int)CocoJoint.R_Knee], pose[(int)CocoJoint.R_Hip], role);
         drawingGroup.Children.Add(rightThigh);
 
-        GeometryDrawing leftUpperArm = DrawLine(pose[(int)CocoJoints.L_Shoulder], pose[(int)CocoJoints.L_Elbow], role);
+        GeometryDrawing leftUpperArm = DrawLine(pose[(int)CocoJoint.L_Shoulder], pose[(int)CocoJoint.L_Elbow], role);
         drawingGroup.Children.Add(leftUpperArm);
 
-        GeometryDrawing leftForearm = DrawLine(pose[(int)CocoJoints.L_Elbow], pose[(int)CocoJoints.L_Wrist], role);
+        GeometryDrawing leftForearm = DrawLine(pose[(int)CocoJoint.L_Elbow], pose[(int)CocoJoint.L_Wrist], role);
         drawingGroup.Children.Add(leftForearm);
 
-        GeometryDrawing rightUpperArm = DrawLine(pose[(int)CocoJoints.R_Shoulder], pose[(int)CocoJoints.R_Elbow], role);
+        GeometryDrawing rightUpperArm = DrawLine(pose[(int)CocoJoint.R_Shoulder], pose[(int)CocoJoint.R_Elbow], role);
         drawingGroup.Children.Add(rightUpperArm);
 
-        GeometryDrawing rightForearm = DrawLine(pose[(int)CocoJoints.R_Elbow], pose[(int)CocoJoints.R_Wrist], role);
+        GeometryDrawing rightForearm = DrawLine(pose[(int)CocoJoint.R_Elbow], pose[(int)CocoJoint.R_Wrist], role);
         drawingGroup.Children.Add(rightForearm);
 
-        GeometryDrawing hip = DrawLine(pose[(int)CocoJoints.L_Hip], pose[(int)CocoJoints.R_Hip], role);
+        GeometryDrawing hip = DrawLine(pose[(int)CocoJoint.L_Hip], pose[(int)CocoJoint.R_Hip], role);
         drawingGroup.Children.Add(hip);
 
-        GeometryDrawing shoulders = DrawLine(pose[(int)CocoJoints.L_Shoulder], pose[(int)CocoJoints.R_Shoulder], role);
+        GeometryDrawing shoulders = DrawLine(pose[(int)CocoJoint.L_Shoulder], pose[(int)CocoJoint.R_Shoulder], role);
         drawingGroup.Children.Add(shoulders);
 
         return drawingGroup;
@@ -225,46 +225,46 @@ public static class PreviewDrawer
 
     static DrawingGroup DrawHalpe(DrawingGroup drawingGroup, List<Vector3> pose, int role)
     {
-        GeometryDrawing leftCalf = DrawLine(pose[(int)HalpeJoints.LAnkle], pose[(int)HalpeJoints.LKnee], role);
+        GeometryDrawing leftCalf = DrawLine(pose[(int)HalpeJoint.LAnkle], pose[(int)HalpeJoint.LKnee], role);
         drawingGroup.Children.Add(leftCalf);
 
-        GeometryDrawing leftThigh = DrawLine(pose[(int)HalpeJoints.LKnee], pose[(int)HalpeJoints.LHip], role);
+        GeometryDrawing leftThigh = DrawLine(pose[(int)HalpeJoint.LKnee], pose[(int)HalpeJoint.LHip], role);
         drawingGroup.Children.Add(leftThigh);
 
-        GeometryDrawing rightCalf = DrawLine(pose[(int)HalpeJoints.RAnkle], pose[(int)HalpeJoints.RKnee], role);
+        GeometryDrawing rightCalf = DrawLine(pose[(int)HalpeJoint.RAnkle], pose[(int)HalpeJoint.RKnee], role);
         drawingGroup.Children.Add(rightCalf);
 
-        GeometryDrawing rightThigh = DrawLine(pose[(int)HalpeJoints.RKnee], pose[(int)HalpeJoints.RHip], role);
+        GeometryDrawing rightThigh = DrawLine(pose[(int)HalpeJoint.RKnee], pose[(int)HalpeJoint.RHip], role);
         drawingGroup.Children.Add(rightThigh);
 
-        GeometryDrawing leftUpperArm = DrawLine(pose[(int)HalpeJoints.LShoulder], pose[(int)HalpeJoints.LElbow], role);
+        GeometryDrawing leftUpperArm = DrawLine(pose[(int)HalpeJoint.LShoulder], pose[(int)HalpeJoint.LElbow], role);
         drawingGroup.Children.Add(leftUpperArm);
 
-        GeometryDrawing leftForearm = DrawLine(pose[(int)HalpeJoints.LElbow], pose[(int)HalpeJoints.LWrist], role);
+        GeometryDrawing leftForearm = DrawLine(pose[(int)HalpeJoint.LElbow], pose[(int)HalpeJoint.LWrist], role);
         drawingGroup.Children.Add(leftForearm);
 
-        GeometryDrawing rightUpperArm = DrawLine(pose[(int)HalpeJoints.RShoulder], pose[(int)HalpeJoints.RElbow], role);
+        GeometryDrawing rightUpperArm = DrawLine(pose[(int)HalpeJoint.RShoulder], pose[(int)HalpeJoint.RElbow], role);
         drawingGroup.Children.Add(rightUpperArm);
 
-        GeometryDrawing rightForearm = DrawLine(pose[(int)HalpeJoints.RElbow], pose[(int)HalpeJoints.RWrist], role);
+        GeometryDrawing rightForearm = DrawLine(pose[(int)HalpeJoint.RElbow], pose[(int)HalpeJoint.RWrist], role);
         drawingGroup.Children.Add(rightForearm);
 
-        GeometryDrawing spine = DrawLine(pose[(int)HalpeJoints.Neck], pose[(int)HalpeJoints.Hip], role);
+        GeometryDrawing spine = DrawLine(pose[(int)HalpeJoint.Neck], pose[(int)HalpeJoint.Hip], role);
         drawingGroup.Children.Add(spine);
 
-        GeometryDrawing neck = DrawLine(pose[(int)HalpeJoints.Head], pose[(int)HalpeJoints.Neck], role);
+        GeometryDrawing neck = DrawLine(pose[(int)HalpeJoint.Head], pose[(int)HalpeJoint.Neck], role);
         drawingGroup.Children.Add(neck);
 
-        GeometryDrawing lHip = DrawLine(pose[(int)HalpeJoints.Hip], pose[(int)HalpeJoints.LHip], role);
+        GeometryDrawing lHip = DrawLine(pose[(int)HalpeJoint.Hip], pose[(int)HalpeJoint.LHip], role);
         drawingGroup.Children.Add(lHip);
 
-        GeometryDrawing rHip = DrawLine(pose[(int)HalpeJoints.Hip], pose[(int)HalpeJoints.RHip], role);
+        GeometryDrawing rHip = DrawLine(pose[(int)HalpeJoint.Hip], pose[(int)HalpeJoint.RHip], role);
         drawingGroup.Children.Add(rHip);
 
-        GeometryDrawing lShoulder = DrawLine(pose[(int)HalpeJoints.Neck], pose[(int)HalpeJoints.LShoulder], role);
+        GeometryDrawing lShoulder = DrawLine(pose[(int)HalpeJoint.Neck], pose[(int)HalpeJoint.LShoulder], role);
         drawingGroup.Children.Add(lShoulder);
 
-        GeometryDrawing rShoulder = DrawLine(pose[(int)HalpeJoints.Neck], pose[(int)HalpeJoints.RShoulder], role);
+        GeometryDrawing rShoulder = DrawLine(pose[(int)HalpeJoint.Neck], pose[(int)HalpeJoint.RShoulder], role);
         drawingGroup.Children.Add(rShoulder);
 
         return drawingGroup;
