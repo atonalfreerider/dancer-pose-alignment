@@ -20,6 +20,17 @@ public class CameraPoseSolver(PoseType poseType)
 
     const float leadShoulderHipArmLength = .3f;
     const float followShoulderHipArmLength = .27f;
+    
+    Dictionary<string, Vector3> cameraPositions => cameras.ToDictionary(
+        pair => pair.Key,
+        pair => pair.Value.PositionsPerFrame[frameNumber]);
+
+    readonly List<Vector3> originCross = [
+        Vector3.Zero,
+        Vector3.UnitX,
+        Vector3.UnitY,
+        Vector3.UnitZ
+    ];
 
     Yolo yolo = new("yolov8x-pose.onnx"); // this is in the assembly dir 
 
@@ -103,18 +114,17 @@ public class CameraPoseSolver(PoseType poseType)
         return merged3DPoseFollowPerFrame[frameNumber]
             .Select(vec => cameras[camName].ReverseProjectPoint(vec, frameNumber)).ToList();
     }
-
+    
     public List<Vector2> ReverseProjectOriginCrossAtCamera(string camName)
     {
-        CameraSetup cameraSetup = cameras[camName];
-
-        return
-        [
-            cameraSetup.ReverseProjectPoint(Vector3.Zero, frameNumber),
-            cameraSetup.ReverseProjectPoint(Vector3.UnitX, frameNumber),
-            cameraSetup.ReverseProjectPoint(Vector3.UnitY, frameNumber),
-            cameraSetup.ReverseProjectPoint(Vector3.UnitZ, frameNumber)
-        ];
+        return originCross.Select(vec => cameras[camName]
+            .ReverseProjectPoint(vec, frameNumber)).ToList();
+    }
+    
+    public List<Vector2> ReverseProjectCameraPositionsAtCamera(string camName)
+    {
+        return cameraPositions.Where(p => p.Key != camName)
+            .Select(pair => cameras[camName].ReverseProjectPoint(pair.Value, frameNumber)).ToList();
     }
 
     public void SaveData(string folder)
@@ -147,6 +157,10 @@ public class CameraPoseSolver(PoseType poseType)
         if (!AreAllCamerasOriented()) return;
 
         float totalError = Calculate3DPosesAndTotalError();
+        float cameraError = 0;
+        Dictionary<string, Vector3> camPos= cameras.ToDictionary(
+            s => s.Key,
+            s => s.Value.PositionsPerFrame[frameNumber]);
 
         int iterationCount = 0;
         while (iterationCount < 10000)

@@ -73,7 +73,8 @@ public static class PreviewDrawer
         PoseType poseType,
         List<Vector2> originCross,
         List<Vector2> leadProjectionsAtFrame,
-        List<Vector2> followProjectionsAtFrame)
+        List<Vector2> followProjectionsAtFrame,
+        List<Vector2> cameraProjectionsAtFrame)
     {
         DrawingGroup drawingGroup = DrawGeometry(
             poses,
@@ -144,8 +145,14 @@ public static class PreviewDrawer
             Thickness = 10
         };
 
-        if(leadProjectionsAtFrame.Count == 0 || followProjectionsAtFrame.Count == 0) return drawingGroup;
-        
+        foreach (Vector2 camPos in cameraProjectionsAtFrame)
+        {
+            GeometryDrawing camGeometry = DrawPoint(camPos, camPen);
+            drawingGroup.Children.Add(camGeometry);
+        }
+
+        if (leadProjectionsAtFrame.Count == 0 || followProjectionsAtFrame.Count == 0) return drawingGroup;
+
         SolidColorBrush brush = new SolidColorBrush(Colors.DarkRed);
         Pen pen = new Pen(brush)
         {

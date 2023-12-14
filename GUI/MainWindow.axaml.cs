@@ -374,9 +374,11 @@ public partial class MainWindow : Window
     {
         Tuple<int, int> leadAndFollowIndex = cameraPoseSolver.LeadAndFollowIndicesAtCameraAtFrame(camName);
 
+        List<Vector2> originCross = cameraPoseSolver.ReverseProjectOriginCrossAtCamera(camName);
         List<Vector2> leadProjectionsAtFrame = cameraPoseSolver.ReverseProjectionOfPoseAtCamera(camName, true);
         List<Vector2> followProjectionsAtFrame = cameraPoseSolver.ReverseProjectionOfPoseAtCamera(camName, false);
-        List<Vector2> originCross = cameraPoseSolver.ReverseProjectOriginCrossAtCamera(camName);
+
+        List<Vector2> cameraPositions2D = cameraPoseSolver.ReverseProjectCameraPositionsAtCamera(camName);
 
         DrawingImage drawingImage = new DrawingImage();
         DrawingGroup drawingGroup = PreviewDrawer.DrawGeometry(
@@ -387,7 +389,8 @@ public partial class MainWindow : Window
             PoseType.Coco,
             originCross,
             leadProjectionsAtFrame,
-            followProjectionsAtFrame);
+            followProjectionsAtFrame,
+            cameraPositions2D);
         drawingImage.Drawing = drawingGroup;
 
         graphicsImages[camName].Source = drawingImage;
