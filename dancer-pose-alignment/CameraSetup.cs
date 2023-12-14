@@ -2,13 +2,15 @@
 
 namespace dancer_pose_alignment;
 
-public class CameraSetup(Vector2 size, int totalFrameCount, PoseType poseType)
+public class CameraSetup(string name, Vector2 size, int totalFrameCount, PoseType poseType)
 {
     public readonly Vector3[] PositionsPerFrame = new Vector3[totalFrameCount];
     public readonly Quaternion[] RotationsPerFrame = new Quaternion[totalFrameCount];
     public float FocalLength = .05f;
 
     const float PixelToMeter = 0.000264583f;
+
+    public readonly Dictionary<string, List<Vector2>> ManualCameraPositionsByFrameByCamName = [];
 
     public Vector3 Forward(int frame) => Vector3.Transform(
         Vector3.UnitZ,
@@ -47,6 +49,24 @@ public class CameraSetup(Vector2 size, int totalFrameCount, PoseType poseType)
 
     public Tuple<int, int> MarkDancer(Vector2 click, int frameNumber, string selectedButton)
     {
+        if (selectedButton is not ("Lead" or "Follow" or "Move"))
+        {
+            if (ManualCameraPositionsByFrameByCamName.TryGetValue(selectedButton, out List<Vector2> positionsByFrame))
+            {
+                positionsByFrame[frameNumber] = click;
+            }
+            else
+            {
+                ManualCameraPositionsByFrameByCamName[selectedButton] = new List<Vector2>(totalFrameCount);
+                for (int i = 0; i < totalFrameCount; i++)
+                {
+                    ManualCameraPositionsByFrameByCamName[selectedButton].Add(Vector2.Zero);
+                }
+
+                ManualCameraPositionsByFrameByCamName[selectedButton][frameNumber] = click;
+            }
+        }
+
         int closestIndex = -1;
         int jointSelected = -1;
         float closestDistance = float.MaxValue;
@@ -99,14 +119,14 @@ public class CameraSetup(Vector2 size, int totalFrameCount, PoseType poseType)
     {
         return new Tuple<int, int>(leadIndicesPerFrame[frameNumber], followIndicesPerFrame[frameNumber]);
     }
-    
+
     public List<List<Vector3>> PosesPerDancerAtFrame(int frameNumber)
     {
         return allPosesAndConfidencesPerFrame[frameNumber];
     }
 
     #region PROJECTION
-    
+
     public void Project(int frameNumber)
     {
         // two things happening here: 
@@ -125,7 +145,7 @@ public class CameraSetup(Vector2 size, int totalFrameCount, PoseType poseType)
         List<Vector3> followProjectionsAtThisFrame = Adjusted(flattenedFollow, frameNumber);
         followProjectionsPerFrame[frameNumber] = followProjectionsAtThisFrame;
     }
-    
+
     List<Vector3> Adjusted(IEnumerable<Vector3> keypoints, int frame)
     {
         // Translate keypoints to the camera center 
@@ -143,7 +163,7 @@ public class CameraSetup(Vector2 size, int totalFrameCount, PoseType poseType)
         return adjustedKeypoints.Select(vec => vec + Forward(frame) * FocalLength).ToList();
     }
 
-    public Vector2 ReverseProjectPoint(Vector3 worldPoint, int frameNumber)
+    public Vector2 ReverseProjectPoint(Vector3 worldPoint, int frameNumber, bool overdraw = false)
     {
         Vector3 target = TargetAtFrame(worldPoint, frameNumber);
         Vector2 imagePlaneCoordinates = GetImagePlaneCoordinates(target, frameNumber);
@@ -152,25 +172,28 @@ public class CameraSetup(Vector2 size, int totalFrameCount, PoseType poseType)
             imagePlaneCoordinates.X / PixelToMeter + size.X / 2,
             -imagePlaneCoordinates.Y / PixelToMeter + size.Y / 2);
 
-        // don't render off screen
-        if (offcenterAndRescaleAndFlip.Y < 0)
+        if (!overdraw)
         {
-            offcenterAndRescaleAndFlip.Y = 0;
-        }
+            // don't render off screen
+            if (offcenterAndRescaleAndFlip.Y < 0)
+            {
+                offcenterAndRescaleAndFlip.Y = 0;
+            }
 
-        if (offcenterAndRescaleAndFlip.Y > size.Y)
-        {
-            offcenterAndRescaleAndFlip.Y = size.Y;
-        }
+            if (offcenterAndRescaleAndFlip.Y > size.Y)
+            {
+                offcenterAndRescaleAndFlip.Y = size.Y;
+            }
 
-        if (offcenterAndRescaleAndFlip.X < 0)
-        {
-            offcenterAndRescaleAndFlip.X = 0;
-        }
+            if (offcenterAndRescaleAndFlip.X < 0)
+            {
+                offcenterAndRescaleAndFlip.X = 0;
+            }
 
-        if (offcenterAndRescaleAndFlip.X > size.X)
-        {
-            offcenterAndRescaleAndFlip.X = size.X;
+            if (offcenterAndRescaleAndFlip.X > size.X)
+            {
+                offcenterAndRescaleAndFlip.X = size.X;
+            }
         }
 
         return offcenterAndRescaleAndFlip;
@@ -190,18 +213,6 @@ public class CameraSetup(Vector2 size, int totalFrameCount, PoseType poseType)
         return imagePlaneCoordinates;
     }
 
-    public float Error(IEnumerable<Vector3> pose3D, bool isLead, int frameNumber)
-    {
-        List<Vector3> comparePose = isLead 
-            ? recenteredRescaledAllPosesPerFrame[frameNumber][leadIndicesPerFrame[frameNumber]]
-            : recenteredRescaledAllPosesPerFrame[frameNumber][followIndicesPerFrame[frameNumber]];
-
-        return pose3D.Select(vec => ReverseProjectPoint(vec, frameNumber))
-            .Select((target, i) => Vector2.Distance(
-                target, 
-                new Vector2(comparePose[i].X, comparePose[i].Y)) * comparePose[i].Z).Sum();
-    }
-
     /// <summary>
     /// Provides a normalized vector from this camera to a target in 3D space at a given frame
     /// </summary>
@@ -209,7 +220,7 @@ public class CameraSetup(Vector2 size, int totalFrameCount, PoseType poseType)
     {
         return Vector3.Normalize(vector3 - PositionsPerFrame[frameNumber]);
     }
-    
+
     #endregion
 
     #region ITERATION
@@ -255,8 +266,8 @@ public class CameraSetup(Vector2 size, int totalFrameCount, PoseType poseType)
                 Quaternion.Identity,
                 PositionsPerFrame[0]);
 
-            Vector2 origin = ReverseProjectPoint(Vector3.Zero, 0);
-            Vector2 leadStance = ReverseProjectPoint(stanceWidth, 0); // lead left ankle 
+            Vector2 origin = ReverseProjectPoint(Vector3.Zero, 0, true);
+            Vector2 leadStance = ReverseProjectPoint(stanceWidth, 0, true); // lead left ankle 
 
             float slopeOfCamera = (leadStance.Y - origin.Y) / (leadStance.X - origin.X);
             bool isFacingLeadInCamera = origin.X < leadStance.X;
@@ -270,144 +281,242 @@ public class CameraSetup(Vector2 size, int totalFrameCount, PoseType poseType)
                 break;
             }
         }
-        
-        CenterRoll(); 
-        CenterRightLeadAnkleOnOrigin(leadRightAnkle); 
-        CenterRoll(); 
-        CenterRightLeadAnkleOnOrigin(leadRightAnkle);
-        
-        const float hipHeight = .75f; 
-        float leadHipY = allPosesAndConfidencesPerFrame[0][leadIndicesPerFrame[0]][JointExtension.RHipIndex(poseType)].Y;
-        
-        while (leadHipY < ReverseProjectPoint(new Vector3(0, hipHeight, 0), 0).Y) 
-        { 
-            FocalLength += .001f; 
-            CenterRightLeadAnkleOnOrigin(leadRightAnkle);
-        }
-        
-        while (leadHipY > ReverseProjectPoint(new Vector3(0, hipHeight, 0), 0).Y) 
-        { 
-            FocalLength -= .001f; 
-            CenterRightLeadAnkleOnOrigin(leadRightAnkle);
-        }
-        
-        CenterRoll(); 
-        CenterRightLeadAnkleOnOrigin(leadRightAnkle); 
-        CenterRoll(); 
-        CenterRightLeadAnkleOnOrigin(leadRightAnkle); 
 
+        CenterRoll();
+        CenterRightLeadAnkleOnOrigin(leadRightAnkle);
+        CenterRoll();
+        CenterRightLeadAnkleOnOrigin(leadRightAnkle);
+
+        HipLock();
+    }
+
+    void HipLock()
+    {
+        Vector2 leadRightAnkle = new Vector2(
+            allPosesAndConfidencesPerFrame[0][leadIndicesPerFrame[0]][JointExtension.RAnkleIndex(poseType)].X,
+            allPosesAndConfidencesPerFrame[0][leadIndicesPerFrame[0]][JointExtension.RAnkleIndex(poseType)].Y);
+
+        const float hipHeight = .8f;
+        float leadHipY = allPosesAndConfidencesPerFrame[0][leadIndicesPerFrame[0]][JointExtension.RHipIndex(poseType)]
+            .Y;
+
+        while (leadHipY < ReverseProjectPoint(new Vector3(0, hipHeight, 0), 0, true).Y)
+        {
+            FocalLength += .001f;
+            CenterRightLeadAnkleOnOrigin(leadRightAnkle);
+        }
+
+        while (leadHipY > ReverseProjectPoint(new Vector3(0, hipHeight, 0), 0, true).Y)
+        {
+            FocalLength -= .001f;
+            CenterRightLeadAnkleOnOrigin(leadRightAnkle);
+        }
+
+        CenterRoll();
+        CenterRightLeadAnkleOnOrigin(leadRightAnkle);
+        CenterRoll();
+        CenterRightLeadAnkleOnOrigin(leadRightAnkle);
     }
 
     void CenterRightLeadAnkleOnOrigin(Vector2 leadRightAnkle)
     {
         // yaw and pitch the camera until the origin is centered at the lead right ankle
-        Vector2 origin = ReverseProjectPoint(Vector3.Zero, 0);
+        Vector2 origin = ReverseProjectPoint(Vector3.Zero, 0, true);
         while (leadRightAnkle.X < origin.X)
         {
             RotationsPerFrame[0] *= Quaternion.CreateFromAxisAngle(Vector3.UnitY, .001f);
-            origin = ReverseProjectPoint(Vector3.Zero, 0);
+            origin = ReverseProjectPoint(Vector3.Zero, 0, true);
         }
 
         while (leadRightAnkle.X > origin.X)
         {
             RotationsPerFrame[0] *= Quaternion.CreateFromAxisAngle(Vector3.UnitY, -.001f);
-            origin = ReverseProjectPoint(Vector3.Zero, 0);
+            origin = ReverseProjectPoint(Vector3.Zero, 0, true);
         }
 
         while (leadRightAnkle.Y > origin.Y)
         {
             // pitch up 
             RotationsPerFrame[0] *= Quaternion.CreateFromAxisAngle(Vector3.UnitX, -.001f);
-            origin = ReverseProjectPoint(Vector3.Zero, 0);
+            origin = ReverseProjectPoint(Vector3.Zero, 0, true);
         }
 
         while (leadRightAnkle.Y < origin.Y)
         {
             // pitch down 
             RotationsPerFrame[0] *= Quaternion.CreateFromAxisAngle(Vector3.UnitX, .001f);
-            origin = ReverseProjectPoint(Vector3.Zero, 0);
+            origin = ReverseProjectPoint(Vector3.Zero, 0, true);
         }
     }
 
     void CenterRoll()
     {
-        Vector2 unitY = ReverseProjectPoint(Vector3.UnitY, 0);
+        Vector2 unitY = ReverseProjectPoint(Vector3.UnitY, 0, true);
         Vector2 origin = ReverseProjectPoint(Vector3.Zero, 0);
 
         while (unitY.X < origin.X)
         {
             // roll left 
             RotationsPerFrame[0] *= Quaternion.CreateFromAxisAngle(Vector3.UnitZ, .001f);
-            origin = ReverseProjectPoint(Vector3.Zero, 0);
-            unitY = ReverseProjectPoint(Vector3.UnitY, 0);
+            origin = ReverseProjectPoint(Vector3.Zero, 0, true);
+            unitY = ReverseProjectPoint(Vector3.UnitY, 0, true);
         }
 
         while (unitY.X > origin.X)
         {
             // roll right 
             RotationsPerFrame[0] *= Quaternion.CreateFromAxisAngle(Vector3.UnitZ, -.001f);
-            origin = ReverseProjectPoint(Vector3.Zero, 0);
-            unitY = ReverseProjectPoint(Vector3.UnitY, 0);
+            origin = ReverseProjectPoint(Vector3.Zero, 0, true);
+            unitY = ReverseProjectPoint(Vector3.UnitY, 0, true);
         }
     }
 
     /// <summary>
-    /// Should only be called on frame 0
+    /// Should only be called on frame 0, because it sets position and focal length
     /// </summary>
-    public bool IterateHeight(CameraPoseSolver poseSolver)
+    public bool IterateHeightRadiusZoom(CameraPoseSolver poseSolver)
     {
-        const float delta = 0.5f;
-        if (PositionsPerFrame[0].Y + delta > 2.5 || PositionsPerFrame[0].Y - delta < 0.05f) return false;
-        
+        // HEIGHT
+        const float delta = 0.05f;
+        if (PositionsPerFrame[0].Y + delta > 2.5 || PositionsPerFrame[0].Y - delta < 0.05f)
+        {
+            Console.WriteLine($"{name}: height out of bounds");
+            return false;
+        }
+
+        float radius = Vector2.Distance(new Vector2(PositionsPerFrame[0].X, PositionsPerFrame[0].Z), Vector2.Zero);
+        if (radius + delta > 10 || radius - delta < 1)
+        {
+            Console.WriteLine($"{name}: radius out of bounds");
+            return false;
+        }
+
+        if (FocalLength is < .001f or > 1.2f)
+        {
+            Console.WriteLine($"{name}: focal length out of bounds");
+            return false;
+        }
+
+        float originalHeight = PositionsPerFrame[0].Y;
+        float originalFocalLength = FocalLength;
+        float originalX = PositionsPerFrame[0].X;
+        float originalZ = PositionsPerFrame[0].Z;
+        Quaternion originalRotation = RotationsPerFrame[0];
+
         float currentError = poseSolver.Calculate3DPosesAndTotalError();
-        
+
         Vector2 leadRightAnkle = new Vector2(
             allPosesAndConfidencesPerFrame[0][leadIndicesPerFrame[0]][JointExtension.RAnkleIndex(poseType)].X,
             allPosesAndConfidencesPerFrame[0][leadIndicesPerFrame[0]][JointExtension.RAnkleIndex(poseType)].Y);
 
-        // yaw camera left and right
-        float originalHeight = PositionsPerFrame[0].Y;
-        Quaternion originalRotation = RotationsPerFrame[0];
-
-        
-        
+        // move camera up
         PositionsPerFrame[0] = new Vector3(
-            PositionsPerFrame[0].X,
-            PositionsPerFrame[0].Y + delta,
-            PositionsPerFrame[0].Z);
-        
+            originalX,
+            originalHeight + delta,
+            originalZ);
+
         CenterRightLeadAnkleOnOrigin(leadRightAnkle);
         float upError = poseSolver.Calculate3DPosesAndTotalError();
-        
+
+        // move camera down
         PositionsPerFrame[0] = new Vector3(
-            PositionsPerFrame[0].X,
-            originalHeight -  delta,
-            PositionsPerFrame[0].Z);
-        
+            originalX,
+            originalHeight - delta,
+            originalZ);
+
         CenterRightLeadAnkleOnOrigin(leadRightAnkle);
         float downError = poseSolver.Calculate3DPosesAndTotalError();
+        
+        // RADIUS / ZOOM
+        
+        // move closer
+        Vector2 closeLerp = Transform.LerpUnclamp(
+            Vector2.Zero,
+            new Vector2(originalX, originalZ),
+            (radius - delta)/radius);
 
-        if (upError < downError && upError < currentError)
+        PositionsPerFrame[0] = new Vector3(
+            closeLerp.X,
+            originalHeight,
+            closeLerp.Y);
+        
+        HipLock();
+
+        float moveCloserError = poseSolver.Calculate3DPosesAndTotalError();
+        
+        // move farther
+        Vector2 farLerp = Transform.LerpUnclamp(
+            Vector2.Zero,
+            new Vector2(originalX, originalZ),
+            (radius + delta)/radius);
+
+        PositionsPerFrame[0] = new Vector3(
+            farLerp.X,
+            originalHeight,
+            farLerp.Y);
+
+        HipLock();
+
+        float moveFartherError = poseSolver.Calculate3DPosesAndTotalError();
+
+        if (upError < downError && upError < currentError && upError < moveCloserError && upError < moveFartherError)
         {
             PositionsPerFrame[0] = new Vector3(
-                PositionsPerFrame[0].X,
+                originalX,
                 originalHeight + delta,
-                PositionsPerFrame[0].Z);
+                originalZ);
+
+            FocalLength = originalFocalLength;
             CenterRightLeadAnkleOnOrigin(leadRightAnkle);
+            
             return true;
         }
 
-        if (downError < upError && downError < currentError)
+        if (downError < upError && downError < currentError && downError < moveCloserError &&
+            downError < moveFartherError)
         {
+            PositionsPerFrame[0] = new Vector3(
+                originalX,
+                originalHeight - delta,
+                originalZ);
+            
+            FocalLength = originalFocalLength;
+            CenterRightLeadAnkleOnOrigin(leadRightAnkle);
+            
+            return true;
+        }
+
+        if (moveCloserError < upError && moveCloserError < currentError && moveCloserError < downError &&
+            moveCloserError < moveFartherError)
+        {
+            PositionsPerFrame[0] = new Vector3(
+                closeLerp.X,
+                originalHeight,
+                closeLerp.Y);
+            
+            FocalLength = originalFocalLength;
+            HipLock();
+            return true;
+        }
+
+        if (moveFartherError < upError && moveFartherError < currentError && moveFartherError < downError &&
+            moveFartherError < moveCloserError)
+        {
+            PositionsPerFrame[0] = new Vector3(
+                farLerp.X,
+                originalHeight,
+                farLerp.Y);
+            HipLock();
             return true;
         }
 
         // reset
         PositionsPerFrame[0] = new Vector3(
-            PositionsPerFrame[0].X,
+            originalX,
             originalHeight,
-            PositionsPerFrame[0].Z);
+            originalZ);
         RotationsPerFrame[0] = originalRotation;
+        FocalLength = originalFocalLength;
         return false;
     }
 
@@ -572,11 +681,37 @@ public class CameraSetup(Vector2 size, int totalFrameCount, PoseType poseType)
         RotationsPerFrame[frameNumber] = originalRotation;
         return false;
     }
-    
+
+    public float PoseError(IEnumerable<Vector3> pose3D, bool isLead, int frameNumber)
+    {
+        List<Vector3> comparePose = isLead
+            ? recenteredRescaledAllPosesPerFrame[frameNumber][leadIndicesPerFrame[frameNumber]]
+            : recenteredRescaledAllPosesPerFrame[frameNumber][followIndicesPerFrame[frameNumber]];
+
+        return pose3D.Select(vec => ReverseProjectPoint(vec, frameNumber, true))
+            .Select((target, i) => Vector2.Distance(
+                target,
+                new Vector2(comparePose[i].X, comparePose[i].Y)) * comparePose[i].Z).Sum();
+    }
+
+    public float CameraError(Dictionary<string, Vector3> otherCameras, int frameNumber)
+    {
+        float camError = 0;
+        foreach ((string otherCamName, List<Vector2> manualPoints) in ManualCameraPositionsByFrameByCamName)
+        {
+            Vector2 camPoint = manualPoints[frameNumber];
+            Vector3 otherCamPoint = otherCameras[otherCamName];
+            Vector2 otherCamPoint2D = ReverseProjectPoint(otherCamPoint, frameNumber, true);
+            camError += Vector2.Distance(camPoint, otherCamPoint2D) * 100; // huge penalty for bad camera position
+        }
+
+        return camError;
+    }
+
     #endregion
 
     #region REFERENCE
-    
+
     public bool HasPoseAtFrame(int frameNumber, bool isLead)
     {
         return isLead
@@ -613,6 +748,6 @@ public class CameraSetup(Vector2 size, int totalFrameCount, PoseType poseType)
             RotationsPerFrame[frameNumber] = RotationsPerFrame[frameNumber - 1];
         }
     }
-    
+
     #endregion
 }

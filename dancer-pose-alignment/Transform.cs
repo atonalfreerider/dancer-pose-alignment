@@ -39,5 +39,20 @@ public static class Transform
 
         return lookRotation;
     }
+    
+    // LerpUnclamp method for Vector2
+    public static Vector2 LerpUnclamp(Vector2 a, Vector2 b, float t)
+    {
+        return new Vector2(
+            LerpUnclamp(a.X, b.X, t),
+            LerpUnclamp(a.Y, b.Y, t)
+        );
+    }
+
+    // LerpUnclamp for single float values
+    static float LerpUnclamp(float start, float end, float t)
+    {
+        return start + (end - start) * t;
+    }
 
 }

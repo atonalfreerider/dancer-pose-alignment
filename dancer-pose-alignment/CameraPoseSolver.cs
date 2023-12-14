@@ -16,10 +16,10 @@ public class CameraPoseSolver(PoseType poseType)
     double timeOffset;
 
     const float leadLegLimbLenth = .4f;
-    const float followLegLimbLength = .35f;
+    const float followLegLimbLength = .4f;
 
     const float leadShoulderHipArmLength = .3f;
-    const float followShoulderHipArmLength = .27f;
+    const float followShoulderHipArmLength = .28f;
     
     Dictionary<string, Vector3> cameraPositions => cameras.ToDictionary(
         pair => pair.Key,
@@ -39,7 +39,7 @@ public class CameraPoseSolver(PoseType poseType)
         Vector2 imageSize,
         int frameCount)
     {
-        CameraSetup camera = new(imageSize, frameCount, poseType);
+        CameraSetup camera = new(name, imageSize, frameCount, poseType);
 
         Quaternion centerLook = Transform.LookAt(
             new Vector3(0, 1.5f, 0),
@@ -127,6 +127,11 @@ public class CameraPoseSolver(PoseType poseType)
             .Select(pair => cameras[camName].ReverseProjectPoint(pair.Value, frameNumber)).ToList();
     }
 
+    public List<Vector2> ManualCameraPositionsAtCamera(string camName)
+    {
+        return cameras[camName].ManualCameraPositionsByFrameByCamName.Select(x => x.Value[frameNumber]).ToList();
+    }
+
     public void SaveData(string folder)
     {
         string jsonMerged3DPose = JsonConvert.SerializeObject(merged3DPoseLeadPerFrame, Formatting.Indented);
@@ -156,57 +161,83 @@ public class CameraPoseSolver(PoseType poseType)
     {
         if (!AreAllCamerasOriented()) return;
 
+        float lastTotalError = float.MaxValue;
         float totalError = Calculate3DPosesAndTotalError();
-        float cameraError = 0;
-        Dictionary<string, Vector3> camPos= cameras.ToDictionary(
-            s => s.Key,
-            s => s.Value.PositionsPerFrame[frameNumber]);
 
         int iterationCount = 0;
-        while (iterationCount < 10000)
+        while (iterationCount < 1000)
         {
-            CameraSetup highestErrorCam = null;
-            float highestError = 0;
-            foreach (CameraSetup cameraSetup in cameras.Values)
+            Dictionary<string, float> errorsByCamera = [];
+            foreach ((string cameraName, CameraSetup cameraSetup) in cameras)
             {
-                float error = cameraSetup.Error(merged3DPoseLeadPerFrame[frameNumber], true, frameNumber) +
-                              cameraSetup.Error(merged3DPoseFollowPerFrame[frameNumber], false, frameNumber);
+                float camError = cameraSetup.CameraError(cameraPositions, frameNumber);
+                
+                float poseError = cameraSetup.PoseError(merged3DPoseLeadPerFrame[frameNumber], true, frameNumber) +
+                              cameraSetup.PoseError(merged3DPoseFollowPerFrame[frameNumber], false, frameNumber);
 
-                if (error > highestError)
-                {
-                    highestError = error;
-                    highestErrorCam = cameraSetup;
-                }
+                errorsByCamera.Add(cameraName, camError + poseError);
             }
 
-            if (highestErrorCam == null)
+            if (errorsByCamera.Values.Sum() <= float.Epsilon)
             {
-                Console.WriteLine("couldn't find highest error camera");
+                Console.WriteLine("PERFECT SOLUTION");
                 break;
             }
+            
+            List<CameraSetup> sortedCamerasByHighestError = errorsByCamera
+                .OrderByDescending(pair => pair.Value)
+                .Select(pair => cameras[pair.Key])
+                .ToList();
 
             if (frameNumber == 0)
             {
                 // lead right ankle is pinned to origin
                 // move camera up and down
-                bool moved = highestErrorCam.IterateHeight(this);
+                bool moved = false;
+                foreach (CameraSetup cameraSetup in sortedCamerasByHighestError)
+                {
+                    for (int i = 0; i < 10f / (sortedCamerasByHighestError.IndexOf(cameraSetup) + 1); i++)
+                    {
+                        bool thisMoved = cameraSetup.IterateHeightRadiusZoom(this);
+                        if (thisMoved)
+                        {
+                            moved = true;
+                        }
+                    }
+                }
+                
                 if (!moved)
                 {
+                    Console.WriteLine("Can't move");
                     break;
                 }
             }
             else
             {
-                bool moved = highestErrorCam.IterateOrientation(this, frameNumber);
-                if (!moved)
+                bool moved = false;
+                foreach (CameraSetup cameraSetup in sortedCamerasByHighestError)
                 {
-                    break;
+                    for (int i = 0; i < 1000f / (sortedCamerasByHighestError.IndexOf(cameraSetup) + 1); i++)
+                    {
+                        bool thisMoved = cameraSetup.IterateOrientation(this, frameNumber);
+                        if (thisMoved)
+                        {
+                            moved = true;
+                        }
+                    }
                 }
             }
 
             totalError = Calculate3DPosesAndTotalError();
             Console.WriteLine($"{iterationCount}:{totalError}");
             iterationCount++;
+
+            if (lastTotalError < totalError)
+            {
+                break;
+            }
+
+            lastTotalError = totalError;
         }
 
         totalError = Calculate3DPosesAndTotalError();
@@ -215,9 +246,11 @@ public class CameraPoseSolver(PoseType poseType)
 
     public float Calculate3DPosesAndTotalError()
     {
+        float camError = 0;
         foreach (CameraSetup cameraSetup in cameras.Values)
         {
             cameraSetup.Project(frameNumber);
+            camError+= cameraSetup.CameraError(cameraPositions, frameNumber);
         }
 
         if (merged3DPoseLeadPerFrame.Count <= frameNumber)
@@ -241,8 +274,8 @@ public class CameraPoseSolver(PoseType poseType)
         merged3DPoseFollowPerFrame[frameNumber] = merged3DPoseFollow;
 
         return cameras.Values.Sum(cameraSetup =>
-            cameraSetup.Error(merged3DPoseLeadPerFrame[frameNumber], true, frameNumber) +
-            cameraSetup.Error(merged3DPoseFollowPerFrame[frameNumber], false, frameNumber));
+            cameraSetup.PoseError(merged3DPoseLeadPerFrame[frameNumber], true, frameNumber) +
+            cameraSetup.PoseError(merged3DPoseFollowPerFrame[frameNumber], false, frameNumber)) + camError;
     }
 
     List<Vector3> Calculate3DPose(bool isLead)

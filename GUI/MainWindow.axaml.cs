@@ -195,8 +195,9 @@ public partial class MainWindow : Window
             // add buttons to select camera role
             RadioButton radioButton = new RadioButton
             {
+                Name = videoFilePath,
                 GroupName = "Role",
-                Content = $"Camera{camCount}",
+                Content = Path.GetFileNameWithoutExtension(videoFilePath),
                 Margin = new Thickness(5)
             };
 
@@ -352,7 +353,7 @@ public partial class MainWindow : Window
         {
             if (child is RadioButton { IsChecked: true } radioButton)
             {
-                return radioButton.Content.ToString();
+                return radioButton.Name.ToString();
             }
         }
 
@@ -379,6 +380,7 @@ public partial class MainWindow : Window
         List<Vector2> followProjectionsAtFrame = cameraPoseSolver.ReverseProjectionOfPoseAtCamera(camName, false);
 
         List<Vector2> cameraPositions2D = cameraPoseSolver.ReverseProjectCameraPositionsAtCamera(camName);
+        List<Vector2> manualPositions2D = cameraPoseSolver.ManualCameraPositionsAtCamera(camName);
 
         DrawingImage drawingImage = new DrawingImage();
         DrawingGroup drawingGroup = PreviewDrawer.DrawGeometry(
@@ -390,7 +392,8 @@ public partial class MainWindow : Window
             originCross,
             leadProjectionsAtFrame,
             followProjectionsAtFrame,
-            cameraPositions2D);
+            cameraPositions2D,
+            manualPositions2D);
         drawingImage.Drawing = drawingGroup;
 
         graphicsImages[camName].Source = drawingImage;

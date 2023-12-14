@@ -23,9 +23,9 @@
                     <StackPanel Orientation="Horizontal" HorizontalAlignment="Center">
                         <StackPanel Name="DynamicRadioButtonsPanel" Orientation="Horizontal"
                                     HorizontalAlignment="Center">
-                            <RadioButton GroupName="Role" Content="Lead" Margin="5" IsChecked="True" IsDefault="True" />
-                            <RadioButton GroupName="Role" Content="Follow" Margin="5" />
-                            <RadioButton GroupName="Role" Content="Move" Margin="5" />
+                            <RadioButton Name="Lead" GroupName="Role" Content="Lead" Margin="5" IsChecked="True" IsDefault="True" />
+                            <RadioButton Name="Follow" GroupName="Role" Content="Follow" Margin="5" />
+                            <RadioButton Name="Move" GroupName="Role" Content="Move" Margin="5" />
                         </StackPanel>
                     </StackPanel>
                     <StackPanel Orientation="Horizontal" HorizontalAlignment="Center">

@@ -74,7 +74,8 @@ public static class PreviewDrawer
         List<Vector2> originCross,
         List<Vector2> leadProjectionsAtFrame,
         List<Vector2> followProjectionsAtFrame,
-        List<Vector2> cameraProjectionsAtFrame)
+        List<Vector2> cameraProjectionsAtFrame,
+        List<Vector2> manualCameraPositionsAtFrame)
     {
         DrawingGroup drawingGroup = DrawGeometry(
             poses,
@@ -139,7 +140,7 @@ public static class PreviewDrawer
         };
         drawingGroup.Children.Add(zGeometry);
 
-        SolidColorBrush camBrush = new SolidColorBrush(Colors.Green);
+        SolidColorBrush camBrush = new SolidColorBrush(Colors.DarkGreen);
         Pen camPen = new Pen(camBrush)
         {
             Thickness = 10
@@ -148,6 +149,18 @@ public static class PreviewDrawer
         foreach (Vector2 camPos in cameraProjectionsAtFrame)
         {
             GeometryDrawing camGeometry = DrawPoint(camPos, camPen);
+            drawingGroup.Children.Add(camGeometry);
+        }
+        
+        SolidColorBrush manualCamBrush = new SolidColorBrush(Colors.Green);
+        Pen manualCamPen = new Pen(manualCamBrush)
+        {
+            Thickness = 10
+        };
+        
+        foreach (Vector2 camPos in manualCameraPositionsAtFrame)
+        {
+            GeometryDrawing camGeometry = DrawPoint(camPos, manualCamPen);
             drawingGroup.Children.Add(camGeometry);
         }
 
@@ -170,6 +183,7 @@ public static class PreviewDrawer
                 leadProjectionsAtFrame.Select(x => new Vector3(x.X, x.Y, 1f)).ToList(), -1),
             PoseType.Halpe => DrawHalpe(drawingGroup,
                 leadProjectionsAtFrame.Select(x => new Vector3(x.X, x.Y, 1f)).ToList(), -1),
+            _ => throw new ArgumentOutOfRangeException(nameof(poseType), poseType, null)
         };
 
         SolidColorBrush followBrush = new SolidColorBrush(Colors.DarkMagenta);
@@ -189,6 +203,7 @@ public static class PreviewDrawer
                 followProjectionsAtFrame.Select(x => new Vector3(x.X, x.Y, 1f)).ToList(), -1),
             PoseType.Halpe => DrawHalpe(drawingGroup,
                 followProjectionsAtFrame.Select(x => new Vector3(x.X, x.Y, 1f)).ToList(), -1),
+            _ => throw new ArgumentOutOfRangeException(nameof(poseType), poseType, null)
         };
 
 
