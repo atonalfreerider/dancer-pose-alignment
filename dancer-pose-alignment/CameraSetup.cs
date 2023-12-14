@@ -31,7 +31,6 @@ public class CameraSetup(Vector2 size, int totalFrameCount, PoseType poseType)
     readonly int[] leadIndicesPerFrame = new int[totalFrameCount];
     readonly int[] followIndicesPerFrame = new int[totalFrameCount];
 
-
     public void SetAllPosesAtFrame(List<List<Vector3>> allPoses, int frameNumber)
     {
         allPosesAndConfidencesPerFrame[frameNumber] = allPoses;
@@ -288,24 +287,32 @@ public class CameraSetup(Vector2 size, int totalFrameCount, PoseType poseType)
                 break;
             }
         }
-
-        // adjust the focal length until the world stance and the pose stance match
-        float stanceDistance = Vector2.Distance(leadLeftAnkle, leadRightAnkle);
-        while (Vector2.Distance(
-                   ReverseProjectPoint(Vector3.Zero, 0),
-                   ReverseProjectPoint(stanceWidth, 0)) < stanceDistance)
-        {
-            FocalLength += .0001f;
+        
+        CenterRoll(); 
+        CenterRightLeadAnkleOnOrigin(leadRightAnkle); 
+        CenterRoll(); 
+        CenterRightLeadAnkleOnOrigin(leadRightAnkle);
+        
+        const float hipHeight = .75f; 
+        float leadHipY = allPosesAndConfidencesPerFrame[0][leadIndicesPerFrame[0]][RHipIndex].Y;
+        
+        while (leadHipY < ReverseProjectPoint(new Vector3(0, hipHeight, 0), 0).Y) 
+        { 
+            FocalLength += .001f; 
             CenterRightLeadAnkleOnOrigin(leadRightAnkle);
         }
-
-        while (Vector2.Distance(
-                   ReverseProjectPoint(Vector3.Zero, 0),
-                   ReverseProjectPoint(stanceWidth, 0)) > stanceDistance)
-        {
-            FocalLength -= .0001f;
+        
+        while (leadHipY > ReverseProjectPoint(new Vector3(0, hipHeight, 0), 0).Y) 
+        { 
+            FocalLength -= .001f; 
             CenterRightLeadAnkleOnOrigin(leadRightAnkle);
         }
+        
+        CenterRoll(); 
+        CenterRightLeadAnkleOnOrigin(leadRightAnkle); 
+        CenterRoll(); 
+        CenterRightLeadAnkleOnOrigin(leadRightAnkle); 
+
     }
 
     void CenterRightLeadAnkleOnOrigin(Vector2 leadRightAnkle)
