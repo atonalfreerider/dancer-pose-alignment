@@ -23,7 +23,7 @@ public class CameraPoseSolver(PoseType poseType)
     
     Dictionary<string, Vector3> cameraPositions => cameras.ToDictionary(
         pair => pair.Key,
-        pair => pair.Value.PositionsPerFrame[frameNumber]);
+        pair => pair.Value.Position);
 
     readonly List<Vector3> originCross = [
         Vector3.Zero,
@@ -44,7 +44,7 @@ public class CameraPoseSolver(PoseType poseType)
         Quaternion centerLook = Transform.LookAt(
             new Vector3(0, 1.5f, 0),
             Quaternion.Identity,
-            camera.PositionsPerFrame[0]);
+            camera.Position);
         camera.RotationsPerFrame[0] = centerLook;
 
         cameras.Add(name, camera);
@@ -68,7 +68,7 @@ public class CameraPoseSolver(PoseType poseType)
         frameNumber++;
         foreach (CameraSetup cameraSetup in cameras.Values)
         {
-            cameraSetup.CopyPositionsToNextFrame(frameNumber);
+            cameraSetup.CopyRotationToNextFrame(frameNumber);
         }
 
         return true;
@@ -491,17 +491,17 @@ public class CameraPoseSolver(PoseType poseType)
 
     public void MoveCameraForward(string camName, float move)
     {
-        cameras[camName].PositionsPerFrame[frameNumber] += cameras[camName].Forward(frameNumber) * move;
+        cameras[camName].Position += cameras[camName].Forward(frameNumber) * move;
     }
 
     public void MoveCameraRight(string camName, float move)
     {
-        cameras[camName].PositionsPerFrame[frameNumber] += cameras[camName].Right(frameNumber) * move;
+        cameras[camName].Position += cameras[camName].Right(frameNumber) * move;
     }
 
     public void MoveCameraUp(string camName, float move)
     {
-        cameras[camName].PositionsPerFrame[frameNumber] += cameras[camName].Up(frameNumber) * move;
+        cameras[camName].Position += cameras[camName].Up(frameNumber) * move;
     }
 
     #endregion

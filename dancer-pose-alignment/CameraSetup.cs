@@ -4,7 +4,7 @@ namespace dancer_pose_alignment;
 
 public class CameraSetup(string name, Vector2 size, int totalFrameCount, PoseType poseType)
 {
-    public readonly Vector3[] PositionsPerFrame = new Vector3[totalFrameCount];
+    public Vector3 Position = Vector3.Zero;
     public readonly Quaternion[] RotationsPerFrame = new Quaternion[totalFrameCount];
     public float FocalLength = .05f;
 
@@ -148,15 +148,14 @@ public class CameraSetup(string name, Vector2 size, int totalFrameCount, PoseTyp
 
     List<Vector3> Adjusted(IEnumerable<Vector3> keypoints, int frame)
     {
-        // Translate keypoints to the camera center 
-        Vector3 cameraCenter = PositionsPerFrame[frame];
-        List<Vector3> adjustedKeypoints = keypoints.Select(vec => cameraCenter + vec).ToList();
+        // Translate keypoints to the camera center
+        List<Vector3> adjustedKeypoints = keypoints.Select(vec => Position + vec).ToList();
 
         // Rotate keypoints around the camera center by the camera's rotation quaternion 
         Quaternion rotation = RotationsPerFrame[frame];
         for (int i = 0; i < adjustedKeypoints.Count; i++)
         {
-            adjustedKeypoints[i] = Vector3.Transform(adjustedKeypoints[i] - cameraCenter, rotation) + cameraCenter;
+            adjustedKeypoints[i] = Vector3.Transform(adjustedKeypoints[i] - Position, rotation) + Position;
         }
 
         // Translate keypoints to the camera's focal length 
@@ -165,7 +164,7 @@ public class CameraSetup(string name, Vector2 size, int totalFrameCount, PoseTyp
 
     public Vector2 ReverseProjectPoint(Vector3 worldPoint, int frameNumber, bool overdraw = false)
     {
-        Vector3 target = TargetAtFrame(worldPoint, frameNumber);
+        Vector3 target = TargetAtFrame(worldPoint);
         Vector2 imagePlaneCoordinates = GetImagePlaneCoordinates(target, frameNumber);
 
         Vector2 offcenterAndRescaleAndFlip = new Vector2(
@@ -216,9 +215,9 @@ public class CameraSetup(string name, Vector2 size, int totalFrameCount, PoseTyp
     /// <summary>
     /// Provides a normalized vector from this camera to a target in 3D space at a given frame
     /// </summary>
-    Vector3 TargetAtFrame(Vector3 vector3, int frameNumber)
+    Vector3 TargetAtFrame(Vector3 vector3)
     {
-        return Vector3.Normalize(vector3 - PositionsPerFrame[frameNumber]);
+        return Vector3.Normalize(vector3 - Position);
     }
 
     #endregion
@@ -256,7 +255,7 @@ public class CameraSetup(string name, Vector2 size, int totalFrameCount, PoseTyp
         // rotate camera in circle at 5m radius and 1.5m elevation pointed at origin until orientation and slope matches 
         for (float alpha = 0; alpha < 2 * MathF.PI; alpha += .001f)
         {
-            PositionsPerFrame[0] = new Vector3(
+            Position = new Vector3(
                 camRadius * MathF.Sin(alpha),
                 camHeight,
                 camRadius * MathF.Cos(alpha));
@@ -264,7 +263,7 @@ public class CameraSetup(string name, Vector2 size, int totalFrameCount, PoseTyp
             RotationsPerFrame[0] = Transform.LookAt(
                 Vector3.Zero,
                 Quaternion.Identity,
-                PositionsPerFrame[0]);
+                Position);
 
             Vector2 origin = ReverseProjectPoint(Vector3.Zero, 0, true);
             Vector2 leadStance = ReverseProjectPoint(stanceWidth, 0, true); // lead left ankle 
@@ -378,13 +377,13 @@ public class CameraSetup(string name, Vector2 size, int totalFrameCount, PoseTyp
     {
         // HEIGHT
         const float delta = 0.05f;
-        if (PositionsPerFrame[0].Y + delta > 2.5 || PositionsPerFrame[0].Y - delta < 0.05f)
+        if (Position.Y + delta > 2.5 || Position.Y - delta < 0.05f)
         {
             Console.WriteLine($"{name}: height out of bounds");
             return false;
         }
 
-        float radius = Vector2.Distance(new Vector2(PositionsPerFrame[0].X, PositionsPerFrame[0].Z), Vector2.Zero);
+        float radius = Vector2.Distance(new Vector2(Position.X, Position.Z), Vector2.Zero);
         if (radius + delta > 10 || radius - delta < 1)
         {
             Console.WriteLine($"{name}: radius out of bounds");
@@ -397,10 +396,10 @@ public class CameraSetup(string name, Vector2 size, int totalFrameCount, PoseTyp
             return false;
         }
 
-        float originalHeight = PositionsPerFrame[0].Y;
+        float originalHeight = Position.Y;
         float originalFocalLength = FocalLength;
-        float originalX = PositionsPerFrame[0].X;
-        float originalZ = PositionsPerFrame[0].Z;
+        float originalX = Position.X;
+        float originalZ = Position.Z;
         Quaternion originalRotation = RotationsPerFrame[0];
 
         float currentError = poseSolver.Calculate3DPosesAndTotalError();
@@ -410,7 +409,7 @@ public class CameraSetup(string name, Vector2 size, int totalFrameCount, PoseTyp
             allPosesAndConfidencesPerFrame[0][leadIndicesPerFrame[0]][JointExtension.RAnkleIndex(poseType)].Y);
 
         // move camera up
-        PositionsPerFrame[0] = new Vector3(
+        Position = new Vector3(
             originalX,
             originalHeight + delta,
             originalZ);
@@ -419,7 +418,7 @@ public class CameraSetup(string name, Vector2 size, int totalFrameCount, PoseTyp
         float upError = poseSolver.Calculate3DPosesAndTotalError();
 
         // move camera down
-        PositionsPerFrame[0] = new Vector3(
+        Position = new Vector3(
             originalX,
             originalHeight - delta,
             originalZ);
@@ -435,7 +434,7 @@ public class CameraSetup(string name, Vector2 size, int totalFrameCount, PoseTyp
             new Vector2(originalX, originalZ),
             (radius - delta)/radius);
 
-        PositionsPerFrame[0] = new Vector3(
+        Position = new Vector3(
             closeLerp.X,
             originalHeight,
             closeLerp.Y);
@@ -450,7 +449,7 @@ public class CameraSetup(string name, Vector2 size, int totalFrameCount, PoseTyp
             new Vector2(originalX, originalZ),
             (radius + delta)/radius);
 
-        PositionsPerFrame[0] = new Vector3(
+        Position = new Vector3(
             farLerp.X,
             originalHeight,
             farLerp.Y);
@@ -461,7 +460,7 @@ public class CameraSetup(string name, Vector2 size, int totalFrameCount, PoseTyp
 
         if (upError < downError && upError < currentError && upError < moveCloserError && upError < moveFartherError)
         {
-            PositionsPerFrame[0] = new Vector3(
+            Position = new Vector3(
                 originalX,
                 originalHeight + delta,
                 originalZ);
@@ -475,7 +474,7 @@ public class CameraSetup(string name, Vector2 size, int totalFrameCount, PoseTyp
         if (downError < upError && downError < currentError && downError < moveCloserError &&
             downError < moveFartherError)
         {
-            PositionsPerFrame[0] = new Vector3(
+            Position = new Vector3(
                 originalX,
                 originalHeight - delta,
                 originalZ);
@@ -489,7 +488,7 @@ public class CameraSetup(string name, Vector2 size, int totalFrameCount, PoseTyp
         if (moveCloserError < upError && moveCloserError < currentError && moveCloserError < downError &&
             moveCloserError < moveFartherError)
         {
-            PositionsPerFrame[0] = new Vector3(
+            Position = new Vector3(
                 closeLerp.X,
                 originalHeight,
                 closeLerp.Y);
@@ -502,7 +501,7 @@ public class CameraSetup(string name, Vector2 size, int totalFrameCount, PoseTyp
         if (moveFartherError < upError && moveFartherError < currentError && moveFartherError < downError &&
             moveFartherError < moveCloserError)
         {
-            PositionsPerFrame[0] = new Vector3(
+            Position = new Vector3(
                 farLerp.X,
                 originalHeight,
                 farLerp.Y);
@@ -511,7 +510,7 @@ public class CameraSetup(string name, Vector2 size, int totalFrameCount, PoseTyp
         }
 
         // reset
-        PositionsPerFrame[0] = new Vector3(
+        Position = new Vector3(
             originalX,
             originalHeight,
             originalZ);
@@ -722,10 +721,10 @@ public class CameraSetup(string name, Vector2 size, int totalFrameCount, PoseTyp
     public Ray PoseRay(int frameNumber, int jointNumber, bool isLead)
     {
         Ray rayToJoint = new Ray(
-            PositionsPerFrame[frameNumber],
+            Position,
             Vector3.Normalize(isLead
-                ? leadProjectionsPerFrame[frameNumber][jointNumber] - PositionsPerFrame[frameNumber]
-                : followProjectionsPerFrame[frameNumber][jointNumber] - PositionsPerFrame[frameNumber]));
+                ? leadProjectionsPerFrame[frameNumber][jointNumber] - Position
+                : followProjectionsPerFrame[frameNumber][jointNumber] - Position));
         return rayToJoint;
     }
 
@@ -736,13 +735,8 @@ public class CameraSetup(string name, Vector2 size, int totalFrameCount, PoseTyp
             : recenteredRescaledAllPosesPerFrame[frameNumber][followIndicesPerFrame[frameNumber]][jointNumber].Z;
     }
 
-    public void CopyPositionsToNextFrame(int frameNumber)
+    public void CopyRotationToNextFrame(int frameNumber)
     {
-        if (PositionsPerFrame.Length <= frameNumber + 1)
-        {
-            PositionsPerFrame[frameNumber] = PositionsPerFrame[frameNumber - 1];
-        }
-
         if (RotationsPerFrame.Length <= frameNumber + 1)
         {
             RotationsPerFrame[frameNumber] = RotationsPerFrame[frameNumber - 1];
