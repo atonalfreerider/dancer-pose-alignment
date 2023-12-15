@@ -11,6 +11,8 @@ public class CameraSetup(string name, Vector2 size, int totalFrameCount, PoseTyp
     const float PixelToMeter = 0.000264583f;
 
     public readonly Dictionary<string, List<Vector2>> ManualCameraPositionsByFrameByCamName = [];
+    public List<Vector2> ReverseLeadProjectionLastFrame;
+    public List<Vector2> ReverseFollowProjectionLastFrame;
 
     public Vector3 Forward(int frame) => Vector3.Transform(
         Vector3.UnitZ,
@@ -43,8 +45,61 @@ public class CameraSetup(string name, Vector2 size, int totalFrameCount, PoseTyp
                     vec.Z)) // keep the confidence
             .ToList()).ToList();
 
-        leadIndicesPerFrame[frameNumber] = -1;
-        followIndicesPerFrame[frameNumber] = -1;
+        if (frameNumber == 0)
+        {
+            leadIndicesPerFrame[frameNumber] = -1;
+            followIndicesPerFrame[frameNumber] = -1;
+        }
+        else
+        {
+            // take the last 3d pose on this camera and match the profile to the closest pose here, within a threshold
+            float lowestLeadError = float.MaxValue;
+            int leadIndex = -1;
+            
+            float lowestFollowError = float.MaxValue;
+            int followIndex = -1;
+
+            int count = 0;
+            foreach (List<Vector3> pose in allPoses)
+            {
+                float leadPoseError = ReverseLeadProjectionLastFrame.Select((target, i) => Vector2.Distance(
+                    target,
+                    new Vector2(pose[i].X, pose[i].Y)) * pose[i].Z).Sum();
+                
+                float followPoseError = ReverseFollowProjectionLastFrame.Select((target, i) => Vector2.Distance(
+                    target,
+                    new Vector2(pose[i].X, pose[i].Y)) * pose[i].Z).Sum();
+
+                if (leadPoseError < lowestLeadError)
+                {
+                    leadIndex = count;
+                    lowestLeadError = leadPoseError;
+                }
+
+                if (followPoseError < lowestFollowError)
+                {
+                    followIndex = count;
+                    lowestFollowError = followPoseError;
+                }
+
+                count++;
+            }
+
+            if (leadIndex == followIndex)
+            {
+                followIndex = -1;
+            }
+
+            if (lowestLeadError < 1000)
+            {
+                leadIndicesPerFrame[frameNumber] = leadIndex;
+            }
+
+            if (lowestFollowError < 1000)
+            {
+                followIndicesPerFrame[frameNumber] = followIndex;
+            }
+        }
     }
 
     public Tuple<int, int> MarkDancer(Vector2 click, int frameNumber, string selectedButton)

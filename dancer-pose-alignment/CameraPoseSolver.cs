@@ -106,13 +106,25 @@ public class CameraPoseSolver(PoseType poseType)
         if (isLead)
         {
             if (merged3DPoseLeadPerFrame.Count <= frameNumber) return [];
-            return merged3DPoseLeadPerFrame[frameNumber]
+            
+            List<Vector2> reverseLeadProjection = merged3DPoseLeadPerFrame[frameNumber]
                 .Select(vec => cameras[camName].ReverseProjectPoint(vec, frameNumber)).ToList();
+            
+            // save the projection for next frame comparison
+            cameras[camName].ReverseLeadProjectionLastFrame = reverseLeadProjection;
+
+            return reverseLeadProjection;
         }
 
         if (merged3DPoseFollowPerFrame.Count <= frameNumber) return [];
-        return merged3DPoseFollowPerFrame[frameNumber]
+        
+        List<Vector2> reverseFollowProjection = merged3DPoseFollowPerFrame[frameNumber]
             .Select(vec => cameras[camName].ReverseProjectPoint(vec, frameNumber)).ToList();
+        
+        // save the projection for next frame comparison
+        cameras[camName].ReverseFollowProjectionLastFrame = reverseFollowProjection;
+
+        return reverseFollowProjection;
     }
     
     public List<Vector2> ReverseProjectOriginCrossAtCamera(string camName)
@@ -165,7 +177,7 @@ public class CameraPoseSolver(PoseType poseType)
         float totalError = Calculate3DPosesAndTotalError();
 
         int iterationCount = 0;
-        while (iterationCount < 1000)
+        while (iterationCount < 10000)
         {
             Dictionary<string, float> errorsByCamera = [];
             foreach ((string cameraName, CameraSetup cameraSetup) in cameras)
@@ -192,7 +204,7 @@ public class CameraPoseSolver(PoseType poseType)
             if (frameNumber == 0)
             {
                 // lead right ankle is pinned to origin
-                // move camera up and down
+                // move cameras around in order of most error to least, and move the highest error camera 10x more
                 bool moved = false;
                 foreach (CameraSetup cameraSetup in sortedCamerasByHighestError)
                 {
@@ -214,17 +226,12 @@ public class CameraPoseSolver(PoseType poseType)
             }
             else
             {
-                bool moved = false;
-                foreach (CameraSetup cameraSetup in sortedCamerasByHighestError)
+                bool moved = sortedCamerasByHighestError.First().IterateOrientation(this, frameNumber);
+                
+                if (!moved)
                 {
-                    for (int i = 0; i < 1000f / (sortedCamerasByHighestError.IndexOf(cameraSetup) + 1); i++)
-                    {
-                        bool thisMoved = cameraSetup.IterateOrientation(this, frameNumber);
-                        if (thisMoved)
-                        {
-                            moved = true;
-                        }
-                    }
+                    Console.WriteLine("Can't orient");
+                    break;
                 }
             }
 

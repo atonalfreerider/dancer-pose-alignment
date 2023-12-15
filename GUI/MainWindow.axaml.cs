@@ -285,16 +285,7 @@ public partial class MainWindow : Window
 
             cameraPoseSolver.SetPoseFromImage(frameMat.ToMemoryStream(), videoFilePath);
 
-            DrawingImage drawingImage = new DrawingImage();
-            DrawingGroup drawingGroup = PreviewDrawer.DrawGeometry(
-                cameraPoseSolver.PosesAtFrameAtCamera(videoFilePath),
-                new Size(frameMat.Width, frameMat.Height),
-                -1,
-                -1,
-                PoseType.Coco);
-            drawingImage.Drawing = drawingGroup;
-
-            graphicsImages[videoFilePath].Source = drawingImage;
+            RedrawCamera(videoFilePath);
         }
     }
 
@@ -507,8 +498,8 @@ public partial class MainWindow : Window
 
         timeFromStart += 1d / 30d;
 
-        cameraPoseSolver.IterationLoop();
         SetPreviewsToFrame();
+        cameraPoseSolver.IterationLoop();
     }
 
     void SolverPreviousFrameButton_Click(object sender, RoutedEventArgs e)
