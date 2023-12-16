@@ -305,9 +305,15 @@ public partial class MainWindow : Window
         }
 
         cameraPoseSolver.TryHomeCamera(selectedCamera);
-        cameraPoseSolver.CameraCircle();
-        //cameraPoseSolver.IterationLoop();
-        RedrawCamera(selectedCamera);
+        for (int i = 0; i < 10; i++)
+        {
+            cameraPoseSolver.CameraCircle();
+        }
+
+        foreach (string videoFilesKey in videoFiles.Keys)
+        {
+            RedrawCamera(videoFilesKey);
+        }
 
         if (cameraPoseSolver.AreAllCamerasOriented())
         {

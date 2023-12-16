@@ -187,8 +187,27 @@ public class CameraPoseSolver(PoseType poseType)
             Vector3 cam2Pos = cam2.Position;
 
             // drop y until optical point matches y
-            
             // contra zoom until optical point matches x
+            cam1.ContraZoom(cam2Pos, camName2);
+
+            float cam1Error =cam2.CamErrorForOther(camName1, cam1.Position, 0);
+            Vector3 cam1UpdatedPos = cam1.Position;
+
+            // reset
+            cam1.Position = cam1Pos;
+            cam1.HipLock();
+            
+            cam2.ContraZoom(cam1Pos, camName1);
+            float cam2Error = cam1.CamErrorForOther(camName2, cam2.Position, 0);
+
+            if (cam1Error < cam2Error)
+            {
+                // set back to first movement
+                cam2.Position = cam2Pos;
+                cam2.HipLock();
+                cam1.Position = cam1UpdatedPos;
+                cam1.HipLock();
+            }
         }
     }
 
@@ -224,29 +243,7 @@ public class CameraPoseSolver(PoseType poseType)
                 .Select(pair => cameras[pair.Key])
                 .ToList();
 
-            if (frameNumber == 0)
-            {
-                // lead right ankle is pinned to origin
-                // move cameras around in order of most error to least, and move the highest error camera 10x more
-                bool moved = false;
-                foreach (CameraSetup cameraSetup in sortedCamerasByHighestError)
-                {
-                    for (int i = 0; i < 10f / (sortedCamerasByHighestError.IndexOf(cameraSetup) + 1); i++)
-                    {
-                        if (moved)
-                        {
-                            moved = true;
-                        }
-                    }
-                }
-
-                if (!moved)
-                {
-                    Console.WriteLine("Can't move");
-                    break;
-                }
-            }
-            else
+            if (frameNumber > 0)
             {
                 bool moved = sortedCamerasByHighestError.First().IterateOrientation(frameNumber);
 
