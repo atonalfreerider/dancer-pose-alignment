@@ -12,7 +12,6 @@ public class CameraSetup(string name, Vector2 size, int totalFrameCount, PoseTyp
 
     public readonly Dictionary<string, List<Vector2>> ManualCameraPositionsByFrameByCamName = [];
     
-    
     public Vector3 Forward(int frame) => Vector3.Transform(
         Vector3.UnitZ,
         RotationsPerFrame[frame]);
@@ -200,6 +199,21 @@ public class CameraSetup(string name, Vector2 size, int totalFrameCount, PoseTyp
         followProjectionsPerFrame[frameNumber] = followProjectionsAtThisFrame;
     }
 
+    public Vector3 ProjectPoint(Vector2 imgPoint)
+    {
+        Vector3 vec = new Vector3(imgPoint.X, imgPoint.Y, 0);
+        List<Vector3> adjusted = Adjusted(new List<Vector3> { vec }, 0);
+        return adjusted[0];
+    }
+
+    public float CamErrorForOther(string otherCamName, Vector3 otherCamPos, int frameNumber)
+    {
+        Vector2 manual = ManualCameraPositionsByFrameByCamName[otherCamName][frameNumber];
+        Vector2 otherCam = ReverseProjectPoint(otherCamPos, frameNumber, true);
+        
+        return Vector2.Distance(manual, otherCam);
+    }
+
     List<Vector3> Adjusted(IEnumerable<Vector3> keypoints, int frame)
     {
         // Translate keypoints to the camera center
@@ -296,7 +310,7 @@ public class CameraSetup(string name, Vector2 size, int totalFrameCount, PoseTyp
             allPosesAndConfidencesPerFrame[0][leadIndicesPerFrame[0]][JointExtension.RAnkleIndex(poseType)].Y);
 
         Vector3 stanceWidth = new Vector3(-.3f, 0f, 0f);
-        const float camRadius = 5f;
+        const float camRadius = 3.5f;
         const float camHeight = 1.5f;
 
         // calculate slope and orientation of lead ankle stance, so that iteration can match it 
@@ -344,7 +358,7 @@ public class CameraSetup(string name, Vector2 size, int totalFrameCount, PoseTyp
         HipLock();
     }
 
-    void HipLock()
+    public void HipLock()
     {
         Vector2 leadRightAnkle = new Vector2(
             allPosesAndConfidencesPerFrame[0][leadIndicesPerFrame[0]][JointExtension.RAnkleIndex(poseType)].X,
@@ -425,169 +439,7 @@ public class CameraSetup(string name, Vector2 size, int totalFrameCount, PoseTyp
         }
     }
 
-    /// <summary>
-    /// Should only be called on frame 0, because it sets position and focal length
-    /// </summary>
-    public bool IterateHeight()
-    {
-        // HEIGHT
-        const float delta = 0.05f;
-        if (Position.Y + delta > 3 || Position.Y - delta < 0.05f)
-        {
-            Console.WriteLine($"{name}: height out of bounds");
-            Position = Position with { Y = 1.5f };
-            return false;
-        }
-
-        float originalHeight = Position.Y;
-        float originalFocalLength = FocalLength;
-        float originalX = Position.X;
-        float originalZ = Position.Z;
-        Quaternion originalRotation = RotationsPerFrame[0];
-
-        float currentError = CurrentError(0);
-        
-        // move camera up
-        Position = new Vector3(
-            originalX,
-            originalHeight + delta,
-            originalZ);
-
-        HipLock();
-        float upError = CurrentError(0);
-
-        // move camera down
-        Position = new Vector3(
-            originalX,
-            originalHeight - delta,
-            originalZ);
-
-        HipLock();
-        float downError = CurrentError(0);
-
-        if (upError < downError && upError < currentError)
-        {
-            Position = new Vector3(
-                originalX,
-                originalHeight + delta,
-                originalZ);
-
-            HipLock();
-            return true;
-        }
-
-        if (downError < upError && downError < currentError)
-        {
-            Position = new Vector3(
-                originalX,
-                originalHeight - delta,
-                originalZ);
-
-            HipLock();
-            return true;
-        }
-
-        // reset
-        Position = new Vector3(
-            originalX,
-            originalHeight,
-            originalZ);
-        RotationsPerFrame[0] = originalRotation;
-        FocalLength = originalFocalLength;
-        return false;
-    }
-
-    public bool IterateRadiusZoom()
-    {
-        const float delta = 0.05f;
-        
-        float originalHeight = Position.Y;
-        float originalFocalLength = FocalLength;
-        float originalX = Position.X;
-        float originalZ = Position.Z;
-        Quaternion originalRotation = RotationsPerFrame[0];
-        
-        float currentError = CurrentError(0);
-        
-        float radius = Vector2.Distance(new Vector2(Position.X, Position.Z), Vector2.Zero);
-        if (radius + delta > 10 || radius - delta < 1)
-        {
-            Console.WriteLine($"{name}: radius out of bounds");
-            Vector2 resetLerp = Transform.LerpUnclamp(
-                Vector2.Zero,
-                new Vector2(Position.X, Position.Z),
-                5f / radius); // lerping to 1m radius
-            Position = new Vector3(resetLerp.X, Position.Y, resetLerp.Y);
-            return false;
-        }
-
-        if (FocalLength is < .001f or > 1.2f)
-        {
-            Console.WriteLine($"{name}: focal length out of bounds");
-            FocalLength = .05f;
-            return false;
-        }
-
-        // move closer
-        Vector2 closeLerp = Transform.LerpUnclamp(
-            Vector2.Zero,
-            new Vector2(originalX, originalZ),
-            (radius - delta) / radius);
-
-        Position = new Vector3(
-            closeLerp.X,
-            originalHeight,
-            closeLerp.Y);
-
-        HipLock();
-
-        float moveCloserError = CurrentError(0);
-
-        // move farther
-        Vector2 farLerp = Transform.LerpUnclamp(
-            Vector2.Zero,
-            new Vector2(originalX, originalZ),
-            (radius + delta) / radius);
-
-        Position = new Vector3(
-            farLerp.X,
-            originalHeight,
-            farLerp.Y);
-
-        HipLock();
-
-        float moveFartherError = CurrentError(0);
-        
-        if (moveCloserError < moveFartherError && moveCloserError < currentError)
-        {
-            Position = new Vector3(
-                closeLerp.X,
-                originalHeight,
-                closeLerp.Y);
-
-            HipLock();
-            return true;
-        }
-
-        if (moveFartherError < currentError && moveFartherError < moveCloserError)
-        {
-            Position = new Vector3(
-                farLerp.X,
-                originalHeight,
-                farLerp.Y);
-            HipLock();
-            return true;
-        }
-        
-        // reset
-        Position = new Vector3(
-            originalX,
-            originalHeight,
-            originalZ);
-        RotationsPerFrame[0] = originalRotation;
-        FocalLength = originalFocalLength;
-        return false;
-    }
+   
 
     public bool IterateOrientation(int frameNumber)
     {

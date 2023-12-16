@@ -110,7 +110,7 @@ public class CameraPoseSolver(PoseType poseType)
 
             List<Vector2> reverseLeadProjection = merged3DPoseLeadPerFrame[frameNumber]
                 .Select(vec => cameras[camName].ReverseProjectPoint(vec, frameNumber)).ToList();
-            
+
             return reverseLeadProjection;
         }
 
@@ -164,6 +164,34 @@ public class CameraPoseSolver(PoseType poseType)
         cameras[camName].Home();
     }
 
+    public void CameraCircle()
+    {
+        List<Tuple<string, string>> camerasThatSeeEachOther = [];
+        foreach ((string camName, CameraSetup cameraSetup) in cameras)
+        {
+            foreach (string otherCamName in cameraSetup.ManualCameraPositionsByFrameByCamName.Keys)
+            {
+                if (cameras[otherCamName].ManualCameraPositionsByFrameByCamName.ContainsKey(camName))
+                {
+                    camerasThatSeeEachOther.Add(new Tuple<string, string>(camName, otherCamName));
+                }
+            }
+        }
+
+        foreach ((string camName1, string camName2) in camerasThatSeeEachOther)
+        {
+            CameraSetup cam1 = cameras[camName1];
+            CameraSetup cam2 = cameras[camName2];
+
+            Vector3 cam1Pos = cam1.Position;
+            Vector3 cam2Pos = cam2.Position;
+
+            // drop y until optical point matches y
+            
+            // contra zoom until optical point matches x
+        }
+    }
+
     public void IterationLoop()
     {
         if (!AreAllCamerasOriented()) return;
@@ -205,9 +233,7 @@ public class CameraPoseSolver(PoseType poseType)
                 {
                     for (int i = 0; i < 10f / (sortedCamerasByHighestError.IndexOf(cameraSetup) + 1); i++)
                     {
-                        bool heightMoved = cameraSetup.IterateHeight();
-                        bool radiusMoved = cameraSetup.IterateRadiusZoom();
-                        if (moved || heightMoved || radiusMoved)
+                        if (moved)
                         {
                             moved = true;
                         }
@@ -239,8 +265,8 @@ public class CameraPoseSolver(PoseType poseType)
             if (errorHistory.Count > 10)
             {
                 errorHistory.RemoveAt(errorHistory.Count - 1);
-                
             }
+
             Console.WriteLine(errorHistory.Average());
         }
 

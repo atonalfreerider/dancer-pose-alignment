@@ -305,7 +305,8 @@ public partial class MainWindow : Window
         }
 
         cameraPoseSolver.TryHomeCamera(selectedCamera);
-        cameraPoseSolver.IterationLoop();
+        cameraPoseSolver.CameraCircle();
+        //cameraPoseSolver.IterationLoop();
         RedrawCamera(selectedCamera);
 
         if (cameraPoseSolver.AreAllCamerasOriented())
