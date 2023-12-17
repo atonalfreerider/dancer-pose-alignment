@@ -310,6 +310,7 @@ public partial class MainWindow : Window
             cameraPoseSolver.CameraCircle();
         }
 
+        cameraPoseSolver.IterationLoop();
         foreach (string videoFilesKey in videoFiles.Keys)
         {
             RedrawCamera(videoFilesKey);
@@ -377,8 +378,7 @@ public partial class MainWindow : Window
         List<Vector2> leadProjectionsAtFrame = cameraPoseSolver.ReverseProjectionOfPoseAtCamera(camName, true);
         List<Vector2> followProjectionsAtFrame = cameraPoseSolver.ReverseProjectionOfPoseAtCamera(camName, false);
 
-        List<Vector2> cameraPositions2D = cameraPoseSolver.ReverseProjectCameraPositionsAtCamera(camName);
-        List<Vector2> manualPositions2D = cameraPoseSolver.ManualCameraPositionsAtCamera(camName);
+        List<Tuple<Vector2, Vector2>> cameraPositions2D = cameraPoseSolver.ReverseProjectCameraPositionsAtCameraAndManualPair(camName);
 
         DrawingImage drawingImage = new DrawingImage();
         DrawingGroup drawingGroup = PreviewDrawer.DrawGeometry(
@@ -390,8 +390,7 @@ public partial class MainWindow : Window
             originCross,
             leadProjectionsAtFrame,
             followProjectionsAtFrame,
-            cameraPositions2D,
-            manualPositions2D);
+            cameraPositions2D);
         drawingImage.Drawing = drawingGroup;
 
         graphicsImages[camName].Source = drawingImage;

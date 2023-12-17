@@ -128,15 +128,27 @@ public class CameraPoseSolver(PoseType poseType)
             .ReverseProjectPoint(vec, frameNumber)).ToList();
     }
 
-    public List<Vector2> ReverseProjectCameraPositionsAtCamera(string camName)
+    public List<Tuple<Vector2, Vector2>> ReverseProjectCameraPositionsAtCameraAndManualPair(string camName)
     {
-        return cameraPositions.Where(p => p.Key != camName)
-            .Select(pair => cameras[camName].ReverseProjectPoint(pair.Value, frameNumber)).ToList();
-    }
+        List<Tuple<Vector2, Vector2>> pointPairs = [];
+        foreach ((string otherCamName, Vector3 camPos) in cameraPositions)
+        {
+            if(camName == otherCamName) continue;
 
-    public List<Vector2> ManualCameraPositionsAtCamera(string camName)
-    {
-        return cameras[camName].ManualCameraPositionsByFrameByCamName.Select(x => x.Value[frameNumber]).ToList();
+            Vector2 point = cameras[camName].ReverseProjectPoint(camPos, frameNumber);
+            if (cameras[camName].ManualCameraPositionsByFrameByCamName.ContainsKey(otherCamName))
+            {
+                Vector2 manualPos = cameras[camName].ManualCameraPositionsByFrameByCamName[otherCamName][frameNumber];
+                pointPairs.Add(new Tuple<Vector2, Vector2>(point, manualPos));
+            }
+            else
+            {
+                pointPairs.Add(new Tuple<Vector2, Vector2>(point, new Vector2(-1, -1)));
+            }
+            
+        }
+
+        return pointPairs;
     }
 
     public void SaveData(string folder)
@@ -161,11 +173,14 @@ public class CameraPoseSolver(PoseType poseType)
 
     public void TryHomeCamera(string camName)
     {
+        if (frameNumber > 0) return;
         cameras[camName].Home();
     }
 
     public void CameraCircle()
     {
+        if (frameNumber > 0) return;
+        
         List<Tuple<string, string>> camerasThatSeeEachOther = [];
         foreach ((string camName, CameraSetup cameraSetup) in cameras)
         {
@@ -215,36 +230,37 @@ public class CameraPoseSolver(PoseType poseType)
     {
         if (!AreAllCamerasOriented()) return;
 
-        List<float> errorHistory = [];
-        float totalError = Calculate3DPosesAndTotalError();
-
-        int iterationCount = 0;
-        while (iterationCount < 10000)
+        float totalError = 0;
+        if (frameNumber > 0)
         {
-            Dictionary<string, float> errorsByCamera = [];
-            foreach ((string cameraName, CameraSetup cameraSetup) in cameras)
+            int iterationCount = 0;
+            List<float> errorHistory = [];
+            while (iterationCount < 10000)
             {
-                float camError = cameraSetup.CameraError(cameraPositions, frameNumber);
+                Dictionary<string, float> errorsByCamera = [];
+                foreach ((string cameraName, CameraSetup cameraSetup) in cameras)
+                {
+                    float camError = cameraSetup.CameraError(cameraPositions, frameNumber);
 
-                float poseError = cameraSetup.PoseError(merged3DPoseLeadPerFrame[frameNumber], true, frameNumber) +
-                                  cameraSetup.PoseError(merged3DPoseFollowPerFrame[frameNumber], false, frameNumber);
+                    float poseError = cameraSetup.PoseError(merged3DPoseLeadPerFrame[frameNumber], true, frameNumber) +
+                                      cameraSetup.PoseError(merged3DPoseFollowPerFrame[frameNumber], false,
+                                          frameNumber);
 
-                errorsByCamera.Add(cameraName, camError + poseError);
-            }
+                    errorsByCamera.Add(cameraName, camError + poseError);
+                }
 
-            if (errorsByCamera.Values.Sum() <= float.Epsilon)
-            {
-                Console.WriteLine("PERFECT SOLUTION");
-                break;
-            }
+                if (errorsByCamera.Values.Sum() <= float.Epsilon)
+                {
+                    Console.WriteLine("PERFECT SOLUTION");
+                    break;
+                }
 
-            List<CameraSetup> sortedCamerasByHighestError = errorsByCamera
-                .OrderByDescending(pair => pair.Value)
-                .Select(pair => cameras[pair.Key])
-                .ToList();
+                List<CameraSetup> sortedCamerasByHighestError = errorsByCamera
+                    .OrderByDescending(pair => pair.Value)
+                    .Select(pair => cameras[pair.Key])
+                    .ToList();
 
-            if (frameNumber > 0)
-            {
+
                 bool moved = sortedCamerasByHighestError.First().IterateOrientation(frameNumber);
 
                 if (!moved)
@@ -252,19 +268,20 @@ public class CameraPoseSolver(PoseType poseType)
                     Console.WriteLine("Can't orient");
                     break;
                 }
+
+
+                totalError = Calculate3DPosesAndTotalError();
+                iterationCount++;
+
+                errorHistory.Insert(0, totalError);
+
+                if (errorHistory.Count > 10)
+                {
+                    errorHistory.RemoveAt(errorHistory.Count - 1);
+                }
+
+                Console.WriteLine(errorHistory.Average());
             }
-
-            totalError = Calculate3DPosesAndTotalError();
-            iterationCount++;
-
-            errorHistory.Insert(0, totalError);
-
-            if (errorHistory.Count > 10)
-            {
-                errorHistory.RemoveAt(errorHistory.Count - 1);
-            }
-
-            Console.WriteLine(errorHistory.Average());
         }
 
         totalError = Calculate3DPosesAndTotalError();
