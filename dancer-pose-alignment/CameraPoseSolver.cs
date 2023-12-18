@@ -133,7 +133,7 @@ public class CameraPoseSolver(PoseType poseType)
         List<Tuple<Vector2, Vector2>> pointPairs = [];
         foreach ((string otherCamName, Vector3 camPos) in cameraPositions)
         {
-            if(camName == otherCamName) continue;
+            if (camName == otherCamName) continue;
 
             Vector2 point = cameras[camName].ReverseProjectPoint(camPos, frameNumber);
             if (cameras[camName].ManualCameraPositionsByFrameByCamName.ContainsKey(otherCamName))
@@ -145,7 +145,6 @@ public class CameraPoseSolver(PoseType poseType)
             {
                 pointPairs.Add(new Tuple<Vector2, Vector2>(point, new Vector2(-1, -1)));
             }
-            
         }
 
         return pointPairs;
@@ -180,48 +179,47 @@ public class CameraPoseSolver(PoseType poseType)
     public void CameraCircle()
     {
         if (frameNumber > 0) return;
-        
-        List<Tuple<string, string>> camerasThatSeeEachOther = [];
-        foreach ((string camName, CameraSetup cameraSetup) in cameras)
+
+        foreach (CameraSetup cam in cameras.Values)
         {
-            foreach (string otherCamName in cameraSetup.ManualCameraPositionsByFrameByCamName.Keys)
+            foreach (string otherCamName in cam.ManualCameraPositionsByFrameByCamName.Keys)
             {
-                if (cameras[otherCamName].ManualCameraPositionsByFrameByCamName.ContainsKey(camName))
+                float originalError = cameras.Values.Sum(errCalc => errCalc.CameraError(cameraPositions, frameNumber));
+
+                CameraSetup otherCam = cameras[otherCamName];
+
+                Vector3 otherCamOriginalPosition = otherCam.Position;
+
+                Tuple<Vector3, Vector3>? cam2RayRange = cam.RayRangeFromManualCamPos(otherCamName, otherCam.Alpha);
+
+                if (cam2RayRange == null) continue;
+
+                // move other camera along the ray and record lowest error
+                float lowestError = float.MaxValue;
+                float lowestT = 0;
+                for (float t = 0; t <= 1; t += .1f)
                 {
-                    camerasThatSeeEachOther.Add(new Tuple<string, string>(camName, otherCamName));
+                    Vector3 setPosition = Vector3.Lerp(cam2RayRange.Item1, cam2RayRange.Item2, t);
+
+                    float rad = Vector2.Distance(Vector2.Zero, new Vector2(setPosition.X, setPosition.Z));
+                    if (setPosition.Y < .1f || setPosition.Y > 3f || rad < 1f || rad > 10f) continue;
+
+                    otherCam.Position = setPosition;
+                    otherCam.HipLock();
+
+                    float thisPositionError =
+                        cameras.Values.Sum(errCalc => errCalc.CameraError(cameraPositions, frameNumber));
+                    if (thisPositionError < lowestError)
+                    {
+                        lowestError = thisPositionError;
+                        lowestT = t;
+                    }
                 }
-            }
-        }
 
-        foreach ((string camName1, string camName2) in camerasThatSeeEachOther)
-        {
-            CameraSetup cam1 = cameras[camName1];
-            CameraSetup cam2 = cameras[camName2];
-
-            Vector3 cam1Pos = cam1.Position;
-            Vector3 cam2Pos = cam2.Position;
-
-            // drop y until optical point matches y
-            // contra zoom until optical point matches x
-            cam1.ContraZoom(cam2Pos, camName2);
-
-            float cam1Error =cam2.CamErrorForOther(camName1, cam1.Position, 0);
-            Vector3 cam1UpdatedPos = cam1.Position;
-
-            // reset
-            cam1.Position = cam1Pos;
-            cam1.HipLock();
-            
-            cam2.ContraZoom(cam1Pos, camName1);
-            float cam2Error = cam1.CamErrorForOther(camName2, cam2.Position, 0);
-
-            if (cam1Error < cam2Error)
-            {
-                // set back to first movement
-                cam2.Position = cam2Pos;
-                cam2.HipLock();
-                cam1.Position = cam1UpdatedPos;
-                cam1.HipLock();
+                otherCam.Position = lowestError < originalError
+                    ? Vector3.Lerp(cam2RayRange.Item1, cam2RayRange.Item2, lowestT)
+                    : otherCamOriginalPosition;
+                otherCam.HipLock();
             }
         }
     }

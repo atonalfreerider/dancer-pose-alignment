@@ -305,7 +305,7 @@ public partial class MainWindow : Window
         }
 
         cameraPoseSolver.TryHomeCamera(selectedCamera);
-        for (int i = 0; i < 10; i++)
+        for (int i = 0; i < 50; i++)
         {
             cameraPoseSolver.CameraCircle();
         }

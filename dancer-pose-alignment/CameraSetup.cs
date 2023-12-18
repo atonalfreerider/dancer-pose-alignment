@@ -4,9 +4,11 @@ namespace dancer_pose_alignment;
 
 public class CameraSetup(string name, Vector2 size, int totalFrameCount, PoseType poseType)
 {
+    public string Name = name;
     public Vector3 Position = Vector3.Zero;
     public readonly Quaternion[] RotationsPerFrame = new Quaternion[totalFrameCount];
     public float FocalLength = .05f;
+    public float Alpha => MathF.Atan2(Position.X, Position.Z);
 
     const float PixelToMeter = 0.000264583f;
 
@@ -35,7 +37,7 @@ public class CameraSetup(string name, Vector2 size, int totalFrameCount, PoseTyp
 
     public List<Vector3> CurrentLead3DPose;
     public List<Vector3> CurrentFollow3DPose;
-    public Dictionary<string, Vector3> CurrentOtherCameraPositions;
+    Dictionary<string, Vector3> currentOtherCameraPositions = [];
 
     public void SetAllPosesAtFrame(List<List<Vector3>> allPoses, int frameNumber)
     {
@@ -199,19 +201,16 @@ public class CameraSetup(string name, Vector2 size, int totalFrameCount, PoseTyp
         followProjectionsPerFrame[frameNumber] = followProjectionsAtThisFrame;
     }
 
-    public Vector3 ProjectPoint(Vector2 imgPoint)
+    Vector3 ProjectPoint(Vector2 imgPoint)
     {
-        Vector3 vec = new Vector3(imgPoint.X, imgPoint.Y, 0);
-        List<Vector3> adjusted = Adjusted(new List<Vector3> { vec }, 0);
+        // rescale point
+        Vector3 rescaledPt = new Vector3(
+            (imgPoint.X - size.X / 2) * PixelToMeter,
+            -(imgPoint.Y - size.Y / 2) * PixelToMeter, // flip
+            0);
+        
+        List<Vector3> adjusted = Adjusted(new List<Vector3> { rescaledPt }, 0);
         return adjusted[0];
-    }
-
-    public float CamErrorForOther(string otherCamName, Vector3 otherCamPos, int frameNumber)
-    {
-        Vector2 manual = ManualCameraPositionsByFrameByCamName[otherCamName][frameNumber];
-        Vector2 otherCam = ReverseProjectPoint(otherCamPos, frameNumber, true);
-
-        return Vector2.Distance(manual, otherCam);
     }
 
     List<Vector3> Adjusted(IEnumerable<Vector3> keypoints, int frame)
@@ -299,7 +298,7 @@ public class CameraSetup(string name, Vector2 size, int totalFrameCount, PoseTyp
     public void Home()
     {
         if (leadIndicesPerFrame[0] == -1) return;
-
+        
         // 1 - ORBIT 
         Vector2 leadLeftAnkle = new Vector2(
             allPosesAndConfidencesPerFrame[0][leadIndicesPerFrame[0]][JointExtension.LAnkleIndex(poseType)].X,
@@ -309,17 +308,11 @@ public class CameraSetup(string name, Vector2 size, int totalFrameCount, PoseTyp
             allPosesAndConfidencesPerFrame[0][leadIndicesPerFrame[0]][JointExtension.RAnkleIndex(poseType)].X,
             allPosesAndConfidencesPerFrame[0][leadIndicesPerFrame[0]][JointExtension.RAnkleIndex(poseType)].Y);
 
+        (bool isFacingLead, float leadPoseAnkleSlope) = FacingAndStanceSlope(leadRightAnkle, leadLeftAnkle);
+        
         Vector3 stanceWidth = new Vector3(-.3f, 0f, 0f);
         const float camRadius = 3.5f;
         const float camHeight = 1.5f;
-
-        // calculate slope and orientation of lead ankle stance, so that iteration can match it 
-        float leadPoseAnkleSlope = (leadLeftAnkle.Y - leadRightAnkle.Y) / (leadLeftAnkle.X - leadRightAnkle.X);
-        bool isFacingLead = leadRightAnkle.X < leadLeftAnkle.X;
-        if (!isFacingLead)
-        {
-            leadPoseAnkleSlope = (leadRightAnkle.Y - leadLeftAnkle.Y) / (leadRightAnkle.X - leadLeftAnkle.X);
-        }
 
         // rotate camera in circle at 5m radius and 1.5m elevation pointed at origin until orientation and slope matches 
         float lowestAlpha = 0;
@@ -338,13 +331,8 @@ public class CameraSetup(string name, Vector2 size, int totalFrameCount, PoseTyp
 
             Vector2 origin = ReverseProjectPoint(Vector3.Zero, 0, true);
             Vector2 leadStance = ReverseProjectPoint(stanceWidth, 0, true); // lead left ankle 
-
-            float slopeOfCamera = (leadStance.Y - origin.Y) / (leadStance.X - origin.X);
-            bool isFacingLeadInCamera = origin.X < leadStance.X;
-            if (!isFacingLeadInCamera)
-            {
-                slopeOfCamera = (origin.Y - leadStance.Y) / (origin.X - leadStance.X);
-            }
+            
+            (bool isFacingLeadInCamera, float slopeOfCamera) = FacingAndStanceSlope(origin, leadStance);
 
             if (isFacingLead == isFacingLeadInCamera)
             {
@@ -373,6 +361,19 @@ public class CameraSetup(string name, Vector2 size, int totalFrameCount, PoseTyp
         CenterRightLeadAnkleOnOrigin(leadRightAnkle);
 
         HipLock();
+    }
+
+    static Tuple<bool, float> FacingAndStanceSlope(Vector2 leadRightAnkle, Vector2 leadLeftAnkle)
+    {
+        // calculate slope and orientation of lead ankle stance, so that iteration can match it 
+        float leadPoseAnkleSlope = (leadLeftAnkle.Y - leadRightAnkle.Y) / (leadLeftAnkle.X - leadRightAnkle.X);
+        bool isFacingLead = leadRightAnkle.X < leadLeftAnkle.X;
+        if (!isFacingLead)
+        {
+            leadPoseAnkleSlope = (leadRightAnkle.Y - leadLeftAnkle.Y) / (leadRightAnkle.X - leadLeftAnkle.X);
+        }
+
+        return new Tuple<bool, float>(isFacingLead, leadPoseAnkleSlope);
     }
 
     public void HipLock()
@@ -488,80 +489,29 @@ public class CameraSetup(string name, Vector2 size, int totalFrameCount, PoseTyp
         }
     }
 
-    public void ContraZoom(Vector3 otherCameraPos, string otherCamName)
+    public Tuple<Vector3, Vector3>? RayRangeFromManualCamPos(string otherCamName, float otherCamAlpha)
     {
-        const float delta = 0.1f;
+        Vector2 manual = ManualCameraPositionsByFrameByCamName[otherCamName][0];
+        Vector3 projectedPoint = ProjectPoint(manual);
+        Ray rayToManual = new Ray(Position, Vector3.Normalize(projectedPoint - Position));
 
-        Vector2 otherCameraImgPos = ManualCameraPositionsByFrameByCamName[otherCamName][0];
-        Vector2 otherCamReverseImgPos = ReverseProjectPoint(otherCameraPos, 0, true);
+        const float delta = MathF.PI / 12;
+        Vector3 startRadXZ = new Vector3(MathF.Sin(otherCamAlpha + delta), 0, MathF.Cos(otherCamAlpha + delta));
+        Plane startPlane = Plane.CreateFromVertices(Vector3.Zero, Vector3.UnitY, startRadXZ);
+        Vector3? startIntersection = Transform.RayPlaneIntersection(startPlane, rayToManual);
 
-        Vector3 originalPosition = Position;
-        int breaker = 0;
-        while (Vector2.Distance(otherCamReverseImgPos, otherCameraImgPos) > 3)
+        Vector3 endRadXZ = new Vector3(MathF.Sin(otherCamAlpha - delta), 0, MathF.Cos(otherCamAlpha - delta));
+        Plane endPlane = Plane.CreateFromVertices(Vector3.Zero, Vector3.UnitY, endRadXZ);
+        Vector3? endIntersection = Transform.RayPlaneIntersection(endPlane, rayToManual);
+
+        if (startIntersection.HasValue && endIntersection.HasValue)
         {
-            if (Math.Abs(otherCamReverseImgPos.X - otherCameraImgPos.X) >
-                Math.Abs(otherCamReverseImgPos.Y - otherCameraImgPos.Y))
-            {
-                float radius = Vector2.Distance(new Vector2(Position.X, Position.Z), Vector2.Zero);
-
-                if (radius is < 1 or > 10)
-                {
-                    Console.WriteLine("too close or too far");
-                    Position = originalPosition;
-                    HipLock();
-                    break;
-                }
-
-                if (otherCameraImgPos.X > size.X / 2 && otherCamReverseImgPos.X > otherCameraImgPos.X ||
-                    otherCameraImgPos.X < size.X / 2 && otherCamReverseImgPos.X < otherCameraImgPos.X)
-                {
-                    // decrease radius
-                    Vector2 lerp = Transform.LerpUnclamp(Vector2.Zero, new Vector2(Position.X, Position.Z),
-                        (radius - delta) / radius);
-                    Position = new Vector3(lerp.X, Position.Y, lerp.Y);
-                }
-                else
-                {
-                    // increase radius
-                    Vector2 lerp = Transform.LerpUnclamp(Vector2.Zero, new Vector2(Position.X, Position.Z),
-                        (radius + delta) / radius);
-                    Position = new Vector3(lerp.X, Position.Y, lerp.Y);
-                }
-            }
-            else
-            {
-                if (Position.Y is < 0.2f or > 3)
-                {
-                    Console.WriteLine("too high or too low");
-                    Position = originalPosition;
-                    HipLock();
-                    break;
-                }
-
-                if (otherCameraImgPos.Y < otherCamReverseImgPos.Y)
-                {
-                    // increase height
-                    Position = Position with { Y = Position.Y + delta };
-                }
-                else
-                {
-                    // decrease height
-                    Position = Position with { Y = Position.Y - delta };
-                }
-            }
-
-            // contra zoom
-            HipLock();
-
-            otherCamReverseImgPos = ReverseProjectPoint(otherCameraPos, 0, true);
-            breaker++;
-            if (breaker > 1000)
-            {
-                break;
-            }
+            return new Tuple<Vector3, Vector3>(startIntersection.Value, endIntersection.Value);
         }
-    }
 
+        return null;
+    }
+    
     public bool IterateOrientation(int frameNumber)
     {
         bool yawed = IterateYaw(0.01f, frameNumber);
@@ -687,17 +637,44 @@ public class CameraSetup(string name, Vector2 size, int totalFrameCount, PoseTyp
 
     public float CameraError(Dictionary<string, Vector3> otherCameras, int frameNumber)
     {
-        CurrentOtherCameraPositions = otherCameras;
+        currentOtherCameraPositions = otherCameras;
         float camError = 0;
         foreach ((string otherCamName, List<Vector2> manualPoints) in ManualCameraPositionsByFrameByCamName)
         {
             Vector2 camPoint = manualPoints[frameNumber];
             Vector3 otherCamPoint = otherCameras[otherCamName];
             Vector2 otherCamPoint2D = ReverseProjectPoint(otherCamPoint, frameNumber, true);
-            camError += Vector2.Distance(camPoint, otherCamPoint2D) * 100; // huge penalty for bad camera position
+            camError += Vector2.Distance(camPoint, otherCamPoint2D);
         }
 
-        return camError;
+        return camError + StanceError() * 10;
+    }
+
+    float StanceError()
+    {
+        Vector2 leadLeftAnkle = new Vector2(
+            allPosesAndConfidencesPerFrame[0][leadIndicesPerFrame[0]][JointExtension.LAnkleIndex(poseType)].X,
+            allPosesAndConfidencesPerFrame[0][leadIndicesPerFrame[0]][JointExtension.LAnkleIndex(poseType)].Y);
+
+        Vector2 leadRightAnkle = new Vector2(
+            allPosesAndConfidencesPerFrame[0][leadIndicesPerFrame[0]][JointExtension.RAnkleIndex(poseType)].X,
+            allPosesAndConfidencesPerFrame[0][leadIndicesPerFrame[0]][JointExtension.RAnkleIndex(poseType)].Y);
+
+        (bool isFacingLead, float leadPoseAnkleSlope) = FacingAndStanceSlope(leadRightAnkle, leadLeftAnkle);
+        
+        Vector3 stanceWidth = new Vector3(-.3f, 0f, 0f);
+        
+        Vector2 origin = ReverseProjectPoint(Vector3.Zero, 0, true);
+        Vector2 leadStance = ReverseProjectPoint(stanceWidth, 0, true); // lead left ankle 
+            
+        (bool isFacingLeadInCamera, float slopeOfCamera) = FacingAndStanceSlope(origin, leadStance);
+
+        if (isFacingLead == isFacingLeadInCamera)
+        {
+            return MathF.Abs(leadPoseAnkleSlope - slopeOfCamera);
+        }
+
+        return float.MaxValue;
     }
 
     #endregion
@@ -764,7 +741,7 @@ public class CameraSetup(string name, Vector2 size, int totalFrameCount, PoseTyp
 
     float CameraError()
     {
-        return CameraError(CurrentOtherCameraPositions, 0);
+        return CameraError(currentOtherCameraPositions, 0);
     }
 
     #endregion

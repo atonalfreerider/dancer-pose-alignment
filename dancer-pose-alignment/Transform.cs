@@ -54,5 +54,31 @@ public static class Transform
     {
         return start + (end - start) * t;
     }
+    
+    public static Vector3? RayPlaneIntersection(Plane plane, Ray ray)
+    {
+        // Calculate the distance from the ray origin to the plane
+        float denominator = Vector3.Dot(plane.Normal, ray.Direction);
+        
+        // Check if the ray is parallel to the plane
+        if (Math.Abs(denominator) <= float.Epsilon)
+        {
+            // No intersection
+            return null;
+        }
+
+        // Compute intersection point
+        float t = (-plane.D - Vector3.Dot(plane.Normal, ray.Origin)) / denominator;
+        
+        // If t is negative, the plane is behind the ray's origin
+        if (t < 0)
+        {
+            return null;
+        }
+
+        // Calculate the intersection point
+        Vector3 intersection = ray.Origin + t * ray.Direction;
+        return intersection;
+    }
 
 }
