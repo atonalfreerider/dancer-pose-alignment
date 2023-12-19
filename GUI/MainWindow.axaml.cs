@@ -231,14 +231,6 @@ public partial class MainWindow : Window
             cameraPoseSolver.SetPoseFromImage(frameMat.ToMemoryStream(), videoFilePath);
 
             DrawingImage drawingImage = new DrawingImage();
-            DrawingGroup drawingGroup = PreviewDrawer.DrawGeometry(
-                cameraPoseSolver.PosesAtFrameAtCamera(videoFilePath),
-                size,
-                -1,
-                -1,
-                PoseType.Coco);
-            drawingImage.Drawing = drawingGroup;
-
             Image poseDrawingImage = new Image
             {
                 Width = size.Width,
@@ -252,6 +244,12 @@ public partial class MainWindow : Window
             CanvasContainer.Items.Add(canvas);
 
             camCount++;
+        }
+                
+        cameraPoseSolver.Calculate3DPosesAndTotalError();
+        foreach (string videoFilesKey in videoFiles.Keys)
+        {
+            RedrawCamera(videoFilesKey);
         }
     }
 
@@ -311,18 +309,15 @@ public partial class MainWindow : Window
         }
 
         cameraPoseSolver.IterationLoop();
-        foreach (string videoFilesKey in videoFiles.Keys)
-        {
-            RedrawCamera(videoFilesKey);
-        }
 
         if (cameraPoseSolver.AreAllCamerasOriented())
         {
             cameraPoseSolver.Calculate3DPosesAndTotalError();
-            foreach (string videoFilesKey in videoFiles.Keys)
-            {
-                RedrawCamera(videoFilesKey);
-            }
+        }
+        
+        foreach (string videoFilesKey in videoFiles.Keys)
+        {
+            RedrawCamera(videoFilesKey);
         }
     }
 
@@ -366,8 +361,6 @@ public partial class MainWindow : Window
             camName,
             position,
             selectedButton);
-
-        RedrawCamera(camName);
     }
 
     void RedrawCamera(string camName)

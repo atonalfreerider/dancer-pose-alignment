@@ -55,8 +55,31 @@ public class CameraSetup(string name, Vector2 size, int totalFrameCount, PoseTyp
 
         if (frameNumber == 0)
         {
-            leadIndicesPerFrame[frameNumber] = -1;
-            followIndicesPerFrame[frameNumber] = -1;
+            int tallestIndex = -1;
+            float tallestHeight = float.MinValue;
+            int secondTallestIndex = -1;
+            float secondTallestHeight = float.MinValue;
+            foreach (List<Vector3> pose in allPoses)
+            {
+                float height = ExtremeHeight(pose);
+                if (height > tallestHeight)
+                {
+                    secondTallestHeight = tallestHeight;
+                    secondTallestIndex = tallestIndex;
+                    tallestHeight = height;
+                    tallestIndex = allPoses.IndexOf(pose);
+                }
+                else if (height > secondTallestHeight)
+                {
+                    secondTallestHeight = height;
+                    secondTallestIndex = allPoses.IndexOf(pose);
+                }
+            }
+            
+            leadIndicesPerFrame[frameNumber] = tallestIndex;
+            followIndicesPerFrame[frameNumber] = secondTallestIndex;
+            
+            Home();
         }
         else
         {
@@ -758,6 +781,17 @@ public class CameraSetup(string name, Vector2 size, int totalFrameCount, PoseTyp
         h += Vector2.Distance(rKnee2D, rHip2D);
         h += Vector2.Distance(rHip2D, rShoulder2D);
         return h;
+    }
+    
+    float ExtremeHeight(IReadOnlyList<Vector3> pose)
+    {
+        Vector3 rAnkle =pose[JointExtension.RAnkleIndex(poseType)];
+        Vector3 lAnkle = pose[JointExtension.LAnkleIndex(poseType)];
+        
+        Vector3 rShoulder = pose[JointExtension.RShoulderIndex(poseType)];
+        Vector3 lShoulder = pose[JointExtension.LShoulderIndex(poseType)];
+        
+        return Math.Max(rAnkle.Y, lAnkle.Y) - Math.Min(rShoulder.Y, lShoulder.Y);
     }
 
     #endregion
