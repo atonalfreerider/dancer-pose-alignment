@@ -180,14 +180,22 @@ public class CameraPoseSolver(PoseType poseType)
     {
         if (frameNumber > 0) return;
 
+        foreach (CameraSetup setup in cameras.Values)
+        {
+            setup.HeightsSetByOtherCameras.Clear();
+        }
+
         foreach (CameraSetup cam in cameras.Values)
         {
-            foreach (string otherCamName in cam.ManualCameraPositionsByFrameByCamName.Keys)
+            foreach ((string otherCamName, List<CameraSetup.CameraHandAnchor> cameraHandAnchorList) in cam.ManualCameraPositionsByFrameByCamName)
             {
+                CameraSetup.CameraHandAnchor cameraHandAnchor = cameraHandAnchorList[0];
+                float poseHeight = cam.PoseHeight(cameraHandAnchor.PoseIndex);
+                
                 float originalError = cameras.Values.Sum(errCalc => errCalc.CameraError(cameraPositions, frameNumber));
-
+                
                 CameraSetup otherCam = cameras[otherCamName];
-
+                otherCam.HeightsSetByOtherCameras.Add(poseHeight);
                 float originalRadius = otherCam.Radius;
                 float originalAlpha = otherCam.Alpha;
 
@@ -536,7 +544,7 @@ public class CameraPoseSolver(PoseType poseType)
 
     public void MoveCameraUp(string camName, float move)
     {
-        cameras[camName].Height += move;
+        
     }
 
     #endregion

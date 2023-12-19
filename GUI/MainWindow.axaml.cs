@@ -303,11 +303,8 @@ public partial class MainWindow : Window
         }
 
         cameraPoseSolver.TryHomeCamera(selectedCamera);
-        for (int i = 0; i < 50; i++)
-        {
-            cameraPoseSolver.CameraCircle();
-        }
-
+        cameraPoseSolver.CameraCircle();
+        
         cameraPoseSolver.IterationLoop();
 
         if (cameraPoseSolver.AreAllCamerasOriented())
