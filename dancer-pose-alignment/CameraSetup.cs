@@ -15,8 +15,7 @@ public class CameraSetup(string name, Vector2 size, int totalFrameCount, PoseTyp
 
     const float PixelToMeter = 0.000264583f;
 
-    public readonly Dictionary<string, List<Vector2>> ManualCameraPositionsByFrameByCamName = [];
-    public readonly Dictionary<string, List<Tuple<int, int>>> ManualJointIndicesByFrameByCamName = [];
+    public readonly Dictionary<string, List<CameraHandAnchor>> ManualCameraPositionsByFrameByCamName = [];
 
     public Vector3 Forward(int frame) => Vector3.Transform(
         Vector3.UnitZ,
@@ -167,34 +166,20 @@ public class CameraSetup(string name, Vector2 size, int totalFrameCount, PoseTyp
                 break;
             default:
                 // set camera position
-                if (ManualCameraPositionsByFrameByCamName.TryGetValue(selectedButton, out List<Vector2> positionsByFrame))
+                if (ManualCameraPositionsByFrameByCamName.TryGetValue(selectedButton, out List<CameraHandAnchor> positionsByFrame))
                 {
-                    positionsByFrame[frameNumber] = click;
+                    positionsByFrame[frameNumber] = new CameraHandAnchor(click, closestIndex, jointSelected);
                 }
                 else
                 {
-                    ManualCameraPositionsByFrameByCamName[selectedButton] = new List<Vector2>(totalFrameCount);
+                    ManualCameraPositionsByFrameByCamName[selectedButton] = new List<CameraHandAnchor>(totalFrameCount);
                     for (int i = 0; i < totalFrameCount; i++)
                     {
-                        ManualCameraPositionsByFrameByCamName[selectedButton].Add(Vector2.Zero);
+                        ManualCameraPositionsByFrameByCamName[selectedButton]
+                            .Add(new CameraHandAnchor(Vector2.Zero, -1, -1));
                     }
 
-                    ManualCameraPositionsByFrameByCamName[selectedButton][frameNumber] = click;
-                }
-                
-                if(ManualJointIndicesByFrameByCamName.TryGetValue(selectedButton, out List<Tuple<int, int>> jointIndicesByFrame))
-                {
-                    jointIndicesByFrame[frameNumber] = new Tuple<int, int>(closestIndex, jointSelected);
-                }
-                else
-                {
-                    ManualJointIndicesByFrameByCamName[selectedButton] = new List<Tuple<int, int>>(totalFrameCount);
-                    for (int i = 0; i < totalFrameCount; i++)
-                    {
-                        ManualJointIndicesByFrameByCamName[selectedButton].Add(new Tuple<int, int>(-1, -1));
-                    }
-
-                    ManualJointIndicesByFrameByCamName[selectedButton][frameNumber] = new Tuple<int, int>(closestIndex, jointSelected);
+                    ManualCameraPositionsByFrameByCamName[selectedButton][frameNumber] = new CameraHandAnchor(click, closestIndex, jointSelected);;
                 }
 
                 break;
@@ -202,6 +187,13 @@ public class CameraSetup(string name, Vector2 size, int totalFrameCount, PoseTyp
         }
 
         return new Tuple<int, int>(closestIndex, jointSelected);
+    }
+
+    public class CameraHandAnchor(Vector2 imgPosition, int poseIndex, int jointIndex)
+    {
+        public Vector2 ImgPosition = imgPosition;
+        public int PoseIndex = poseIndex;
+        public int JointIndex = jointIndex;
     }
 
     public void MoveKeypoint(Vector2 click, int frameNumber, Tuple<int, int> closestIndexAndJointSelected)
@@ -525,7 +517,7 @@ public class CameraSetup(string name, Vector2 size, int totalFrameCount, PoseTyp
 
     public Vector3? RayFloorIntersection(string otherCamName, float otherCamHeight)
     {
-        Vector2 manual = ManualCameraPositionsByFrameByCamName[otherCamName][0];
+        Vector2 manual = ManualCameraPositionsByFrameByCamName[otherCamName][0].ImgPosition;
         Vector3 projectedPoint = ProjectPoint(manual);
         Ray rayToManual = new Ray(Position, Vector3.Normalize(projectedPoint - Position));
         
@@ -659,9 +651,9 @@ public class CameraSetup(string name, Vector2 size, int totalFrameCount, PoseTyp
     {
         currentOtherCameraPositions = otherCameras;
         float camError = 0;
-        foreach ((string otherCamName, List<Vector2> manualPoints) in ManualCameraPositionsByFrameByCamName)
+        foreach ((string otherCamName, List<CameraHandAnchor> manualPoints) in ManualCameraPositionsByFrameByCamName)
         {
-            Vector2 camPoint = manualPoints[frameNumber];
+            Vector2 camPoint = manualPoints[frameNumber].ImgPosition;
             Vector3 otherCamPoint = otherCameras[otherCamName];
             Vector2 otherCamPoint2D = ReverseProjectPoint(otherCamPoint, frameNumber, true);
             camError += Vector2.Distance(camPoint, otherCamPoint2D);

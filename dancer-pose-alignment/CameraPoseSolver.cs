@@ -138,7 +138,7 @@ public class CameraPoseSolver(PoseType poseType)
             Vector2 point = cameras[camName].ReverseProjectPoint(camPos, frameNumber);
             if (cameras[camName].ManualCameraPositionsByFrameByCamName.ContainsKey(otherCamName))
             {
-                Vector2 manualPos = cameras[camName].ManualCameraPositionsByFrameByCamName[otherCamName][frameNumber];
+                Vector2 manualPos = cameras[camName].ManualCameraPositionsByFrameByCamName[otherCamName][frameNumber].ImgPosition;
                 pointPairs.Add(new Tuple<Vector2, Vector2>(point, manualPos));
             }
             else
