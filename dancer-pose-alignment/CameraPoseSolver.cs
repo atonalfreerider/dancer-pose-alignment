@@ -138,7 +138,8 @@ public class CameraPoseSolver(PoseType poseType)
             Vector2 point = cameras[camName].ReverseProjectPoint(camPos, frameNumber);
             if (cameras[camName].ManualCameraPositionsByFrameByCamName.ContainsKey(otherCamName))
             {
-                Vector2 manualPos = cameras[camName].ManualCameraPositionsByFrameByCamName[otherCamName][frameNumber].ImgPosition;
+                Vector2 manualPos = cameras[camName].ManualCameraPositionsByFrameByCamName[otherCamName][frameNumber]
+                    .ImgPosition;
                 pointPairs.Add(new Tuple<Vector2, Vector2>(point, manualPos));
             }
             else
@@ -176,47 +177,34 @@ public class CameraPoseSolver(PoseType poseType)
         cameras[camName].Home();
     }
 
-    public void CameraCircle()
+    public void SetCameraHeights()
     {
         if (frameNumber > 0) return;
 
-        foreach (CameraSetup setup in cameras.Values)
+        foreach (CameraSetup cam in cameras.Values)
         {
-            setup.HeightsSetByOtherCameras.Clear();
+            cam.HeightsSetByOtherCameras.Clear();
         }
 
         foreach (CameraSetup cam in cameras.Values)
         {
-            foreach ((string otherCamName, List<CameraSetup.CameraHandAnchor> cameraHandAnchorList) in cam.ManualCameraPositionsByFrameByCamName)
+            foreach ((string otherCamName, List<CameraSetup.CameraHandAnchor> cameraHandAnchorList) in cam
+                         .ManualCameraPositionsByFrameByCamName)
             {
                 CameraSetup.CameraHandAnchor cameraHandAnchor = cameraHandAnchorList[0];
-                float poseHeight = cam.PoseHeight(cameraHandAnchor.PoseIndex);
-                
-                float originalError = cameras.Values.Sum(errCalc => errCalc.CameraError(cameraPositions, frameNumber));
-                
+                float poseHeight = cam.PoseHeight(cameraHandAnchor.PoseIndex, cameraHandAnchor.ImgPosition.Y);
+
                 CameraSetup otherCam = cameras[otherCamName];
                 otherCam.HeightsSetByOtherCameras.Add(poseHeight);
-                float originalRadius = otherCam.Radius;
-                float originalAlpha = otherCam.Alpha;
-
-                Vector3? rayIntersection = cam.RayFloorIntersection(otherCamName, otherCam.Height);
-                if (rayIntersection == null) continue;
-
-                otherCam.Radius = Vector2.Distance(Vector2.Zero, new Vector2(rayIntersection.Value.X, rayIntersection.Value.Z));
-                otherCam.Alpha = MathF.Atan2(rayIntersection.Value.Z, rayIntersection.Value.X);
-                
-                otherCam.HipLock();
-                
-                float newError = cameras.Values.Sum(errCalc => errCalc.CameraError(cameraPositions, frameNumber));
-                
-                if (newError > originalError)
-                {
-                    otherCam.Radius = originalRadius;
-                    otherCam.Alpha = originalAlpha;
-                    
-                    otherCam.HipLock();
-                }
             }
+        }
+    }
+
+    public void ContraZoom()
+    {
+        foreach (CameraSetup cam in cameras.Values)
+        {
+            cam.ContraZoom(cameraPositions);
         }
     }
 
@@ -534,7 +522,7 @@ public class CameraPoseSolver(PoseType poseType)
 
     public void MoveCameraForward(string camName, float move)
     {
-        cameras[camName].Radius += move;
+        cameras[camName].Radius -= move;
     }
 
     public void MoveCameraRight(string camName, float move)

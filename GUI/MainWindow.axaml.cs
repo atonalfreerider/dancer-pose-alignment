@@ -302,8 +302,8 @@ public partial class MainWindow : Window
             SetDancer(new Vector2((float)x, (float)y), selectedCamera);
         }
 
+        cameraPoseSolver.SetCameraHeights();
         cameraPoseSolver.TryHomeCamera(selectedCamera);
-        cameraPoseSolver.CameraCircle();
         
         cameraPoseSolver.IterationLoop();
 
@@ -502,7 +502,7 @@ public partial class MainWindow : Window
     
     void Solve_Click(object sender, RoutedEventArgs e)
     {
-        cameraPoseSolver.IterationLoop();
+        cameraPoseSolver.ContraZoom();
     }
 
     void SolverPreviousFrameButton_Click(object sender, RoutedEventArgs e)
