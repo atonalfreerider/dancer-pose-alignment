@@ -17,15 +17,15 @@ public class CameraSetup(string name, Vector2 size, int totalFrameCount, PoseTyp
 
     public readonly Dictionary<string, List<CameraHandAnchor>> ManualCameraPositionsByFrameByCamName = [];
 
-    public Vector3 Forward(int frame) => Vector3.Transform(
+    Vector3 Forward(int frame) => Vector3.Transform(
         Vector3.UnitZ,
         RotationsPerFrame[frame]);
 
-    public Vector3 Up(int frame) => Vector3.Transform(
+    Vector3 Up(int frame) => Vector3.Transform(
         Vector3.UnitY,
         RotationsPerFrame[frame]);
 
-    public Vector3 Right(int frame) => Vector3.Transform(
+    Vector3 Right(int frame) => Vector3.Transform(
         Vector3.UnitX,
         RotationsPerFrame[frame]);
 

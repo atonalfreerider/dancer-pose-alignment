@@ -12,6 +12,99 @@ public static class PreviewDrawer
         Size imgSize,
         int currentLeadIndex,
         int currentFollowIndex,
+        PoseType poseType,
+        List<Vector2> originCross,
+        List<Vector2> leadProjectionsAtFrame,
+        List<Vector2> followProjectionsAtFrame,
+        List<Tuple<Vector2, Vector2>> cameraProjectionsAtFrame)
+    {
+        DrawingGroup drawingGroup = DrawPoses(
+            poses,
+            imgSize,
+            currentLeadIndex,
+            currentFollowIndex,
+            poseType);
+
+        drawingGroup = DrawOriginCross(drawingGroup, originCross);
+
+        SolidColorBrush camBrush = new SolidColorBrush(Colors.DarkGreen);
+        Pen camPen = new Pen(camBrush)
+        {
+            Thickness = 10
+        };
+
+        SolidColorBrush manualCamBrush = new SolidColorBrush(Colors.Green);
+        Pen manualCamPen = new Pen(manualCamBrush)
+        {
+            Thickness = 10
+        };
+
+        foreach (Tuple<Vector2, Vector2> camPosAndManual in cameraProjectionsAtFrame)
+        {
+            GeometryDrawing camGeometry = DrawPoint(camPosAndManual.Item1, camPen);
+            drawingGroup.Children.Add(camGeometry);
+
+            if (camPosAndManual.Item2.X > 0 && camPosAndManual.Item2.Y > 0)
+            {
+                GeometryDrawing manualCamGeometry = DrawPoint(camPosAndManual.Item2, manualCamPen);
+                drawingGroup.Children.Add(manualCamGeometry);
+
+                GeometryDrawing line = DrawLine(camPosAndManual.Item1, camPosAndManual.Item2, manualCamPen);
+                drawingGroup.Children.Add(line);
+            }
+        }
+
+        if (leadProjectionsAtFrame.Count == 0 || followProjectionsAtFrame.Count == 0) return drawingGroup;
+
+        SolidColorBrush brush = new SolidColorBrush(Colors.DarkRed);
+        Pen pen = new Pen(brush)
+        {
+            Thickness = 4
+        };
+        foreach (Vector2 point in leadProjectionsAtFrame)
+        {
+            GeometryDrawing poseGeometry = DrawPoint(point, pen);
+            drawingGroup.Children.Add(poseGeometry);
+        }
+
+        drawingGroup = poseType switch
+        {
+            PoseType.Coco => DrawCoco(drawingGroup,
+                leadProjectionsAtFrame.Select(x => new Vector3(x.X, x.Y, 1f)).ToList(), -1),
+            PoseType.Halpe => DrawHalpe(drawingGroup,
+                leadProjectionsAtFrame.Select(x => new Vector3(x.X, x.Y, 1f)).ToList(), -1),
+            _ => throw new ArgumentOutOfRangeException(nameof(poseType), poseType, null)
+        };
+
+        SolidColorBrush followBrush = new SolidColorBrush(Colors.DarkMagenta);
+        Pen followPen = new Pen(followBrush)
+        {
+            Thickness = 4
+        };
+        foreach (Vector2 point in followProjectionsAtFrame)
+        {
+            GeometryDrawing poseGeometry = DrawPoint(point, followPen);
+            drawingGroup.Children.Add(poseGeometry);
+        }
+
+        drawingGroup = poseType switch
+        {
+            PoseType.Coco => DrawCoco(drawingGroup,
+                followProjectionsAtFrame.Select(x => new Vector3(x.X, x.Y, 1f)).ToList(), -1),
+            PoseType.Halpe => DrawHalpe(drawingGroup,
+                followProjectionsAtFrame.Select(x => new Vector3(x.X, x.Y, 1f)).ToList(), -1),
+            _ => throw new ArgumentOutOfRangeException(nameof(poseType), poseType, null)
+        };
+
+
+        return drawingGroup;
+    }
+
+    static DrawingGroup DrawPoses(
+        List<List<Vector3>> poses,
+        Size imgSize,
+        int currentLeadIndex,
+        int currentFollowIndex,
         PoseType poseType)
     {
         DrawingGroup drawingGroup = new DrawingGroup();
@@ -61,99 +154,6 @@ public static class PreviewDrawer
 
             poseCount++;
         }
-
-        return drawingGroup;
-    }
-
-    public static DrawingGroup DrawGeometry(
-        List<List<Vector3>> poses,
-        Size imgSize,
-        int currentLeadIndex,
-        int currentFollowIndex,
-        PoseType poseType,
-        List<Vector2> originCross,
-        List<Vector2> leadProjectionsAtFrame,
-        List<Vector2> followProjectionsAtFrame,
-        List<Tuple<Vector2, Vector2>> cameraProjectionsAtFrame)
-    {
-        DrawingGroup drawingGroup = DrawGeometry(
-            poses,
-            imgSize,
-            currentLeadIndex,
-            currentFollowIndex,
-            poseType);
-
-        drawingGroup = DrawOriginCross(drawingGroup, originCross);
-
-        SolidColorBrush camBrush = new SolidColorBrush(Colors.DarkGreen);
-        Pen camPen = new Pen(camBrush)
-        {
-            Thickness = 10
-        };
-        
-        SolidColorBrush manualCamBrush = new SolidColorBrush(Colors.Green);
-        Pen manualCamPen = new Pen(manualCamBrush)
-        {
-            Thickness = 10
-        };
-
-        foreach (Tuple<Vector2, Vector2> camPosAndManual in cameraProjectionsAtFrame)
-        {
-            GeometryDrawing camGeometry = DrawPoint(camPosAndManual.Item1, camPen);
-            drawingGroup.Children.Add(camGeometry);
-            
-            if(camPosAndManual.Item2.X > 0 && camPosAndManual.Item2.Y > 0)
-            {
-                GeometryDrawing manualCamGeometry = DrawPoint(camPosAndManual.Item2, manualCamPen);
-                drawingGroup.Children.Add(manualCamGeometry);
-                
-                GeometryDrawing line = DrawLine(camPosAndManual.Item1, camPosAndManual.Item2, manualCamPen);
-                drawingGroup.Children.Add(line);
-            }
-        }
-
-        if (leadProjectionsAtFrame.Count == 0 || followProjectionsAtFrame.Count == 0) return drawingGroup;
-
-        SolidColorBrush brush = new SolidColorBrush(Colors.DarkRed);
-        Pen pen = new Pen(brush)
-        {
-            Thickness = 4
-        };
-        foreach (Vector2 point in leadProjectionsAtFrame)
-        {
-            GeometryDrawing poseGeometry = DrawPoint(point, pen);
-            drawingGroup.Children.Add(poseGeometry);
-        }
-
-        drawingGroup = poseType switch
-        {
-            PoseType.Coco => DrawCoco(drawingGroup,
-                leadProjectionsAtFrame.Select(x => new Vector3(x.X, x.Y, 1f)).ToList(), -1),
-            PoseType.Halpe => DrawHalpe(drawingGroup,
-                leadProjectionsAtFrame.Select(x => new Vector3(x.X, x.Y, 1f)).ToList(), -1),
-            _ => throw new ArgumentOutOfRangeException(nameof(poseType), poseType, null)
-        };
-
-        SolidColorBrush followBrush = new SolidColorBrush(Colors.DarkMagenta);
-        Pen followPen = new Pen(followBrush)
-        {
-            Thickness = 4
-        };
-        foreach (Vector2 point in followProjectionsAtFrame)
-        {
-            GeometryDrawing poseGeometry = DrawPoint(point, followPen);
-            drawingGroup.Children.Add(poseGeometry);
-        }
-
-        drawingGroup = poseType switch
-        {
-            PoseType.Coco => DrawCoco(drawingGroup,
-                followProjectionsAtFrame.Select(x => new Vector3(x.X, x.Y, 1f)).ToList(), -1),
-            PoseType.Halpe => DrawHalpe(drawingGroup,
-                followProjectionsAtFrame.Select(x => new Vector3(x.X, x.Y, 1f)).ToList(), -1),
-            _ => throw new ArgumentOutOfRangeException(nameof(poseType), poseType, null)
-        };
-
 
         return drawingGroup;
     }
@@ -328,7 +328,7 @@ public static class PreviewDrawer
 
         return poseGeometry;
     }
-    
+
     static GeometryDrawing DrawLine(Vector2 start, Vector2 end, Pen linePen)
     {
         GeometryDrawing poseGeometry = new GeometryDrawing
