@@ -5,14 +5,18 @@ namespace dancer_pose_alignment;
 public class CameraSetup(string name, Vector2 size, int totalFrameCount, PoseType poseType)
 {
     public string Name = name;
-    public Vector3 Position = Vector3.Zero;
+    public float Radius = 3.5f;
+    public float Height = 1.5f;
+    public float Alpha = 0;
+    public Vector3 Position => new Vector3(Radius * MathF.Sin(Alpha), Height, Radius * MathF.Cos(Alpha));
+    
     public readonly Quaternion[] RotationsPerFrame = new Quaternion[totalFrameCount];
     public float FocalLength = .05f;
-    public float Alpha => MathF.Atan2(Position.X, Position.Z);
 
     const float PixelToMeter = 0.000264583f;
 
     public readonly Dictionary<string, List<Vector2>> ManualCameraPositionsByFrameByCamName = [];
+    public readonly Dictionary<string, List<Tuple<int, int>>> ManualJointIndicesByFrameByCamName = [];
 
     public Vector3 Forward(int frame) => Vector3.Transform(
         Vector3.UnitZ,
@@ -104,24 +108,6 @@ public class CameraSetup(string name, Vector2 size, int totalFrameCount, PoseTyp
 
     public Tuple<int, int> MarkDancer(Vector2 click, int frameNumber, string selectedButton)
     {
-        if (selectedButton is not ("Lead" or "Follow" or "Move"))
-        {
-            if (ManualCameraPositionsByFrameByCamName.TryGetValue(selectedButton, out List<Vector2> positionsByFrame))
-            {
-                positionsByFrame[frameNumber] = click;
-            }
-            else
-            {
-                ManualCameraPositionsByFrameByCamName[selectedButton] = new List<Vector2>(totalFrameCount);
-                for (int i = 0; i < totalFrameCount; i++)
-                {
-                    ManualCameraPositionsByFrameByCamName[selectedButton].Add(Vector2.Zero);
-                }
-
-                ManualCameraPositionsByFrameByCamName[selectedButton][frameNumber] = click;
-            }
-        }
-
         int closestIndex = -1;
         int jointSelected = -1;
         float closestDistance = float.MaxValue;
@@ -156,6 +142,40 @@ public class CameraSetup(string name, Vector2 size, int totalFrameCount, PoseTyp
                     click.Y,
                     allPosesAndConfidencesPerFrame[frameNumber][closestIndex][jointSelected].Z); // move
                 break;
+            default:
+                // set camera position
+                if (ManualCameraPositionsByFrameByCamName.TryGetValue(selectedButton, out List<Vector2> positionsByFrame))
+                {
+                    positionsByFrame[frameNumber] = click;
+                }
+                else
+                {
+                    ManualCameraPositionsByFrameByCamName[selectedButton] = new List<Vector2>(totalFrameCount);
+                    for (int i = 0; i < totalFrameCount; i++)
+                    {
+                        ManualCameraPositionsByFrameByCamName[selectedButton].Add(Vector2.Zero);
+                    }
+
+                    ManualCameraPositionsByFrameByCamName[selectedButton][frameNumber] = click;
+                }
+                
+                if(ManualJointIndicesByFrameByCamName.TryGetValue(selectedButton, out List<Tuple<int, int>> jointIndicesByFrame))
+                {
+                    jointIndicesByFrame[frameNumber] = new Tuple<int, int>(closestIndex, jointSelected);
+                }
+                else
+                {
+                    ManualJointIndicesByFrameByCamName[selectedButton] = new List<Tuple<int, int>>(totalFrameCount);
+                    for (int i = 0; i < totalFrameCount; i++)
+                    {
+                        ManualJointIndicesByFrameByCamName[selectedButton].Add(new Tuple<int, int>(-1, -1));
+                    }
+
+                    ManualJointIndicesByFrameByCamName[selectedButton][frameNumber] = new Tuple<int, int>(closestIndex, jointSelected);
+                }
+
+                break;
+                
         }
 
         return new Tuple<int, int>(closestIndex, jointSelected);
@@ -311,19 +331,13 @@ public class CameraSetup(string name, Vector2 size, int totalFrameCount, PoseTyp
         (bool isFacingLead, float leadPoseAnkleSlope) = FacingAndStanceSlope(leadRightAnkle, leadLeftAnkle);
         
         Vector3 stanceWidth = new Vector3(-.3f, 0f, 0f);
-        const float camRadius = 3.5f;
-        const float camHeight = 1.5f;
 
         // rotate camera in circle at 5m radius and 1.5m elevation pointed at origin until orientation and slope matches 
         float lowestAlpha = 0;
         float lowestDiff = float.MaxValue;
         for (float alpha = 0; alpha < 2 * MathF.PI; alpha += .001f)
         {
-            Position = new Vector3(
-                camRadius * MathF.Sin(alpha),
-                camHeight,
-                camRadius * MathF.Cos(alpha));
-
+            Alpha = alpha;
             RotationsPerFrame[0] = Transform.LookAt(
                 Vector3.Zero,
                 Quaternion.Identity,
@@ -345,10 +359,7 @@ public class CameraSetup(string name, Vector2 size, int totalFrameCount, PoseTyp
             }
         }
         
-        Position = new Vector3(
-            camRadius * MathF.Sin(lowestAlpha),
-            camHeight,
-            camRadius * MathF.Cos(lowestAlpha));
+        Alpha = lowestAlpha;
 
         RotationsPerFrame[0] = Transform.LookAt(
             Vector3.Zero,
@@ -489,27 +500,13 @@ public class CameraSetup(string name, Vector2 size, int totalFrameCount, PoseTyp
         }
     }
 
-    public Tuple<Vector3, Vector3>? RayRangeFromManualCamPos(string otherCamName, float otherCamAlpha)
+    public Vector3? RayFloorIntersection(string otherCamName, float otherCamHeight)
     {
         Vector2 manual = ManualCameraPositionsByFrameByCamName[otherCamName][0];
         Vector3 projectedPoint = ProjectPoint(manual);
         Ray rayToManual = new Ray(Position, Vector3.Normalize(projectedPoint - Position));
-
-        const float delta = MathF.PI / 12;
-        Vector3 startRadXZ = new Vector3(MathF.Sin(otherCamAlpha + delta), 0, MathF.Cos(otherCamAlpha + delta));
-        Plane startPlane = Plane.CreateFromVertices(Vector3.Zero, Vector3.UnitY, startRadXZ);
-        Vector3? startIntersection = Transform.RayPlaneIntersection(startPlane, rayToManual);
-
-        Vector3 endRadXZ = new Vector3(MathF.Sin(otherCamAlpha - delta), 0, MathF.Cos(otherCamAlpha - delta));
-        Plane endPlane = Plane.CreateFromVertices(Vector3.Zero, Vector3.UnitY, endRadXZ);
-        Vector3? endIntersection = Transform.RayPlaneIntersection(endPlane, rayToManual);
-
-        if (startIntersection.HasValue && endIntersection.HasValue)
-        {
-            return new Tuple<Vector3, Vector3>(startIntersection.Value, endIntersection.Value);
-        }
-
-        return null;
+        
+        return Transform.RayXZPlaneIntersection(rayToManual, otherCamHeight);
     }
     
     public bool IterateOrientation(int frameNumber)
@@ -742,6 +739,25 @@ public class CameraSetup(string name, Vector2 size, int totalFrameCount, PoseTyp
     float CameraError()
     {
         return CameraError(currentOtherCameraPositions, 0);
+    }
+    
+    public float PoseHeight(List<Vector3> pose)
+    {
+        float h = 0;
+        Vector3 rAnkle = allPosesAndConfidencesPerFrame[0][leadIndicesPerFrame[0]][JointExtension.RAnkleIndex(poseType)];
+        Vector3 rKnee = allPosesAndConfidencesPerFrame[0][leadIndicesPerFrame[0]][JointExtension.RKneeIndex(poseType)];
+        Vector3 rHip = allPosesAndConfidencesPerFrame[0][leadIndicesPerFrame[0]][JointExtension.RHipIndex(poseType)];
+        Vector3 rShoulder = allPosesAndConfidencesPerFrame[0][leadIndicesPerFrame[0]][JointExtension.RShoulderIndex(poseType)];
+        
+        Vector2 rAnkle2D = new Vector2(rAnkle.X, rAnkle.Y);
+        Vector2 rKnee2D = new Vector2(rKnee.X, rKnee.Y);
+        Vector2 rHip2D = new Vector2(rHip.X, rHip.Y);
+        Vector2 rShoulder2D = new Vector2(rShoulder.X, rShoulder.Y);
+        
+        h += Vector2.Distance(rAnkle2D, rKnee2D);
+        h += Vector2.Distance(rKnee2D, rHip2D);
+        h += Vector2.Distance(rHip2D, rShoulder2D);
+        return h;
     }
 
     #endregion

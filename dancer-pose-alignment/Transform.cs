@@ -55,6 +55,19 @@ public static class Transform
         return start + (end - start) * t;
     }
     
+    public static Vector3? RayXZPlaneIntersection(Ray ray, float planeHeight)
+    {
+        if (ray.Direction.Y == 0)
+        {
+            return null;
+        }
+
+        float t = (planeHeight - ray.Origin.Y) / ray.Direction.Y;
+        Vector3 intersectionPoint = ray.Origin + t * ray.Direction;
+
+        return intersectionPoint;
+    }
+    
     public static Vector3? RayPlaneIntersection(Plane plane, Ray ray)
     {
         // Calculate the distance from the ray origin to the plane

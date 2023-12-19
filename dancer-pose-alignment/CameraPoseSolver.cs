@@ -188,38 +188,26 @@ public class CameraPoseSolver(PoseType poseType)
 
                 CameraSetup otherCam = cameras[otherCamName];
 
-                Vector3 otherCamOriginalPosition = otherCam.Position;
+                float originalRadius = otherCam.Radius;
+                float originalAlpha = otherCam.Alpha;
 
-                Tuple<Vector3, Vector3>? cam2RayRange = cam.RayRangeFromManualCamPos(otherCamName, otherCam.Alpha);
+                Vector3? rayIntersection = cam.RayFloorIntersection(otherCamName, otherCam.Height);
+                if (rayIntersection == null) continue;
 
-                if (cam2RayRange == null) continue;
-
-                // move other camera along the ray and record lowest error
-                float lowestError = float.MaxValue;
-                float lowestT = 0;
-                for (float t = 0; t <= 1; t += .1f)
-                {
-                    Vector3 setPosition = Vector3.Lerp(cam2RayRange.Item1, cam2RayRange.Item2, t);
-
-                    float rad = Vector2.Distance(Vector2.Zero, new Vector2(setPosition.X, setPosition.Z));
-                    if (setPosition.Y < .1f || setPosition.Y > 3f || rad < 1f || rad > 10f) continue;
-
-                    otherCam.Position = setPosition;
-                    otherCam.HipLock();
-
-                    float thisPositionError =
-                        cameras.Values.Sum(errCalc => errCalc.CameraError(cameraPositions, frameNumber));
-                    if (thisPositionError < lowestError)
-                    {
-                        lowestError = thisPositionError;
-                        lowestT = t;
-                    }
-                }
-
-                otherCam.Position = lowestError < originalError
-                    ? Vector3.Lerp(cam2RayRange.Item1, cam2RayRange.Item2, lowestT)
-                    : otherCamOriginalPosition;
+                otherCam.Radius = Vector2.Distance(Vector2.Zero, new Vector2(rayIntersection.Value.X, rayIntersection.Value.Z));
+                otherCam.Alpha = MathF.Atan2(rayIntersection.Value.Z, rayIntersection.Value.X);
+                
                 otherCam.HipLock();
+                
+                float newError = cameras.Values.Sum(errCalc => errCalc.CameraError(cameraPositions, frameNumber));
+                
+                if (newError > originalError)
+                {
+                    otherCam.Radius = originalRadius;
+                    otherCam.Alpha = originalAlpha;
+                    
+                    otherCam.HipLock();
+                }
             }
         }
     }
@@ -538,17 +526,17 @@ public class CameraPoseSolver(PoseType poseType)
 
     public void MoveCameraForward(string camName, float move)
     {
-        cameras[camName].Position += cameras[camName].Forward(frameNumber) * move;
+        cameras[camName].Radius += move;
     }
 
     public void MoveCameraRight(string camName, float move)
     {
-        cameras[camName].Position += cameras[camName].Right(frameNumber) * move;
+        cameras[camName].Alpha += move;
     }
 
     public void MoveCameraUp(string camName, float move)
     {
-        cameras[camName].Position += cameras[camName].Up(frameNumber) * move;
+        cameras[camName].Height += move;
     }
 
     #endregion
