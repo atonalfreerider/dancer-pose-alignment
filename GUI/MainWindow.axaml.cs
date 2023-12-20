@@ -307,6 +307,11 @@ public partial class MainWindow : Window
         
         cameraPoseSolver.IterationLoop();
 
+        RecalculateAndRedraw();
+    }
+
+    void RecalculateAndRedraw()
+    {
         if (cameraPoseSolver.AreAllCamerasOriented())
         {
             cameraPoseSolver.Calculate3DPosesAndTotalError();
@@ -503,6 +508,7 @@ public partial class MainWindow : Window
     void Solve_Click(object sender, RoutedEventArgs e)
     {
         cameraPoseSolver.ContraZoom();
+        RecalculateAndRedraw();
     }
 
     void SolverPreviousFrameButton_Click(object sender, RoutedEventArgs e)

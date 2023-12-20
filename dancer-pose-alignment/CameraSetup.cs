@@ -6,7 +6,7 @@ public class CameraSetup(string name, Vector2 size, int totalFrameCount, PoseTyp
 {
     public string Name = name;
     public float Radius = 3.5f;
-    public float Height => HeightsSetByOtherCameras.Any() ? HeightsSetByOtherCameras.Average() : 1.5f;
+    float Height => HeightsSetByOtherCameras.Count != 0 ? HeightsSetByOtherCameras.Average() : 1.5f;
     public float Alpha = 0;
     public Vector3 Position => new(Radius * MathF.Sin(Alpha), Height, Radius * MathF.Cos(Alpha));
 
@@ -16,7 +16,7 @@ public class CameraSetup(string name, Vector2 size, int totalFrameCount, PoseTyp
     const float PixelToMeter = 0.000264583f;
 
     public readonly Dictionary<string, List<CameraHandAnchor>> ManualCameraPositionsByFrameByCamName = [];
-    public List<float> HeightsSetByOtherCameras = [];
+    public readonly List<float> HeightsSetByOtherCameras = [];
 
     Vector3 Forward(int frame) => Vector3.Transform(
         Vector3.UnitZ,
@@ -181,7 +181,7 @@ public class CameraSetup(string name, Vector2 size, int totalFrameCount, PoseTyp
         return new Tuple<int, int>(closestIndex, jointSelected);
     }
 
-    Tuple<int, int> GetClosestIndexAndJointSelected(Vector2 click, int frameNumber, List<int> indicesToSkip)
+    Tuple<int, int> GetClosestIndexAndJointSelected(Vector2 click, int frameNumber, ICollection<int> indicesToSkip)
     {
         int closestIndex = -1;
         int jointSelected = -1;
@@ -396,12 +396,7 @@ public class CameraSetup(string name, Vector2 size, int totalFrameCount, PoseTyp
             Vector3.Zero,
             Quaternion.Identity,
             Position);
-
-        CenterRoll();
-        CenterRightLeadAnkleOnOrigin(leadRightAnkle);
-        CenterRoll();
-        CenterRightLeadAnkleOnOrigin(leadRightAnkle);
-
+        
         HipLock();
     }
 
@@ -556,7 +551,7 @@ public class CameraSetup(string name, Vector2 size, int totalFrameCount, PoseTyp
         }
 
         float absDiffPos = Math.Abs(mostPositiveX - size.X / 2);
-        float absDiffCloseToZero = Math.Abs(xClosestToZero - size.X / 2);
+        float absDiffCloseToZero = Math.Abs(size.X / 2 - xClosestToZero);
         if (mostPositiveX > size.X / 2 && xClosestToZero < size.X / 2)
         {
             extremeOtherCamName = absDiffPos > absDiffCloseToZero
@@ -582,15 +577,13 @@ public class CameraSetup(string name, Vector2 size, int totalFrameCount, PoseTyp
 
         Vector3 otherCameraPos = otherCamPositions[extremeOtherCamName];
 
-        Vector2 otherCamReverseImgPos = ReverseProjectPoint(otherCameraPos, 0, true);
+        float otherCamReverseImgPosX = ReverseProjectPoint(otherCameraPos, 0, true).X;
 
         float originalRadius = Radius;
         int breaker = 0;
-        while (Math.Abs(otherCamReverseImgPos.X - otherCameraImgPosX) > 1)
+        while (Math.Abs(otherCamReverseImgPosX - otherCameraImgPosX) > 1)
         {
-            float radius = Vector2.Distance(new Vector2(Position.X, Position.Z), Vector2.Zero);
-
-            if (radius is < 1 or > 10)
+            if (Radius is < 1 or > 10)
             {
                 Console.WriteLine("too close or too far");
                 Radius = originalRadius;
@@ -598,8 +591,8 @@ public class CameraSetup(string name, Vector2 size, int totalFrameCount, PoseTyp
                 break;
             }
 
-            if (otherCameraImgPosX > size.X / 2 && otherCamReverseImgPos.X > otherCameraImgPosX ||
-                otherCameraImgPosX < size.X / 2 && otherCamReverseImgPos.X < otherCameraImgPosX)
+            if (otherCameraImgPosX > size.X / 2 && otherCamReverseImgPosX > otherCameraImgPosX ||
+                otherCameraImgPosX < size.X / 2 && otherCamReverseImgPosX < otherCameraImgPosX)
             {
                 // decrease radius
                 Radius -= delta;
@@ -613,7 +606,7 @@ public class CameraSetup(string name, Vector2 size, int totalFrameCount, PoseTyp
             // contra zoom 
             HipLock();
 
-            otherCamReverseImgPos = ReverseProjectPoint(otherCameraPos, 0, true);
+            otherCamReverseImgPosX = ReverseProjectPoint(otherCameraPos, 0, true).X;
             breaker++;
             if (breaker > 1000)
             {
