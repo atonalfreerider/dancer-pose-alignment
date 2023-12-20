@@ -579,15 +579,22 @@ public class CameraSetup(string name, Vector2 size, int totalFrameCount, PoseTyp
 
         float otherCamReverseImgPosX = ReverseProjectPoint(otherCameraPos, 0, true).X;
 
-        float originalRadius = Radius;
         int breaker = 0;
+        float smallestX = float.MaxValue;
+        float smallestRadius = Radius;
         while (Math.Abs(otherCamReverseImgPosX - otherCameraImgPosX) > 1)
         {
+            float currentDistance = Math.Abs(otherCamReverseImgPosX - otherCameraImgPosX);
+            if (currentDistance < smallestX)
+            {
+                smallestX = currentDistance;
+                smallestRadius = Radius;
+            }
+
             if (Radius is < 1 or > 10)
             {
                 Console.WriteLine("too close or too far");
-                Radius = originalRadius;
-                HipLock();
+                Radius = smallestRadius;
                 break;
             }
 
@@ -610,6 +617,7 @@ public class CameraSetup(string name, Vector2 size, int totalFrameCount, PoseTyp
             breaker++;
             if (breaker > 1000)
             {
+                Radius = smallestRadius;
                 break;
             }
         }
