@@ -21,6 +21,8 @@ public class CameraPoseSolver(PoseType poseType)
     const float leadShoulderHipArmLength = .3f;
     const float followShoulderHipArmLength = .28f;
 
+    public Dictionary<float, float> CameraWall = []; // alpha to radius 
+
     Dictionary<string, Vector3> cameraPositions => cameras.ToDictionary(
         pair => pair.Key,
         pair => pair.Value.Position);
@@ -55,6 +57,12 @@ public class CameraPoseSolver(PoseType poseType)
     {
         List<List<Vector3>> poses = yolo.CalculatePosesFromImage(imageStream);
         cameras[camName].SetAllPosesAtFrame(poses, frameNumber);
+        cameras[camName].CalculateCameraWall(frameNumber);
+
+        if (frameNumber == 0)
+        {
+            TryHomeCamera(camName);
+        }
     }
 
     public List<List<Vector3>> PosesAtFrameAtCamera(string camName)
@@ -94,7 +102,20 @@ public class CameraPoseSolver(PoseType poseType)
     /// <returns>The index of the dancer and the index of the joint</returns>
     public Tuple<int, int> MarkDancerAtCam(string camName, Vector2 click, string selectedButton)
     {
-        return cameras[camName].MarkDancer(click, frameNumber, selectedButton);
+        Tuple<int, int> selectionAndJoint = cameras[camName].MarkDancer(click, frameNumber, selectedButton);
+        switch (selectedButton)
+        {
+            case "Lead":
+            case "Follow":
+                CameraWall.Clear();
+                foreach (CameraSetup cam in cameras.Values)
+                {
+                    cam.CalculateCameraWall(frameNumber);
+                }
+                break;
+        }
+
+        return selectionAndJoint;
     }
 
     public void MoveKeypointAtCam(string camName, Vector2 click, Tuple<int, int> selectedPoseAndKeypoint)
@@ -171,7 +192,16 @@ public class CameraPoseSolver(PoseType poseType)
             cam.LeadAndFollowIndexForFrame(frameNumber).Item2 == -1);
     }
 
-    public void TryHomeCamera(string camName)
+    public void HomeAllCameras()
+    {
+        if (frameNumber > 0) return;
+        foreach (CameraSetup cam in cameras.Values)
+        {
+            cam.Home();
+        }
+    }
+    
+    void TryHomeCamera(string camName)
     {
         if (frameNumber > 0) return;
         cameras[camName].Home();

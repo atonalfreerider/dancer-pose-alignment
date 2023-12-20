@@ -303,11 +303,8 @@ public partial class MainWindow : Window
         }
 
         cameraPoseSolver.SetCameraHeights();
-        cameraPoseSolver.TryHomeCamera(selectedCamera);
-        for (int i = 0; i < 10; i++)
-        {
-            cameraPoseSolver.ContraZoom();
-        }
+        cameraPoseSolver.HomeAllCameras();
+
 
         cameraPoseSolver.IterationLoop();
 

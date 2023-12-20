@@ -6,7 +6,8 @@ public class CameraSetup(string name, Vector2 size, int totalFrameCount, PoseTyp
 {
     public string Name = name;
     public float Radius = 3.5f;
-    float Height => HeightsSetByOtherCameras.Count != 0 ? HeightsSetByOtherCameras.Average() : 1.5f;
+    float Height = 0;
+    public List<float> HeightsSetByOtherCameras = [];
     public float Alpha = 0;
     public Vector3 Position => new(Radius * MathF.Sin(Alpha), Height, Radius * MathF.Cos(Alpha));
 
@@ -16,7 +17,6 @@ public class CameraSetup(string name, Vector2 size, int totalFrameCount, PoseTyp
     const float PixelToMeter = 0.000264583f;
 
     public readonly Dictionary<string, List<CameraHandAnchor>> ManualCameraPositionsByFrameByCamName = [];
-    public readonly List<float> HeightsSetByOtherCameras = [];
 
     Vector3 Forward(int frame) => Vector3.Transform(
         Vector3.UnitZ,
@@ -55,6 +55,7 @@ public class CameraSetup(string name, Vector2 size, int totalFrameCount, PoseTyp
 
         if (frameNumber == 0)
         {
+            // find lead and follow
             int tallestIndex = -1;
             float tallestHeight = float.MinValue;
             int secondTallestIndex = -1;
@@ -79,7 +80,63 @@ public class CameraSetup(string name, Vector2 size, int totalFrameCount, PoseTyp
             leadIndicesPerFrame[frameNumber] = tallestIndex;
             followIndicesPerFrame[frameNumber] = secondTallestIndex;
 
-            Home();
+            // set camera height based on what lead and background poses match levels, eg:
+            // (1) if shoulders match shoulders, or I am a torso height above a squatter's shoulders, I am standing
+
+            // (2) if lead hips match standing background person's hips, or squatting background person's shoulders,
+            // my camera is squatting
+
+            float leadRShoulderY =
+                allPoses[leadIndicesPerFrame[frameNumber]][JointExtension.RShoulderIndex(poseType)].Y;
+            float leadRHipY = allPoses[leadIndicesPerFrame[frameNumber]][JointExtension.RHipIndex(poseType)].Y;
+
+            int count = 0;
+            int standCount = 0;
+            int sitCount = 0;
+            foreach (List<Vector3> pose in allPoses)
+            {
+                if (count == tallestIndex || count == secondTallestIndex)
+                {
+                    count++;
+                    continue;
+                }
+
+                bool backgroundFigureStanding = IsStanding(pose);
+                float backgroundFigureShoulderY = pose[JointExtension.RShoulderIndex(poseType)].Y;
+                float backgroundFigureHipY = pose[JointExtension.RHipIndex(poseType)].Y;
+
+                if (backgroundFigureStanding)
+                {
+                    if (Math.Abs(leadRShoulderY - backgroundFigureShoulderY) <
+                        Math.Abs(leadRHipY - backgroundFigureHipY))
+                    {
+                        // standing shoulder and lead shoulder are square
+                        standCount++;
+                    }
+                    else
+                    {
+                        // standing shoulder is closer to lead hip
+                        sitCount++;
+                    }
+                }
+                else
+                {
+                    if (backgroundFigureShoulderY < leadRHipY)
+                    {
+                        // sitting shoulder is above lead hip
+                        standCount++;
+                    }
+                    else
+                    {
+                        // sitting shoulder is below lead hip
+                        sitCount++;
+                    }
+                }
+
+                count++;
+            }
+
+            Height = standCount > sitCount ? 1.4f : .8f;
         }
         else
         {
@@ -125,6 +182,19 @@ public class CameraSetup(string name, Vector2 size, int totalFrameCount, PoseTyp
             if (lowestFollowError < 1000)
             {
                 followIndicesPerFrame[frameNumber] = followIndex;
+            }
+        }
+    }
+
+    public void CalculateCameraWall(int frameNumber)
+    {
+        // from the lead forward, scan in a radar sweep with a ray
+        // every time an ankle is within a minimum distance, add to the wall, and based on the height of the pose,
+        // calculate the radius at that point.
+        for (float alpha = 0; alpha < MathF.PI * 2; alpha += .01f)
+        {
+            foreach (List<Vector3> pose in allPosesAndConfidencesPerFrame[frameNumber])
+            {
             }
         }
     }
@@ -396,7 +466,7 @@ public class CameraSetup(string name, Vector2 size, int totalFrameCount, PoseTyp
             Vector3.Zero,
             Quaternion.Identity,
             Position);
-        
+
         HipLock();
     }
 
@@ -621,7 +691,7 @@ public class CameraSetup(string name, Vector2 size, int totalFrameCount, PoseTyp
                 break;
             }
         }
-        
+
         HipLock();
     }
 
@@ -928,20 +998,16 @@ public class CameraSetup(string name, Vector2 size, int totalFrameCount, PoseTyp
         Vector3 rHip = pose[JointExtension.RHipIndex(poseType)];
         Vector3 rShoulder = pose[JointExtension.RShoulderIndex(poseType)];
 
-        Vector2 rAnkle2D = new Vector2(rAnkle.X, rAnkle.Y);
-        Vector2 rHip2D = new Vector2(rHip.X, rHip.Y);
-        Vector2 rShoulder2D = new Vector2(rShoulder.X, rShoulder.Y);
-
-        float torsoHeight = Math.Abs(rHip2D.Y - rShoulder2D.Y);
-        float hipHeight = Math.Abs(rHip2D.Y - rAnkle2D.Y);
+        float torsoHeight = Math.Abs(rHip.Y - rShoulder.Y);
+        float hipHeight = Math.Abs(rHip.Y - rAnkle.Y);
 
         float squatPrct = hipHeight / torsoHeight;
 
         float totalHeight = .4f + .9f * squatPrct;
-        
-        float camHeight = Math.Abs(rAnkle2D.Y - camYImgComponent);
-        float ankleToShoulder = Math.Abs(rAnkle2D.Y - rShoulder2D.Y);
-        
+
+        float camHeight = Math.Abs(rAnkle.Y - camYImgComponent);
+        float ankleToShoulder = Math.Abs(rAnkle.Y - rShoulder.Y);
+
         return totalHeight * camHeight / ankleToShoulder;
     }
 
@@ -954,6 +1020,20 @@ public class CameraSetup(string name, Vector2 size, int totalFrameCount, PoseTyp
         Vector3 lShoulder = pose[JointExtension.LShoulderIndex(poseType)];
 
         return Math.Max(rAnkle.Y, lAnkle.Y) - Math.Min(rShoulder.Y, lShoulder.Y);
+    }
+
+    bool IsStanding(List<Vector3> pose)
+    {
+        Vector3 rAnkle = pose[JointExtension.RAnkleIndex(poseType)];
+        Vector3 rHip = pose[JointExtension.RHipIndex(poseType)];
+        Vector3 rShoulder = pose[JointExtension.RShoulderIndex(poseType)];
+
+        float torsoHeight = Math.Abs(rHip.Y - rShoulder.Y);
+        float hipHeight = Math.Abs(rHip.Y - rAnkle.Y);
+
+        float squatPrct = hipHeight / torsoHeight;
+
+        return squatPrct < .8f;
     }
 
     #endregion
