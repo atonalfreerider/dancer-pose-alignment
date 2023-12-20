@@ -140,49 +140,70 @@ public class CameraSetup(string name, Vector2 size, int totalFrameCount, PoseTyp
         }
         else
         {
-            // take the last 3d pose on this camera and match the profile to the closest pose here, within a threshold
-            float lowestLeadError = float.MaxValue;
-            int leadIndex = -1;
+            Match3DPoseToPoses(frameNumber);
+        }
+    }
 
-            float lowestFollowError = float.MaxValue;
-            int followIndex = -1;
+    public void Unassign(int frameNumber)
+    {
+        leadIndicesPerFrame[frameNumber] = -1;
+        followIndicesPerFrame[frameNumber] = -1;
+    }
 
-            int count = 0;
-            foreach (List<Vector3> pose in allPoses)
+    public void Match3DPoseToPoses(int frameNumber, int distanceLimit = 1000)
+    {
+        // take the last 3d pose on this camera and match the profile to the closest pose here, within a threshold
+        float lowestLeadError = float.MaxValue;
+        int leadIndex = -1;
+        
+        float lowestFollowError = float.MaxValue;
+        int followIndex = -1;
+        
+        float secondLowestFollowError = float.MaxValue;
+        int secondFollowIndex = -1;
+
+        int count = 0;
+        foreach (List<Vector3> pose in allPosesAndConfidencesPerFrame[frameNumber])
+        {
+            float leadPoseError = PoseError(pose, true, frameNumber);
+
+            float followPoseError = PoseError(pose, false, frameNumber);
+
+            if (leadPoseError < lowestLeadError)
             {
-                float leadPoseError = PoseError(pose, true, frameNumber);
-
-                float followPoseError = PoseError(pose, false, frameNumber);
-
-                if (leadPoseError < lowestLeadError)
-                {
-                    leadIndex = count;
-                    lowestLeadError = leadPoseError;
-                }
-
-                if (followPoseError < lowestFollowError)
-                {
-                    followIndex = count;
-                    lowestFollowError = followPoseError;
-                }
-
-                count++;
+                leadIndex = count;
+                lowestLeadError = leadPoseError;
             }
 
-            if (leadIndex == followIndex)
+            if (followPoseError < lowestFollowError)
             {
-                followIndex = -1;
+                secondFollowIndex = followIndex;
+                secondLowestFollowError = lowestFollowError;
+                followIndex = count;
+                lowestFollowError = followPoseError;
+            }
+            else if(followPoseError < secondLowestFollowError)
+            {
+                secondFollowIndex = count;
+                secondLowestFollowError = followPoseError;
             }
 
-            if (lowestLeadError < 1000)
-            {
-                leadIndicesPerFrame[frameNumber] = leadIndex;
-            }
+            count++;
+        }
 
-            if (lowestFollowError < 1000)
-            {
-                followIndicesPerFrame[frameNumber] = followIndex;
-            }
+        if (leadIndex == followIndex)
+        {
+            followIndex = secondFollowIndex;
+        }
+
+        if (lowestLeadError < distanceLimit)
+        {
+            leadIndicesPerFrame[frameNumber] = leadIndex;
+        }
+
+        if (lowestFollowError < distanceLimit)
+        {
+            followIndicesPerFrame[frameNumber] = followIndex;
         }
     }
 
@@ -309,17 +330,25 @@ public class CameraSetup(string name, Vector2 size, int totalFrameCount, PoseTyp
         // 1 the vector2 is transformed to a vector 3 where x and y on the image correspond to x and y on the 3D camera 
         // plane 
         // 2 the z confidence value is overwritten with 0, which is also the z value of the camera position 
-        List<Vector3> flattenedLead = recenteredRescaledAllPosesPerFrame[frameNumber][leadIndicesPerFrame[frameNumber]]
-            .Select(vec => vec with { Z = 0 }).ToList();
-        List<Vector3> flattenedFollow =
-            recenteredRescaledAllPosesPerFrame[frameNumber][followIndicesPerFrame[frameNumber]]
-                .Select(vec => vec with { Z = 0 }).ToList();
+        if (leadIndicesPerFrame[frameNumber] != -1)
+        {
+            List<Vector3> flattenedLead =
+                recenteredRescaledAllPosesPerFrame[frameNumber][leadIndicesPerFrame[frameNumber]]
+                    .Select(vec => vec with { Z = 0 }).ToList();
 
-        List<Vector3> leadProjectionsAtThisFrame = Adjusted(flattenedLead, frameNumber);
-        leadProjectionsPerFrame[frameNumber] = leadProjectionsAtThisFrame;
+            List<Vector3> leadProjectionsAtThisFrame = Adjusted(flattenedLead, frameNumber);
+            leadProjectionsPerFrame[frameNumber] = leadProjectionsAtThisFrame;
+        }
 
-        List<Vector3> followProjectionsAtThisFrame = Adjusted(flattenedFollow, frameNumber);
-        followProjectionsPerFrame[frameNumber] = followProjectionsAtThisFrame;
+        if (followIndicesPerFrame[frameNumber] != -1)
+        {
+            List<Vector3> flattenedFollow =
+                recenteredRescaledAllPosesPerFrame[frameNumber][followIndicesPerFrame[frameNumber]]
+                    .Select(vec => vec with { Z = 0 }).ToList();
+
+            List<Vector3> followProjectionsAtThisFrame = Adjusted(flattenedFollow, frameNumber);
+            followProjectionsPerFrame[frameNumber] = followProjectionsAtThisFrame;
+        }
     }
 
     Vector3 ProjectPoint(Vector2 imgPoint)
@@ -861,6 +890,16 @@ public class CameraSetup(string name, Vector2 size, int totalFrameCount, PoseTyp
 
     public float PoseError(IEnumerable<Vector3> pose3D, bool isLead, int frameNumber)
     {
+        if (isLead && leadIndicesPerFrame[frameNumber] == -1)
+        {
+            return 0;
+        }
+
+        if (!isLead && followIndicesPerFrame[frameNumber] == -1)
+        {
+            return 0;
+        }
+
         List<Vector3> comparePose = isLead
             ? recenteredRescaledAllPosesPerFrame[frameNumber][leadIndicesPerFrame[frameNumber]]
             : recenteredRescaledAllPosesPerFrame[frameNumber][followIndicesPerFrame[frameNumber]];
@@ -883,7 +922,7 @@ public class CameraSetup(string name, Vector2 size, int totalFrameCount, PoseTyp
             camError += Vector2.Distance(camPoint, otherCamPoint2D);
         }
 
-        return camError + StanceError() * 10;
+        return camError + StanceError(frameNumber) * 10;
     }
 
     Tuple<bool, float> FacingAndStanceSlopeFromDefault()
@@ -909,8 +948,9 @@ public class CameraSetup(string name, Vector2 size, int totalFrameCount, PoseTyp
         return FacingAndStanceSlope(origin, leadStance);
     }
 
-    float StanceError()
+    float StanceError(int frameNumber)
     {
+        if (leadIndicesPerFrame[frameNumber] == -1) return 0;
         (bool isFacingLead, float leadPoseAnkleSlope) = FacingAndStanceSlopeFromDefault();
 
         (bool isFacingLeadInCamera, float slopeOfCamera) = FacingAndStanceSlopeFromActual();
@@ -929,6 +969,15 @@ public class CameraSetup(string name, Vector2 size, int totalFrameCount, PoseTyp
 
     public bool HasPoseAtFrame(int frameNumber, bool isLead)
     {
+        if (isLead && leadIndicesPerFrame[frameNumber] == -1)
+        {
+            return false;
+        }
+        if(!isLead && followIndicesPerFrame[frameNumber] == -1)
+        {
+            return false;
+        }
+
         return isLead
             ? recenteredRescaledAllPosesPerFrame[frameNumber][leadIndicesPerFrame[frameNumber]].Count > 0
             : recenteredRescaledAllPosesPerFrame[frameNumber][followIndicesPerFrame[frameNumber]].Count > 0;

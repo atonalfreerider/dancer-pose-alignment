@@ -182,6 +182,16 @@ public class CameraPoseSolver(PoseType poseType)
 
         Console.WriteLine($"wrote 3d poses to {folder}");
     }
+    
+    public void UnassignEachIndexAndMatchToClosest()
+    {
+        Calculate3DPosesAndTotalError();
+        foreach (CameraSetup cameraSetup in cameras.Values)
+        {
+            cameraSetup.Unassign(0);
+            cameraSetup.Match3DPoseToPoses(0, 3000);
+        }
+    }
 
     #region ITERATORS
 

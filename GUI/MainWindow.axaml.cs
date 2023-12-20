@@ -245,12 +245,15 @@ public partial class MainWindow : Window
 
             camCount++;
         }
-                
-        cameraPoseSolver.Calculate3DPosesAndTotalError();
-        foreach (string videoFilesKey in videoFiles.Keys)
+             
+        if (cameraPoseSolver.AreAllCamerasOriented())
         {
-            RedrawCamera(videoFilesKey);
+            // make sure each matches to the closest, not just tallest
+            cameraPoseSolver.UnassignEachIndexAndMatchToClosest();
         }
+        
+        cameraPoseSolver.HomeAllCameras();
+        RecalculateAndRedraw();
     }
 
     void SetPreviewsToFrame()
