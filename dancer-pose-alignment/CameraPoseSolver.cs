@@ -35,21 +35,14 @@ public class CameraPoseSolver(PoseType poseType)
         Vector3.UnitZ
     ];
 
-    Yolo yolo = new("yolov8x-pose.onnx"); // this is in the assembly dir 
+    readonly Yolo yolo = new("yolov8x-pose.onnx"); // this is in the assembly dir 
 
-    public void CreateAndPlaceCamera(
+    public void CreateCamera(
         string name,
         Vector2 imageSize,
         int frameCount)
     {
         CameraSetup camera = new(name, imageSize, frameCount, poseType);
-
-        Quaternion centerLook = Transform.LookAt(
-            new Vector3(0, 1.5f, 0),
-            Quaternion.Identity,
-            camera.Position);
-        camera.RotationsPerFrame[0] = centerLook;
-
         cameras.Add(name, camera);
     }
 

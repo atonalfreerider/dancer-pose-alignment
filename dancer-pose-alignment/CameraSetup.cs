@@ -17,6 +17,8 @@ public class CameraSetup(string name, Vector2 size, int totalFrameCount, PoseTyp
     const float PixelToMeter = 0.000264583f;
 
     public readonly Dictionary<string, List<CameraHandAnchor>> ManualCameraPositionsByFrameByCamName = [];
+    
+    public readonly Dictionary<float, float> CameraWall = [];
 
     Vector3 Forward(int frame) => Vector3.Transform(
         Vector3.UnitZ,
@@ -213,11 +215,20 @@ public class CameraSetup(string name, Vector2 size, int totalFrameCount, PoseTyp
         // from the lead forward, scan in a radar sweep with a ray
         // every time an ankle is within a minimum distance, add to the wall, and based on the height of the pose,
         // calculate the radius at that point.
-        for (float alpha = 0; alpha < MathF.PI * 2; alpha += .01f)
+        CameraWall.Clear();
+        foreach (List<Vector3> pose in recenteredRescaledAllPosesPerFrame[frameNumber])
         {
-            foreach (List<Vector3> pose in allPosesAndConfidencesPerFrame[frameNumber])
-            {
-            }
+            Vector2 poseRightAnkle = new Vector2(
+                pose[JointExtension.RAnkleIndex(poseType)].X,
+                pose[JointExtension.RAnkleIndex(poseType)].Y);
+            
+            float alpha = MathF.Atan2(poseRightAnkle.Y, poseRightAnkle.X);
+            // TODO adjust for lead forward position
+
+            float poseHeight = PoseHeight(pose);
+            float poseRadius = poseHeight / MathF.Cos(alpha);
+            
+            CameraWall.Add(alpha, poseRadius);
         }
     }
 
@@ -1059,6 +1070,21 @@ public class CameraSetup(string name, Vector2 size, int totalFrameCount, PoseTyp
         float ankleToShoulder = Math.Abs(rAnkle.Y - rShoulder.Y);
 
         return totalHeight * camHeight / ankleToShoulder;
+    }
+
+    float PoseHeight(IReadOnlyList<Vector3> pose)
+    {
+        Vector3 rAnkle = pose[JointExtension.RAnkleIndex(poseType)];
+        Vector3 rHip = pose[JointExtension.RHipIndex(poseType)];
+        Vector3 rShoulder = pose[JointExtension.RShoulderIndex(poseType)];
+
+        float torsoHeight = Math.Abs(rHip.Y - rShoulder.Y);
+        float hipHeight = Math.Abs(rHip.Y - rAnkle.Y);
+
+        float squatPrct = hipHeight / torsoHeight;
+
+        float totalHeight = .4f + .9f * squatPrct;
+        return totalHeight;
     }
 
     float ExtremeHeight(IReadOnlyList<Vector3> pose)

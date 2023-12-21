@@ -223,7 +223,7 @@ public partial class MainWindow : Window
             canvas.Children.Add(frameImage);
 
             // get yolo pose and draw
-            cameraPoseSolver.CreateAndPlaceCamera(
+            cameraPoseSolver.CreateCamera(
                 videoFilePath,
                 new Vector2((float)size.Width, (float)size.Height),
                 framesAt30Fps);
