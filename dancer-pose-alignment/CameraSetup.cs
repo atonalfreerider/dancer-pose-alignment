@@ -87,8 +87,8 @@ public class CameraSetup(string name, Vector2 size, int totalFrameCount, PoseTyp
             // my camera is squatting
 
             float leadRShoulderY =
-                allPoses[leadIndicesPerFrame[frameNumber]][JointExtension.RShoulderIndex(poseType)].Y;
-            float leadRHipY = allPoses[leadIndicesPerFrame[frameNumber]][JointExtension.RHipIndex(poseType)].Y;
+                allPoses[tallestIndex][JointExtension.RShoulderIndex(poseType)].Y;
+            float leadRHipY = allPoses[tallestIndex][JointExtension.RHipIndex(poseType)].Y;
 
             int count = 0;
             int standCount = 0;
@@ -107,7 +107,8 @@ public class CameraSetup(string name, Vector2 size, int totalFrameCount, PoseTyp
 
                 if (backgroundFigureStanding)
                 {
-                    if (Math.Abs(leadRShoulderY - backgroundFigureShoulderY) <
+                    if (backgroundFigureShoulderY < leadRShoulderY || // standing shoulder is above lead shoulder
+                        Math.Abs(leadRShoulderY - backgroundFigureShoulderY) <
                         Math.Abs(leadRHipY - backgroundFigureHipY))
                     {
                         // standing shoulder and lead shoulder are square
@@ -1071,7 +1072,7 @@ public class CameraSetup(string name, Vector2 size, int totalFrameCount, PoseTyp
         return Math.Max(rAnkle.Y, lAnkle.Y) - Math.Min(rShoulder.Y, lShoulder.Y);
     }
 
-    bool IsStanding(List<Vector3> pose)
+    bool IsStanding(IReadOnlyList<Vector3> pose)
     {
         Vector3 rAnkle = pose[JointExtension.RAnkleIndex(poseType)];
         Vector3 rHip = pose[JointExtension.RHipIndex(poseType)];
@@ -1082,7 +1083,7 @@ public class CameraSetup(string name, Vector2 size, int totalFrameCount, PoseTyp
 
         float squatPrct = hipHeight / torsoHeight;
 
-        return squatPrct < .8f;
+        return squatPrct > .8f;
     }
 
     #endregion
