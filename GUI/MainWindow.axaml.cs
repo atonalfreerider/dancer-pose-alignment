@@ -15,6 +15,7 @@ using Avalonia.Media.Imaging;
 using dancer_pose_alignment;
 using Newtonsoft.Json;
 using OpenCvSharp;
+using Point = Avalonia.Point;
 using Size = Avalonia.Size;
 using Window = Avalonia.Controls.Window;
 
@@ -48,6 +49,125 @@ public partial class MainWindow : Window
         AudioStreamFactory.AddFactory(new FFmpegAudioStreamFactory());
 
         InitializeComponent();
+        
+        const float scale = 30;
+        DrawingGroup points = new DrawingGroup();
+        Pen OriginPen = new Pen(Brushes.Red)
+        {
+            Thickness = 4
+        };
+        GeometryDrawing originGeometry = new GeometryDrawing
+        {
+            Pen = OriginPen
+        };
+        EllipseGeometry originEllipseGeometry = new EllipseGeometry
+        {
+            Center = new Point(0, 0),
+            RadiusX = 1,
+            RadiusY = 1
+        };
+        originGeometry.Geometry = originEllipseGeometry;
+        points.Children.Add(originGeometry);
+
+        Pen ForwardPen = new Pen(Brushes.Blue)
+        {
+            Thickness = 4
+        };
+        GeometryDrawing forwardGeometry = new GeometryDrawing
+        {
+            Pen = ForwardPen
+        };
+        EllipseGeometry forwardEllipseGeometry = new EllipseGeometry
+        {
+            Center = new Point(0, scale),
+            RadiusX = 1,
+            RadiusY = 1
+        };
+        forwardGeometry.Geometry = forwardEllipseGeometry;
+        points.Children.Add(forwardGeometry);
+
+        int count = 0;
+        foreach (string jsonPath in Directory.EnumerateFiles(@"C:\Users\john\Desktop", "*.json"))
+        {
+            if (!jsonPath.Contains("Wall")) continue;
+            
+            string cameraWall = File.ReadAllText(jsonPath);
+            List<Tuple<float, float>> CameraWall = JsonConvert.DeserializeObject<List<Tuple<float, float>>>(cameraWall);
+
+            IImmutableBrush brush = count switch
+            {
+                0 => Brushes.Red,
+                1 => Brushes.Blue,
+                2 => Brushes.Yellow,
+                3 => Brushes.Purple,
+                4 => Brushes.Orange,
+                5 => Brushes.Pink,
+                6 => Brushes.Brown,
+                _ => Brushes.Green
+            };
+
+            Pen camPen = new Pen(brush)
+            {
+                Thickness = 4
+            };
+            
+            foreach ((float alpha, float radius) in CameraWall)
+            {
+                GeometryDrawing poseGeometry = new GeometryDrawing
+                {
+                    Pen = camPen
+                };
+
+                EllipseGeometry ellipseGeometry = new EllipseGeometry
+                {
+                    Center = new Point(radius * scale * MathF.Sin(alpha), radius * scale * MathF.Cos(alpha)),
+                    RadiusX = 1,
+                    RadiusY = 1
+                };
+
+                poseGeometry.Geometry = ellipseGeometry;
+                points.Children.Add(poseGeometry);
+            }
+
+            
+            count++;
+        }
+
+        if (File.Exists(@"C:\Users\john\Desktop\cameraPositions.json"))
+        {
+            List<Tuple<float, float>> camPos =
+                JsonConvert.DeserializeObject<List<Tuple<float, float>>>(
+                    File.ReadAllText(@"C:\Users\john\Desktop\cameraPositions.json"));
+
+            Pen camPen2 = new Pen(Brushes.Green)
+            {
+                Thickness = 4
+            };
+            foreach (Tuple<float, float> alphaAndRadius in camPos)
+            {
+                GeometryDrawing poseGeometry = new GeometryDrawing
+                {
+                    Pen = camPen2
+                };
+
+                EllipseGeometry ellipseGeometry = new EllipseGeometry
+                {
+                    Center = new Point(alphaAndRadius.Item2 * scale * MathF.Sin(alphaAndRadius.Item1),
+                        alphaAndRadius.Item2 * scale * MathF.Cos(alphaAndRadius.Item1)),
+                    RadiusX = 1,
+                    RadiusY = 1
+                };
+
+                poseGeometry.Geometry = ellipseGeometry;
+                points.Children.Add(poseGeometry);
+            }
+        }
+
+        DrawingImage drawingImage = new DrawingImage
+        {
+            Drawing = points
+        };
+        CameraWallImage.Source = drawingImage;
     }
 
     void LoadVideosButton_Click(object sender, RoutedEventArgs e)
@@ -254,8 +374,8 @@ public partial class MainWindow : Window
         }
         
         cameraPoseSolver.HomeAllCameras();
-        cameraPoseSolver.SetCamR();
-        cameraPoseSolver.HomeAllCameras();
+        //cameraPoseSolver.SetCamR();
+        //cameraPoseSolver.HomeAllCameras();
         RecalculateAndRedraw();
     }
 
@@ -311,7 +431,7 @@ public partial class MainWindow : Window
 
         cameraPoseSolver.SetCameraHeights();
         cameraPoseSolver.HomeAllCameras();
-        cameraPoseSolver.SetCamR();
+        //cameraPoseSolver.SetCamR();
 
         cameraPoseSolver.IterationLoop();
 
@@ -515,8 +635,7 @@ public partial class MainWindow : Window
     
     void Solve_Click(object sender, RoutedEventArgs e)
     {
-        cameraPoseSolver.ContraZoom();
-        RecalculateAndRedraw();
+        cameraPoseSolver.Print();
     }
 
     void SolverPreviousFrameButton_Click(object sender, RoutedEventArgs e)

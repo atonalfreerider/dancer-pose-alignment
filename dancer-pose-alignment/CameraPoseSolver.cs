@@ -533,6 +533,15 @@ public class CameraPoseSolver(PoseType poseType)
 
     #endregion
 
+    public void Print()
+    {
+        string json = JsonConvert.SerializeObject(OrderedAndSmoothedCameraWall(), Formatting.Indented);
+        File.WriteAllText(@"C:\Users\john\Desktop\cameraWall.json", json);
+        
+        List<Tuple<float, float> > camerasAlphaRadius = cameras.Select(cam => new Tuple<float, float>(cam.Value.Alpha, cam.Value.Radius)).ToList();
+        File.WriteAllText(@"C:\Users\john\Desktop\cameraPositions.json", JsonConvert.SerializeObject(camerasAlphaRadius));
+    }
+
     List<Tuple<float, float>> OrderedAndSmoothedCameraWall()
     {   
         List<Tuple<float,float>> ordered = cameras.Values
