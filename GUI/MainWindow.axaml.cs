@@ -399,111 +399,6 @@ public partial class MainWindow : Window
         graphicsImages[camName].Source = drawingImage;
     }
 
-    #region PERSPECTIVE
-
-    const float TranslateStepSize = .1f;
-    const float AngleStepSize = .01f;
-
-    void YawLeftButton_Click(object sender, RoutedEventArgs e)
-    {
-        if (string.IsNullOrEmpty(selectedCamera)) return;
-        cameraPoseSolver.YawCamera(selectedCamera, -AngleStepSize);
-        RedrawCamera(selectedCamera);
-    }
-
-    void YawRightButton_Click(object sender, RoutedEventArgs e)
-    {
-        if (string.IsNullOrEmpty(selectedCamera)) return;
-        cameraPoseSolver.YawCamera(selectedCamera, AngleStepSize);
-        RedrawCamera(selectedCamera);
-    }
-
-    void PitchUpButton_Click(object sender, RoutedEventArgs e)
-    {
-        if (string.IsNullOrEmpty(selectedCamera)) return;
-        cameraPoseSolver.PitchCamera(selectedCamera, -AngleStepSize);
-        RedrawCamera(selectedCamera);
-    }
-
-    void PitchDownButton_Click(object sender, RoutedEventArgs e)
-    {
-        if (string.IsNullOrEmpty(selectedCamera)) return;
-        cameraPoseSolver.PitchCamera(selectedCamera, AngleStepSize);
-        RedrawCamera(selectedCamera);
-    }
-
-    void ZoomInButton_Click(object sender, RoutedEventArgs e)
-    {
-        if (string.IsNullOrEmpty(selectedCamera)) return;
-        cameraPoseSolver.ZoomCamera(selectedCamera, AngleStepSize);
-        RedrawCamera(selectedCamera);
-    }
-
-    void ZoomOutButton_Click(object sender, RoutedEventArgs e)
-    {
-        if (string.IsNullOrEmpty(selectedCamera)) return;
-        cameraPoseSolver.ZoomCamera(selectedCamera, -AngleStepSize);
-        RedrawCamera(selectedCamera);
-    }
-
-    void RollLeftButton_Click(object sender, RoutedEventArgs e)
-    {
-        if (string.IsNullOrEmpty(selectedCamera)) return;
-        cameraPoseSolver.RollCamera(selectedCamera, AngleStepSize);
-        RedrawCamera(selectedCamera);
-    }
-
-    void RollRightButton_Click(object sender, RoutedEventArgs e)
-    {
-        if (string.IsNullOrEmpty(selectedCamera)) return;
-        cameraPoseSolver.RollCamera(selectedCamera, -AngleStepSize);
-        RedrawCamera(selectedCamera);
-    }
-
-    void TranslateLeftButton_Click(object sender, RoutedEventArgs e)
-    {
-        if (string.IsNullOrEmpty(selectedCamera)) return;
-        cameraPoseSolver.MoveCameraRight(selectedCamera, -TranslateStepSize);
-        RedrawCamera(selectedCamera);
-    }
-
-    void TranslateRightButton_Click(object sender, RoutedEventArgs e)
-    {
-        if (string.IsNullOrEmpty(selectedCamera)) return;
-        cameraPoseSolver.MoveCameraRight(selectedCamera, TranslateStepSize);
-        RedrawCamera(selectedCamera);
-    }
-
-    void TranslateUpButton_Click(object sender, RoutedEventArgs e)
-    {
-        if (string.IsNullOrEmpty(selectedCamera)) return;
-        cameraPoseSolver.MoveCameraUp(selectedCamera, TranslateStepSize);
-        RedrawCamera(selectedCamera);
-    }
-
-    void TranslateDownButton_Click(object sender, RoutedEventArgs e)
-    {
-        if (string.IsNullOrEmpty(selectedCamera)) return;
-        cameraPoseSolver.MoveCameraUp(selectedCamera, -TranslateStepSize);
-        RedrawCamera(selectedCamera);
-    }
-
-    void TranslateForwardButton_Click(object sender, RoutedEventArgs e)
-    {
-        if (string.IsNullOrEmpty(selectedCamera)) return;
-        cameraPoseSolver.MoveCameraForward(selectedCamera, TranslateStepSize);
-        RedrawCamera(selectedCamera);
-    }
-
-    void TranslateBackwardButton_Click(object sender, RoutedEventArgs e)
-    {
-        if (string.IsNullOrEmpty(selectedCamera)) return;
-        cameraPoseSolver.MoveCameraForward(selectedCamera, -TranslateStepSize);
-        RedrawCamera(selectedCamera);
-    }
-
-    #endregion
-
     void SolverNextFrameButton_Click(object sender, RoutedEventArgs e)
     {
         if (!cameraPoseSolver.Advance()) return;
@@ -511,12 +406,6 @@ public partial class MainWindow : Window
         timeFromStart += 1d / 30d;
 
         SetPreviewsToFrame();
-    }
-    
-    void Solve_Click(object sender, RoutedEventArgs e)
-    {
-        cameraPoseSolver.ContraZoom();
-        RecalculateAndRedraw();
     }
 
     void SolverPreviousFrameButton_Click(object sender, RoutedEventArgs e)

@@ -235,14 +235,6 @@ public class CameraPoseSolver(PoseType poseType)
         }
     }
 
-    public void ContraZoom()
-    {
-        foreach (CameraSetup cam in cameras.Values)
-        {
-            cam.ContraZoom(cameraPositions);
-        }
-    }
-
     public void IterationLoop()
     {
         if (!AreAllCamerasOriented()) return;
@@ -557,42 +549,4 @@ public class CameraPoseSolver(PoseType poseType)
         return final;
     }
 
-    #region CAMERA MOTION
-
-    public void YawCamera(string camName, float angle)
-    {
-        cameras[camName].RotationsPerFrame[frameNumber] *= Quaternion.CreateFromAxisAngle(Vector3.UnitY, angle);
-    }
-
-    public void PitchCamera(string camName, float angle)
-    {
-        cameras[camName].RotationsPerFrame[frameNumber] *= Quaternion.CreateFromAxisAngle(Vector3.UnitX, angle);
-    }
-
-    public void RollCamera(string camName, float angle)
-    {
-        cameras[camName].RotationsPerFrame[frameNumber] *= Quaternion.CreateFromAxisAngle(Vector3.UnitZ, angle);
-    }
-
-    public void ZoomCamera(string camName, float zoom)
-    {
-        cameras[camName].FocalLength += zoom;
-    }
-
-    public void MoveCameraForward(string camName, float move)
-    {
-        cameras[camName].Radius -= move;
-    }
-
-    public void MoveCameraRight(string camName, float move)
-    {
-        cameras[camName].Alpha += move;
-    }
-
-    public void MoveCameraUp(string camName, float move)
-    {
-        
-    }
-
-    #endregion
 }
