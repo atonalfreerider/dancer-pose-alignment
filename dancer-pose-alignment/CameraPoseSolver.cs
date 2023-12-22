@@ -33,21 +33,14 @@ public class CameraPoseSolver(PoseType poseType)
         Vector3.UnitZ
     ];
 
-    Yolo yolo = new("yolov8x-pose.onnx"); // this is in the assembly dir 
+    readonly Yolo yolo = new("yolov8x-pose.onnx"); // this is in the assembly dir 
 
-    public void CreateAndPlaceCamera(
+    public void CreateCamera(
         string name,
         Vector2 imageSize,
         int frameCount)
     {
         CameraSetup camera = new(name, imageSize, frameCount, poseType);
-
-        Quaternion centerLook = Transform.LookAt(
-            new Vector3(0, 1.5f, 0),
-            Quaternion.Identity,
-            camera.Position);
-        camera.RotationsPerFrame[0] = centerLook;
-
         cameras.Add(name, camera);
     }
 
@@ -55,6 +48,11 @@ public class CameraPoseSolver(PoseType poseType)
     {
         List<List<Vector3>> poses = yolo.CalculatePosesFromImage(imageStream);
         cameras[camName].SetAllPosesAtFrame(poses, frameNumber);
+
+        if (frameNumber == 0)
+        {
+            TryHomeCamera(camName);
+        }
     }
 
     public List<List<Vector3>> PosesAtFrameAtCamera(string camName)
@@ -94,7 +92,16 @@ public class CameraPoseSolver(PoseType poseType)
     /// <returns>The index of the dancer and the index of the joint</returns>
     public Tuple<int, int> MarkDancerAtCam(string camName, Vector2 click, string selectedButton)
     {
-        return cameras[camName].MarkDancer(click, frameNumber, selectedButton);
+        Tuple<int, int> selectionAndJoint = cameras[camName].MarkDancer(click, frameNumber, selectedButton);
+        switch (selectedButton)
+        {
+            case "Lead":
+            case "Follow":
+                cameras[camName].CalculateCameraWall(frameNumber);
+                break;
+        }
+
+        return selectionAndJoint;
     }
 
     public void MoveKeypointAtCam(string camName, Vector2 click, Tuple<int, int> selectedPoseAndKeypoint)
@@ -110,7 +117,7 @@ public class CameraPoseSolver(PoseType poseType)
 
             List<Vector2> reverseLeadProjection = merged3DPoseLeadPerFrame[frameNumber]
                 .Select(vec => cameras[camName].ReverseProjectPoint(vec, frameNumber)).ToList();
-            
+
             return reverseLeadProjection;
         }
 
@@ -128,15 +135,27 @@ public class CameraPoseSolver(PoseType poseType)
             .ReverseProjectPoint(vec, frameNumber)).ToList();
     }
 
-    public List<Vector2> ReverseProjectCameraPositionsAtCamera(string camName)
+    public List<Tuple<Vector2, Vector2>> ReverseProjectCameraPositionsAtCameraAndManualPair(string camName)
     {
-        return cameraPositions.Where(p => p.Key != camName)
-            .Select(pair => cameras[camName].ReverseProjectPoint(pair.Value, frameNumber)).ToList();
-    }
+        List<Tuple<Vector2, Vector2>> pointPairs = [];
+        foreach ((string otherCamName, Vector3 camPos) in cameraPositions)
+        {
+            if (camName == otherCamName) continue;
 
-    public List<Vector2> ManualCameraPositionsAtCamera(string camName)
-    {
-        return cameras[camName].ManualCameraPositionsByFrameByCamName.Select(x => x.Value[frameNumber]).ToList();
+            Vector2 point = cameras[camName].ReverseProjectPoint(camPos, frameNumber);
+            if (cameras[camName].ManualCameraPositionsByFrameByCamName.ContainsKey(otherCamName))
+            {
+                Vector2 manualPos = cameras[camName].ManualCameraPositionsByFrameByCamName[otherCamName][frameNumber]
+                    .ImgPosition;
+                pointPairs.Add(new Tuple<Vector2, Vector2>(point, manualPos));
+            }
+            else
+            {
+                pointPairs.Add(new Tuple<Vector2, Vector2>(point, new Vector2(-1, -1)));
+            }
+        }
+
+        return pointPairs;
     }
 
     public void SaveData(string folder)
@@ -149,6 +168,16 @@ public class CameraPoseSolver(PoseType poseType)
 
         Console.WriteLine($"wrote 3d poses to {folder}");
     }
+    
+    public void UnassignEachIndexAndMatchToClosest()
+    {
+        Calculate3DPosesAndTotalError();
+        foreach (CameraSetup cameraSetup in cameras.Values)
+        {
+            cameraSetup.Unassign(0);
+            cameraSetup.Match3DPoseToPoses(0, 3000);
+        }
+    }
 
     #region ITERATORS
 
@@ -159,69 +188,96 @@ public class CameraPoseSolver(PoseType poseType)
             cam.LeadAndFollowIndexForFrame(frameNumber).Item2 == -1);
     }
 
-    public void TryHomeCamera(string camName)
+    public void HomeAllCameras()
     {
+        if (frameNumber > 0) return;
+        foreach (CameraSetup cam in cameras.Values)
+        {
+            cam.Home();
+        }
+    }
+    
+    void TryHomeCamera(string camName)
+    {
+        if (frameNumber > 0) return;
         cameras[camName].Home();
+    }
+
+    public void SetCamR()
+    {
+        List<Tuple<float, float>> cameraWall = OrderedAndSmoothedCameraWall();
+        foreach (CameraSetup camerasValue in cameras.Values)
+        {
+            camerasValue.SetRadiusFromCameraWall(cameraWall);
+        }
+    }
+
+    public void SetCameraHeights()
+    {
+        if (frameNumber > 0) return;
+
+        foreach (CameraSetup cam in cameras.Values)
+        {
+            cam.HeightsSetByOtherCameras.Clear();
+        }
+
+        foreach (CameraSetup cam in cameras.Values)
+        {
+            foreach ((string otherCamName, List<CameraSetup.CameraHandAnchor> cameraHandAnchorList) in cam
+                         .ManualCameraPositionsByFrameByCamName)
+            {
+                CameraSetup.CameraHandAnchor cameraHandAnchor = cameraHandAnchorList[0];
+                float poseHeight = cam.PoseHeight(cameraHandAnchor.PoseIndex, cameraHandAnchor.ImgPosition.Y);
+
+                CameraSetup otherCam = cameras[otherCamName];
+                otherCam.HeightsSetByOtherCameras.Add(poseHeight);
+            }
+        }
+    }
+
+    public void ContraZoom()
+    {
+        foreach (CameraSetup cam in cameras.Values)
+        {
+            cam.ContraZoom(cameraPositions);
+        }
     }
 
     public void IterationLoop()
     {
         if (!AreAllCamerasOriented()) return;
 
-        List<float> errorHistory = [];
-        float totalError = Calculate3DPosesAndTotalError();
-
-        int iterationCount = 0;
-        while (iterationCount < 10000)
+        float totalError = 0;
+        if (frameNumber > 0)
         {
-            Dictionary<string, float> errorsByCamera = [];
-            foreach ((string cameraName, CameraSetup cameraSetup) in cameras)
+            int iterationCount = 0;
+            List<float> errorHistory = [];
+            while (iterationCount < 10000)
             {
-                float camError = cameraSetup.CameraError(cameraPositions, frameNumber);
-
-                float poseError = cameraSetup.PoseError(merged3DPoseLeadPerFrame[frameNumber], true, frameNumber) +
-                                  cameraSetup.PoseError(merged3DPoseFollowPerFrame[frameNumber], false, frameNumber);
-
-                errorsByCamera.Add(cameraName, camError + poseError);
-            }
-
-            if (errorsByCamera.Values.Sum() <= float.Epsilon)
-            {
-                Console.WriteLine("PERFECT SOLUTION");
-                break;
-            }
-
-            List<CameraSetup> sortedCamerasByHighestError = errorsByCamera
-                .OrderByDescending(pair => pair.Value)
-                .Select(pair => cameras[pair.Key])
-                .ToList();
-
-            if (frameNumber == 0)
-            {
-                // lead right ankle is pinned to origin
-                // move cameras around in order of most error to least, and move the highest error camera 10x more
-                bool moved = false;
-                foreach (CameraSetup cameraSetup in sortedCamerasByHighestError)
+                Dictionary<string, float> errorsByCamera = [];
+                foreach ((string cameraName, CameraSetup cameraSetup) in cameras)
                 {
-                    for (int i = 0; i < 10f / (sortedCamerasByHighestError.IndexOf(cameraSetup) + 1); i++)
-                    {
-                        bool heightMoved = cameraSetup.IterateHeight();
-                        bool radiusMoved = cameraSetup.IterateRadiusZoom();
-                        if (moved || heightMoved || radiusMoved)
-                        {
-                            moved = true;
-                        }
-                    }
+                    float camError = cameraSetup.CameraError(cameraPositions, frameNumber);
+
+                    float poseError = cameraSetup.PoseError(merged3DPoseLeadPerFrame[frameNumber], true, frameNumber) +
+                                      cameraSetup.PoseError(merged3DPoseFollowPerFrame[frameNumber], false,
+                                          frameNumber);
+
+                    errorsByCamera.Add(cameraName, camError + poseError);
                 }
 
-                if (!moved)
+                if (errorsByCamera.Values.Sum() <= float.Epsilon)
                 {
-                    Console.WriteLine("Can't move");
+                    Console.WriteLine("PERFECT SOLUTION");
                     break;
                 }
-            }
-            else
-            {
+
+                List<CameraSetup> sortedCamerasByHighestError = errorsByCamera
+                    .OrderByDescending(pair => pair.Value)
+                    .Select(pair => cameras[pair.Key])
+                    .ToList();
+
+
                 bool moved = sortedCamerasByHighestError.First().IterateOrientation(frameNumber);
 
                 if (!moved)
@@ -229,19 +285,20 @@ public class CameraPoseSolver(PoseType poseType)
                     Console.WriteLine("Can't orient");
                     break;
                 }
+
+
+                totalError = Calculate3DPosesAndTotalError();
+                iterationCount++;
+
+                errorHistory.Insert(0, totalError);
+
+                if (errorHistory.Count > 10)
+                {
+                    errorHistory.RemoveAt(errorHistory.Count - 1);
+                }
+
+                Console.WriteLine(errorHistory.Average());
             }
-
-            totalError = Calculate3DPosesAndTotalError();
-            iterationCount++;
-
-            errorHistory.Insert(0, totalError);
-
-            if (errorHistory.Count > 10)
-            {
-                errorHistory.RemoveAt(errorHistory.Count - 1);
-                
-            }
-            Console.WriteLine(errorHistory.Average());
         }
 
         totalError = Calculate3DPosesAndTotalError();
@@ -476,6 +533,30 @@ public class CameraPoseSolver(PoseType poseType)
 
     #endregion
 
+    List<Tuple<float, float>> OrderedAndSmoothedCameraWall()
+    {   
+        List<Tuple<float,float>> ordered = cameras.Values
+            .SelectMany(cam => cam.CameraWall).OrderBy(x => x.Item1).ToList();
+        List<Vector3> allPoints = [];
+        foreach (Tuple<float,float> tuple in ordered)
+        {
+            Vector3 point = new Vector3(tuple.Item2 * MathF.Sin(tuple.Item1), 0, tuple.Item2 * MathF.Cos(tuple.Item1));
+            allPoints.Add(point);
+        }
+
+        allPoints = Transform.MovingAverageSmoothing(allPoints, 4);
+        
+        List<Tuple<float, float>> final = [];
+        for(int i = 0; i < allPoints.Count; i++)
+        {
+            Vector3 point = allPoints[i];
+            float rad = Vector3.Distance(Vector3.Zero, point);
+            final.Add(new Tuple<float, float>(ordered[i].Item1, rad));
+        }
+
+        return final;
+    }
+
     #region CAMERA MOTION
 
     public void YawCamera(string camName, float angle)
@@ -500,17 +581,17 @@ public class CameraPoseSolver(PoseType poseType)
 
     public void MoveCameraForward(string camName, float move)
     {
-        cameras[camName].Position += cameras[camName].Forward(frameNumber) * move;
+        cameras[camName].Radius -= move;
     }
 
     public void MoveCameraRight(string camName, float move)
     {
-        cameras[camName].Position += cameras[camName].Right(frameNumber) * move;
+        cameras[camName].Alpha += move;
     }
 
     public void MoveCameraUp(string camName, float move)
     {
-        cameras[camName].Position += cameras[camName].Up(frameNumber) * move;
+        
     }
 
     #endregion

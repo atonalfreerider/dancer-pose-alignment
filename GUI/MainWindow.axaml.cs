@@ -223,22 +223,15 @@ public partial class MainWindow : Window
             canvas.Children.Add(frameImage);
 
             // get yolo pose and draw
-            cameraPoseSolver.CreateAndPlaceCamera(
+            cameraPoseSolver.CreateCamera(
                 videoFilePath,
                 new Vector2((float)size.Width, (float)size.Height),
                 framesAt30Fps);
 
+            // TODO if pre-cached json, load it
             cameraPoseSolver.SetPoseFromImage(frameMat.ToMemoryStream(), videoFilePath);
 
             DrawingImage drawingImage = new DrawingImage();
-            DrawingGroup drawingGroup = PreviewDrawer.DrawGeometry(
-                cameraPoseSolver.PosesAtFrameAtCamera(videoFilePath),
-                size,
-                -1,
-                -1,
-                PoseType.Coco);
-            drawingImage.Drawing = drawingGroup;
-
             Image poseDrawingImage = new Image
             {
                 Width = size.Width,
@@ -253,6 +246,17 @@ public partial class MainWindow : Window
 
             camCount++;
         }
+             
+        if (cameraPoseSolver.AreAllCamerasOriented())
+        {
+            // make sure each matches to the closest, not just tallest
+            cameraPoseSolver.UnassignEachIndexAndMatchToClosest();
+        }
+        
+        cameraPoseSolver.HomeAllCameras();
+        //cameraPoseSolver.SetCamR();
+        //cameraPoseSolver.HomeAllCameras();
+        RecalculateAndRedraw();
     }
 
     void SetPreviewsToFrame()
@@ -283,6 +287,7 @@ public partial class MainWindow : Window
 
             frameImages[videoFilePath].Source = frame;
 
+            // TODO if pre-cached json, load it
             cameraPoseSolver.SetPoseFromImage(frameMat.ToMemoryStream(), videoFilePath);
 
             RedrawCamera(videoFilePath);
@@ -304,17 +309,25 @@ public partial class MainWindow : Window
             SetDancer(new Vector2((float)x, (float)y), selectedCamera);
         }
 
-        cameraPoseSolver.TryHomeCamera(selectedCamera);
-        cameraPoseSolver.IterationLoop();
-        RedrawCamera(selectedCamera);
+        cameraPoseSolver.SetCameraHeights();
+        cameraPoseSolver.HomeAllCameras();
+        //cameraPoseSolver.SetCamR();
 
+        cameraPoseSolver.IterationLoop();
+
+        RecalculateAndRedraw();
+    }
+
+    void RecalculateAndRedraw()
+    {
         if (cameraPoseSolver.AreAllCamerasOriented())
         {
             cameraPoseSolver.Calculate3DPosesAndTotalError();
-            foreach (string videoFilesKey in videoFiles.Keys)
-            {
-                RedrawCamera(videoFilesKey);
-            }
+        }
+        
+        foreach (string videoFilesKey in videoFiles.Keys)
+        {
+            RedrawCamera(videoFilesKey);
         }
     }
 
@@ -358,8 +371,6 @@ public partial class MainWindow : Window
             camName,
             position,
             selectedButton);
-
-        RedrawCamera(camName);
     }
 
     void RedrawCamera(string camName)
@@ -370,8 +381,7 @@ public partial class MainWindow : Window
         List<Vector2> leadProjectionsAtFrame = cameraPoseSolver.ReverseProjectionOfPoseAtCamera(camName, true);
         List<Vector2> followProjectionsAtFrame = cameraPoseSolver.ReverseProjectionOfPoseAtCamera(camName, false);
 
-        List<Vector2> cameraPositions2D = cameraPoseSolver.ReverseProjectCameraPositionsAtCamera(camName);
-        List<Vector2> manualPositions2D = cameraPoseSolver.ManualCameraPositionsAtCamera(camName);
+        List<Tuple<Vector2, Vector2>> cameraPositions2D = cameraPoseSolver.ReverseProjectCameraPositionsAtCameraAndManualPair(camName);
 
         DrawingImage drawingImage = new DrawingImage();
         DrawingGroup drawingGroup = PreviewDrawer.DrawGeometry(
@@ -383,8 +393,7 @@ public partial class MainWindow : Window
             originCross,
             leadProjectionsAtFrame,
             followProjectionsAtFrame,
-            cameraPositions2D,
-            manualPositions2D);
+            cameraPositions2D);
         drawingImage.Drawing = drawingGroup;
 
         graphicsImages[camName].Source = drawingImage;
@@ -506,7 +515,8 @@ public partial class MainWindow : Window
     
     void Solve_Click(object sender, RoutedEventArgs e)
     {
-        cameraPoseSolver.IterationLoop();
+        cameraPoseSolver.ContraZoom();
+        RecalculateAndRedraw();
     }
 
     void SolverPreviousFrameButton_Click(object sender, RoutedEventArgs e)
