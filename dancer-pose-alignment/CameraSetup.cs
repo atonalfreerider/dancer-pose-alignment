@@ -14,9 +14,9 @@ public class CameraSetup(
     string dbPath)
 {
     // camera cylindrical position and intrinsic
-    float radius = 3.5f;
+    public float radius = 3.5f;
     float height = 0;
-    float alpha = 0;
+    public float alpha = 0;
     float focalLength = .05f;
 
     // cartesian position is constant (for now), rotation is tracked per frame

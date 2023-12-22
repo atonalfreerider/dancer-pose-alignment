@@ -10,6 +10,15 @@
         <!-- Controls / Settings Tab -->
         <TabItem>
             <TabItem.Header>
+                <TextBlock VerticalAlignment="Center">Camera Wall</TextBlock>
+            </TabItem.Header>
+            <Canvas Name="CameraWallCanvas" Width="500" Height="500">
+                <Image Name="CameraWallImage"  Stretch="Fill"/>
+            </Canvas>
+        </TabItem> 
+
+        <TabItem>
+            <TabItem.Header>
                 <TextBlock VerticalAlignment="Center">Camera Solver</TextBlock>
             </TabItem.Header>
 
@@ -23,14 +32,16 @@
                     <StackPanel Orientation="Horizontal" HorizontalAlignment="Center">
                         <StackPanel Name="DynamicRadioButtonsPanel" Orientation="Horizontal"
                                     HorizontalAlignment="Center">
-                            <RadioButton Name="Lead" GroupName="Role" Content="Lead" Margin="5" IsChecked="True" IsDefault="True" />
+                            <RadioButton Name="Lead" GroupName="Role" Content="Lead" Margin="5" IsChecked="True"
+                                         IsDefault="True" />
                             <RadioButton Name="Follow" GroupName="Role" Content="Follow" Margin="5" />
                             <RadioButton Name="Move" GroupName="Role" Content="Move" Margin="5" />
                         </StackPanel>
                     </StackPanel>
                     <StackPanel Orientation="Horizontal" HorizontalAlignment="Center">
                         <!-- IMAGE DISPLAY -->
-                        <Button Name="BackButton" Content="Back" Height="30" Margin="5" Click="PreviousFrameButton_Click" />
+                        <Button Name="BackButton" Content="Back" Height="30" Margin="5"
+                                Click="PreviousFrameButton_Click" />
                         <TextBox Name="FrameIndicator" Text="0" Height="30" Margin="5" />
                         <Button Name="NextFrameButton" Content="Next" Height="30" Margin="5"
                                 Click="NextFrameButton_Click" />

@@ -311,23 +311,33 @@ public class CameraPoseSolver(PoseType poseType)
 
     #region USER MARKUP
 
-    /// <summary>
-    /// For the selected camera, attempt to select the figure from the closes joint
-    /// </summary>
-    /// <returns>The index of the dancer and the index of the joint</returns>
-    public Tuple<PoseBoundingBox, int> MarkDancerAtCam(string camName, Vector2 click, string selectedButton)
+    public void Print()
     {
-        Tuple<PoseBoundingBox, int> selectionAndJoint = cameras[camName].MarkDancer(click, frameNumber, selectedButton);
-        switch (selectedButton)
-        {
-            case "Lead":
-            case "Follow":
-                cameras[camName].CalculateCameraWall(frameNumber);
-                break;
-        }
-
-        return selectionAndJoint;
+        string json = JsonConvert.SerializeObject(OrderedAndSmoothedCameraWall(), Formatting.Indented);
+        File.WriteAllText(@"C:\Users\john\Desktop\cameraWall.json", json);
+        
+        List<Tuple<float, float> > camerasAlphaRadius = cameras.Select(cam => new Tuple<float, float>(cam.Value.alpha, cam.Value.radius)).ToList();
+        File.WriteAllText(@"C:\Users\john\Desktop\cameraPositions.json", JsonConvert.SerializeObject(camerasAlphaRadius));
     }
+
+    /// </summary> 
+    /// <returns>The index of the dancer and the index of the joint</returns> 
+    public Tuple<PoseBoundingBox, int> MarkDancerAtCam(string camName, Vector2 click, string selectedButton) 
+    { 
+        List<Tuple<float,float>> ordered = cameras.Values 
+            .SelectMany(cam => cam.CameraWall).OrderBy(x => x.Item1).ToList(); 
+        List<Vector3> allPoints = []; 
+        Tuple<PoseBoundingBox, int> selectionAndJoint = cameras[camName].MarkDancer(click, frameNumber, selectedButton); 
+        switch (selectedButton) 
+        { 
+            case "Lead": 
+            case "Follow": 
+                cameras[camName].CalculateCameraWall(frameNumber); 
+                break; 
+        } 
+ 
+        return selectionAndJoint; 
+    } 
 
     public void MoveKeypointAtCam(string camName, Vector2 click, Tuple<PoseBoundingBox?, int> selectedPoseAndKeypoint)
     {
