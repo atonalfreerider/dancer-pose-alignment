@@ -254,8 +254,8 @@ public partial class MainWindow : Window
         }
         
         cameraPoseSolver.HomeAllCameras();
-        cameraPoseSolver.SetCamR();
-        cameraPoseSolver.HomeAllCameras();
+        //cameraPoseSolver.SetCamR();
+        //cameraPoseSolver.HomeAllCameras();
         RecalculateAndRedraw();
     }
 
@@ -311,7 +311,7 @@ public partial class MainWindow : Window
 
         cameraPoseSolver.SetCameraHeights();
         cameraPoseSolver.HomeAllCameras();
-        cameraPoseSolver.SetCamR();
+        //cameraPoseSolver.SetCamR();
 
         cameraPoseSolver.IterationLoop();
 
