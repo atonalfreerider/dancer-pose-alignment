@@ -228,6 +228,7 @@ public partial class MainWindow : Window
                 new Vector2((float)size.Width, (float)size.Height),
                 framesAt30Fps);
 
+            // TODO if pre-cached json, load it
             cameraPoseSolver.SetPoseFromImage(frameMat.ToMemoryStream(), videoFilePath);
 
             DrawingImage drawingImage = new DrawingImage();
@@ -252,6 +253,8 @@ public partial class MainWindow : Window
             cameraPoseSolver.UnassignEachIndexAndMatchToClosest();
         }
         
+        cameraPoseSolver.HomeAllCameras();
+        cameraPoseSolver.SetCamR();
         cameraPoseSolver.HomeAllCameras();
         RecalculateAndRedraw();
     }
@@ -284,6 +287,7 @@ public partial class MainWindow : Window
 
             frameImages[videoFilePath].Source = frame;
 
+            // TODO if pre-cached json, load it
             cameraPoseSolver.SetPoseFromImage(frameMat.ToMemoryStream(), videoFilePath);
 
             RedrawCamera(videoFilePath);
@@ -307,7 +311,7 @@ public partial class MainWindow : Window
 
         cameraPoseSolver.SetCameraHeights();
         cameraPoseSolver.HomeAllCameras();
-
+        cameraPoseSolver.SetCamR();
 
         cameraPoseSolver.IterationLoop();
 

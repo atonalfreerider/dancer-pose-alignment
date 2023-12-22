@@ -21,8 +21,6 @@ public class CameraPoseSolver(PoseType poseType)
     const float leadShoulderHipArmLength = .3f;
     const float followShoulderHipArmLength = .28f;
 
-    public Dictionary<float, float> CameraWall = []; // alpha to radius 
-
     Dictionary<string, Vector3> cameraPositions => cameras.ToDictionary(
         pair => pair.Key,
         pair => pair.Value.Position);
@@ -50,7 +48,6 @@ public class CameraPoseSolver(PoseType poseType)
     {
         List<List<Vector3>> poses = yolo.CalculatePosesFromImage(imageStream);
         cameras[camName].SetAllPosesAtFrame(poses, frameNumber);
-        cameras[camName].CalculateCameraWall(frameNumber);
 
         if (frameNumber == 0)
         {
@@ -100,11 +97,7 @@ public class CameraPoseSolver(PoseType poseType)
         {
             case "Lead":
             case "Follow":
-                CameraWall.Clear();
-                foreach (CameraSetup cam in cameras.Values)
-                {
-                    cam.CalculateCameraWall(frameNumber);
-                }
+                cameras[camName].CalculateCameraWall(frameNumber);
                 break;
         }
 
@@ -208,6 +201,15 @@ public class CameraPoseSolver(PoseType poseType)
     {
         if (frameNumber > 0) return;
         cameras[camName].Home();
+    }
+
+    public void SetCamR()
+    {
+        List<Tuple<float, float>> cameraWall = OrderedAndSmoothedCameraWall();
+        foreach (CameraSetup camerasValue in cameras.Values)
+        {
+            camerasValue.SetRadiusFromCameraWall(cameraWall);
+        }
     }
 
     public void SetCameraHeights()
@@ -530,6 +532,30 @@ public class CameraPoseSolver(PoseType poseType)
     }
 
     #endregion
+
+    List<Tuple<float, float>> OrderedAndSmoothedCameraWall()
+    {   
+        List<Tuple<float,float>> ordered = cameras.Values
+            .SelectMany(cam => cam.CameraWall).OrderBy(x => x.Item1).ToList();
+        List<Vector3> allPoints = [];
+        foreach (Tuple<float,float> tuple in ordered)
+        {
+            Vector3 point = new Vector3(tuple.Item2 * MathF.Sin(tuple.Item1), 0, tuple.Item2 * MathF.Cos(tuple.Item1));
+            allPoints.Add(point);
+        }
+
+        allPoints = Transform.MovingAverageSmoothing(allPoints, 4);
+        
+        List<Tuple<float, float>> final = [];
+        for(int i = 0; i < allPoints.Count; i++)
+        {
+            Vector3 point = allPoints[i];
+            float rad = Vector3.Distance(Vector3.Zero, point);
+            final.Add(new Tuple<float, float>(ordered[i].Item1, rad));
+        }
+
+        return final;
+    }
 
     #region CAMERA MOTION
 
