@@ -305,7 +305,7 @@ public partial class MainWindow : Window
             
             if (cameraPoseSolver.AreAllCamerasOriented())
             {
-                cameraPoseSolver.Calculate3DPosesAndTotalError();
+                cameraPoseSolver.CalculateLeadFollow3DPoses();
             }
 
             RedrawCamera(videoFilePath);
@@ -330,9 +330,7 @@ public partial class MainWindow : Window
         cameraPoseSolver.SetCameraHeights();
         cameraPoseSolver.HomeAllCameras();
         //cameraPoseSolver.SetCamR();
-
-        cameraPoseSolver.IterationLoop();
-
+        
         RecalculateAndRedraw();
     }
 
@@ -340,7 +338,7 @@ public partial class MainWindow : Window
     {
         if (cameraPoseSolver.AreAllCamerasOriented())
         {
-            cameraPoseSolver.Calculate3DPosesAndTotalError();
+            cameraPoseSolver.CalculateLeadFollow3DPoses();
         }
         
         foreach (string videoFilesKey in videoFiles.Keys)
@@ -439,10 +437,8 @@ public partial class MainWindow : Window
     {
         while (cameraPoseSolver.Advance())
         {
-            cameraPoseSolver.IterationLoop();
+            timeFromStart += 1d / 30d;
         }
-
-        SetPreviewsToFrame();
     }
 
     void Save3D_Click(object sender, RoutedEventArgs e)

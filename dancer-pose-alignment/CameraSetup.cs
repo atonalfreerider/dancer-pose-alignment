@@ -742,193 +742,7 @@ public class CameraSetup(
 
         return Transform.RayPlaneIntersection(new Plane(Vector3.UnitY, 0), rayFromImgPoint);
     }
-
-    public bool IterateOrientation(int frameNumber)
-    {
-        bool yawed = IterateYaw(0.01f, frameNumber);
-        bool pitched = IteratePitch(0.01f, frameNumber);
-        bool rolled = IterateRoll(0.01f, frameNumber);
-
-        return yawed || pitched || rolled;
-    }
-
-    bool IterateYaw(float yawStepSize, int frameNumber)
-    {
-        float currentError = CurrentError(0);
-
-        // yaw camera left and right
-        Quaternion originalRotation = RotationsPerFrame[frameNumber];
-
-        Quaternion leftYawRotation = originalRotation *
-                                     Quaternion.CreateFromAxisAngle(Vector3.UnitY, yawStepSize);
-        Quaternion rightYawRotation = originalRotation *
-                                      Quaternion.CreateFromAxisAngle(Vector3.UnitY, -yawStepSize);
-
-        RotationsPerFrame[frameNumber] = leftYawRotation;
-        float leftYawError = CurrentError(0);
-
-        RotationsPerFrame[frameNumber] = rightYawRotation;
-        float rightYawError = CurrentError(0);
-
-        if (leftYawError < rightYawError && leftYawError < currentError)
-        {
-            RotationsPerFrame[frameNumber] = leftYawRotation;
-            return true;
-        }
-
-        if (rightYawError < leftYawError && rightYawError < currentError)
-        {
-            RotationsPerFrame[frameNumber] = rightYawRotation;
-            return true;
-        }
-
-        // reset
-        RotationsPerFrame[frameNumber] = originalRotation;
-        return false;
-    }
-
-    bool IteratePitch(float pitchStepSize, int frameNumber)
-    {
-        float currentError = CurrentError(0);
-
-        // pitch camera up and down
-        Quaternion originalRotation = RotationsPerFrame[frameNumber];
-        Quaternion upPitchRotation = originalRotation *
-                                     Quaternion.CreateFromAxisAngle(Vector3.UnitX, -pitchStepSize);
-        Quaternion downPitchRotation = originalRotation *
-                                       Quaternion.CreateFromAxisAngle(Vector3.UnitZ, pitchStepSize);
-
-        RotationsPerFrame[frameNumber] = upPitchRotation;
-        float upPitchError = CurrentError(0);
-
-        RotationsPerFrame[frameNumber] = downPitchRotation;
-        float downPitchError = CurrentError(0);
-
-        if (upPitchError < downPitchError && upPitchError < currentError)
-        {
-            RotationsPerFrame[frameNumber] = upPitchRotation;
-            return true;
-        }
-
-        if (downPitchError < upPitchError && downPitchError < currentError)
-        {
-            RotationsPerFrame[frameNumber] = downPitchRotation;
-            return true;
-        }
-
-        // reset
-        RotationsPerFrame[frameNumber] = originalRotation;
-        return false;
-    }
-
-    bool IterateRoll(float rollStepSize, int frameNumber)
-    {
-        float currentError = CurrentError(0);
-        // roll camera left and right
-        Quaternion originalRotation = RotationsPerFrame[frameNumber];
-        Quaternion leftRollRotation = originalRotation *
-                                      Quaternion.CreateFromAxisAngle(Vector3.UnitZ, rollStepSize);
-        Quaternion rightRollRotation = originalRotation *
-                                       Quaternion.CreateFromAxisAngle(Vector3.UnitZ, -rollStepSize);
-
-        RotationsPerFrame[frameNumber] = leftRollRotation;
-        float leftRollError = CurrentError(0);
-
-        RotationsPerFrame[frameNumber] = rightRollRotation;
-        float rightRollError = CurrentError(0);
-
-        if (leftRollError < rightRollError && leftRollError < currentError)
-        {
-            RotationsPerFrame[frameNumber] = leftRollRotation;
-            return true;
-        }
-
-        if (rightRollError < leftRollError && rightRollError < currentError)
-        {
-            RotationsPerFrame[frameNumber] = rightRollRotation;
-            return true;
-        }
-
-        // reset
-        RotationsPerFrame[frameNumber] = originalRotation;
-        return false;
-    }
-
-    public float PoseError(IEnumerable<Vector3> pose3D, bool isLead, int frameNumber)
-    {
-        if (isLead && leadIndicesPerFrame[frameNumber] == -1)
-        {
-            return 0;
-        }
-
-        if (!isLead && followIndicesPerFrame[frameNumber] == -1)
-        {
-            return 0;
-        }
-
-        List<Vector3> comparePose = isLead
-            ? recenteredRescaledAllPosesPerFrame[frameNumber][leadIndicesPerFrame[frameNumber]]
-            : recenteredRescaledAllPosesPerFrame[frameNumber][followIndicesPerFrame[frameNumber]];
-
-        return pose3D.Select(vec => ReverseProjectPoint(vec, frameNumber, true))
-            .Select((target, i) => Vector2.Distance(
-                target,
-                new Vector2(comparePose[i].X, comparePose[i].Y)) * comparePose[i].Z).Sum();
-    }
-
-    public float CameraError(Dictionary<string, Vector3> otherCameras, int frameNumber)
-    {
-        currentOtherCameraPositions = otherCameras;
-        float camError = 0;
-        foreach ((string otherCamName, List<CameraHandAnchor> manualPoints) in ManualCameraPositionsByFrameByCamName)
-        {
-            Vector2 camPoint = manualPoints[frameNumber].ImgPosition;
-            Vector3 otherCamPoint = otherCameras[otherCamName];
-            Vector2 otherCamPoint2D = ReverseProjectPoint(otherCamPoint, frameNumber, true);
-            camError += Vector2.Distance(camPoint, otherCamPoint2D);
-        }
-
-        return camError + StanceError(frameNumber) * 10;
-    }
-
-    Tuple<bool, float> FacingAndStanceSlopeFromDefault()
-    {
-        Vector2 leadLeftAnkle = new Vector2(
-            allPosesAndConfidencesPerFrame[0][leadIndicesPerFrame[0]][JointExtension.LAnkleIndex(poseType)].X,
-            allPosesAndConfidencesPerFrame[0][leadIndicesPerFrame[0]][JointExtension.LAnkleIndex(poseType)].Y);
-
-        Vector2 leadRightAnkle = new Vector2(
-            allPosesAndConfidencesPerFrame[0][leadIndicesPerFrame[0]][JointExtension.RAnkleIndex(poseType)].X,
-            allPosesAndConfidencesPerFrame[0][leadIndicesPerFrame[0]][JointExtension.RAnkleIndex(poseType)].Y);
-
-        return FacingAndStanceSlope(leadRightAnkle, leadLeftAnkle);
-    }
-
-    Tuple<bool, float> FacingAndStanceSlopeFromActual()
-    {
-        Vector3 stanceWidth = new Vector3(-.3f, 0f, 0f);
-
-        Vector2 origin = ReverseProjectPoint(Vector3.Zero, 0, true);
-        Vector2 leadStance = ReverseProjectPoint(stanceWidth, 0, true); // lead left ankle 
-
-        return FacingAndStanceSlope(origin, leadStance);
-    }
-
-    float StanceError(int frameNumber)
-    {
-        if (leadIndicesPerFrame[frameNumber] == -1) return 0;
-        (bool isFacingLead, float leadPoseAnkleSlope) = FacingAndStanceSlopeFromDefault();
-
-        (bool isFacingLeadInCamera, float slopeOfCamera) = FacingAndStanceSlopeFromActual();
-
-        if (isFacingLead == isFacingLeadInCamera)
-        {
-            return MathF.Abs(leadPoseAnkleSlope - slopeOfCamera);
-        }
-
-        return float.MaxValue;
-    }
-
+ 
     #endregion
 
     #region REFERENCE
@@ -971,16 +785,7 @@ public class CameraSetup(
     {
         RotationsPerFrame[frameNumber] = RotationsPerFrame[frameNumber - 1];
     }
-
-    float CurrentError(int frameNumber)
-    {
-        return PoseError(allPosesAndConfidencesPerFrame[frameNumber][leadIndicesPerFrame[frameNumber]], true,
-                   frameNumber) +
-               PoseError(allPosesAndConfidencesPerFrame[frameNumber][followIndicesPerFrame[frameNumber]], true,
-                   frameNumber) +
-               CameraError();
-    }
-
+    
     float PoseError(IReadOnlyList<Vector3> pose, bool isLead, int frameNumber)
     {
         if (isLead)
@@ -999,11 +804,6 @@ public class CameraSetup(
         return reverseProjectedFollow.Select((target, i) => Vector2.Distance(
             target,
             new Vector2(pose[i].X, pose[i].Y)) * pose[i].Z).Sum();
-    }
-
-    float CameraError()
-    {
-        return CameraError(currentOtherCameraPositions, 0);
     }
 
     public float PoseHeight(int index, float camYImgComponent)
