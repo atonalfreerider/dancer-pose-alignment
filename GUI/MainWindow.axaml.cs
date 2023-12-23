@@ -257,7 +257,7 @@ public partial class MainWindow : Window
             camCount++;
         }
              
-        if (cameraPoseSolver.AreAllCamerasOriented())
+        if (cameraPoseSolver.AreLeadAndFollowAssignedForFrame())
         {
             // make sure each matches to the closest, not just tallest
             cameraPoseSolver.UnassignEachIndexAndMatchToClosest();
@@ -303,7 +303,7 @@ public partial class MainWindow : Window
                 cameraPoseSolver.SetPoseFromImage(frameMat.ToMemoryStream(), videoFilePath);
             }
             
-            if (cameraPoseSolver.AreAllCamerasOriented())
+            if (cameraPoseSolver.AreLeadAndFollowAssignedForFrame())
             {
                 cameraPoseSolver.CalculateLeadFollow3DPoses();
             }
@@ -336,7 +336,7 @@ public partial class MainWindow : Window
 
     void RecalculateAndRedraw()
     {
-        if (cameraPoseSolver.AreAllCamerasOriented())
+        if (cameraPoseSolver.AreLeadAndFollowAssignedForFrame())
         {
             cameraPoseSolver.CalculateLeadFollow3DPoses();
         }
@@ -420,7 +420,12 @@ public partial class MainWindow : Window
         if (!cameraPoseSolver.Advance()) return;
 
         timeFromStart += 1d / 30d;
-
+        
+        if (cameraPoseSolver.AreLeadAndFollowAssignedForFrame())
+        {
+            cameraPoseSolver.TrackCameraRotation();
+        }
+        
         SetPreviewsToFrame();
     }
 
@@ -435,10 +440,24 @@ public partial class MainWindow : Window
 
     void RunUntilEnd_Click(object sender, RoutedEventArgs e)
     {
+        int count = 0;
         while (cameraPoseSolver.Advance())
         {
             timeFromStart += 1d / 30d;
+            if (!cameraPoseSolver.AreLeadAndFollowAssignedForFrame())
+            {
+                break;
+            }
+            
+            cameraPoseSolver.TrackCameraRotation();
+            cameraPoseSolver.CalculateLeadFollow3DPoses();
+            count++;
+            if (count > 100)
+            {
+                break;
+            }
         }
+        SetPreviewsToFrame();
     }
 
     void Save3D_Click(object sender, RoutedEventArgs e)

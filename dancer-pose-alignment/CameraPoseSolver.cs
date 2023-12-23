@@ -192,7 +192,7 @@ public class CameraPoseSolver(PoseType poseType)
 
     #region ITERATORS
 
-    public bool AreAllCamerasOriented()
+    public bool AreLeadAndFollowAssignedForFrame()
     {
         return !cameras.Values.Any(cam =>
             cam.LeadAndFollowIndexForFrame(frameNumber).Item1 == -1 ||
@@ -243,6 +243,14 @@ public class CameraPoseSolver(PoseType poseType)
                 CameraSetup otherCam = cameras[otherCamName];
                 otherCam.HeightsSetByOtherCameras.Add(poseHeight);
             }
+        }
+    }
+
+    public void TrackCameraRotation()
+    {
+        foreach (CameraSetup cam in cameras.Values)
+        {
+            cam.TrackRotationFromLastFrame(frameNumber);
         }
     }
 
