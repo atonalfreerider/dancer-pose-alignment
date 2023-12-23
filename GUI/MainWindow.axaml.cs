@@ -226,10 +226,20 @@ public partial class MainWindow : Window
             cameraPoseSolver.CreateCamera(
                 videoFilePath,
                 new Vector2((float)size.Width, (float)size.Height),
-                framesAt30Fps);
+                framesAt30Fps,
+                startingFrame);
 
-            // TODO if pre-cached json, load it
-            cameraPoseSolver.SetPoseFromImage(frameMat.ToMemoryStream(), videoFilePath);
+            // if pre-cached json, load it
+            if (File.Exists(videoFilePath + ".json"))
+            {
+                List<List<List<Vector3>>> posesByFrame = JsonConvert.DeserializeObject<List<List<List<Vector3>>>>(
+                    File.ReadAllText(videoFilePath + ".json"));
+                cameraPoseSolver.SetAllPoses(posesByFrame, videoFilePath);
+            }
+            else
+            {
+                cameraPoseSolver.SetPoseFromImage(frameMat.ToMemoryStream(), videoFilePath);
+            }
 
             DrawingImage drawingImage = new DrawingImage();
             Image poseDrawingImage = new Image
@@ -287,8 +297,16 @@ public partial class MainWindow : Window
 
             frameImages[videoFilePath].Source = frame;
 
-            // TODO if pre-cached json, load it
-            cameraPoseSolver.SetPoseFromImage(frameMat.ToMemoryStream(), videoFilePath);
+            // if pre-cached json, load it
+            if (!File.Exists(Path.Combine(videoFilePath, ".json")))
+            {
+                cameraPoseSolver.SetPoseFromImage(frameMat.ToMemoryStream(), videoFilePath);
+            }
+            
+            if (cameraPoseSolver.AreAllCamerasOriented())
+            {
+                cameraPoseSolver.Calculate3DPosesAndTotalError();
+            }
 
             RedrawCamera(videoFilePath);
         }

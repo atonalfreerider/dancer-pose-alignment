@@ -13,7 +13,6 @@ public class CameraPoseSolver(PoseType poseType)
     readonly Dictionary<string, CameraSetup> cameras = [];
     int frameNumber = 0;
     public int MaximumFrameCount = int.MaxValue;
-    double timeOffset;
 
     const float leadLegLimbLenth = .4f;
     const float followLegLimbLength = .4f;
@@ -38,9 +37,10 @@ public class CameraPoseSolver(PoseType poseType)
     public void CreateCamera(
         string name,
         Vector2 imageSize,
-        int frameCount)
+        int frameCount,
+        int startingFrame)
     {
-        CameraSetup camera = new(name, imageSize, frameCount, poseType);
+        CameraSetup camera = new(name, imageSize, frameCount, poseType, startingFrame);
         cameras.Add(name, camera);
     }
 
@@ -49,6 +49,16 @@ public class CameraPoseSolver(PoseType poseType)
         List<List<Vector3>> poses = yolo.CalculatePosesFromImage(imageStream);
         cameras[camName].SetAllPosesAtFrame(poses, frameNumber);
 
+        if (frameNumber == 0)
+        {
+            TryHomeCamera(camName);
+        }
+    }
+
+    public void SetAllPoses(List<List<List<Vector3>>> posesByFrame, string camName)
+    {
+        cameras[camName].SetAllPosesForEveryFrame(posesByFrame);
+        
         if (frameNumber == 0)
         {
             TryHomeCamera(camName);
@@ -68,6 +78,7 @@ public class CameraPoseSolver(PoseType poseType)
         foreach (CameraSetup cameraSetup in cameras.Values)
         {
             cameraSetup.CopyRotationToNextFrame(frameNumber);
+            cameraSetup.Match3DPoseToPoses(frameNumber);
         }
 
         return true;

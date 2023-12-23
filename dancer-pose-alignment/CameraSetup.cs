@@ -2,7 +2,12 @@ using System.Numerics;
 
 namespace dancer_pose_alignment;
 
-public class CameraSetup(string name, Vector2 size, int totalFrameCount, PoseType poseType)
+public class CameraSetup(
+    string name,
+    Vector2 size,
+    int totalFrameCount,
+    PoseType poseType,
+    int startingFrame)
 {
     public string Name = name;
     public float Radius = 3.5f;
@@ -46,6 +51,9 @@ public class CameraSetup(string name, Vector2 size, int totalFrameCount, PoseTyp
     public List<Vector3> CurrentFollow3DPose;
     Dictionary<string, Vector3> currentOtherCameraPositions = [];
 
+    /// <summary>
+    /// Called when poses are being calculated every frame
+    /// </summary>
     public void SetAllPosesAtFrame(List<List<Vector3>> allPoses, int frameNumber)
     {
         allPosesAndConfidencesPerFrame[frameNumber] = allPoses;
@@ -58,94 +66,119 @@ public class CameraSetup(string name, Vector2 size, int totalFrameCount, PoseTyp
 
         if (frameNumber == 0)
         {
-            // find lead and follow
-            int tallestIndex = -1;
-            float tallestHeight = float.MinValue;
-            int secondTallestIndex = -1;
-            float secondTallestHeight = float.MinValue;
-            foreach (List<Vector3> pose in allPoses)
-            {
-                float height = ExtremeHeight(pose);
-                if (height > tallestHeight)
-                {
-                    secondTallestHeight = tallestHeight;
-                    secondTallestIndex = tallestIndex;
-                    tallestHeight = height;
-                    tallestIndex = allPoses.IndexOf(pose);
-                }
-                else if (height > secondTallestHeight)
-                {
-                    secondTallestHeight = height;
-                    secondTallestIndex = allPoses.IndexOf(pose);
-                }
-            }
-
-            leadIndicesPerFrame[frameNumber] = tallestIndex;
-            followIndicesPerFrame[frameNumber] = secondTallestIndex;
-
-            // set camera height based on what lead and background poses match levels, eg:
-            // (1) if shoulders match shoulders, or I am a torso height above a squatter's shoulders, I am standing
-
-            // (2) if lead hips match standing background person's hips, or squatting background person's shoulders,
-            // my camera is squatting
-
-            float leadRShoulderY =
-                allPoses[tallestIndex][JointExtension.RShoulderIndex(poseType)].Y;
-            float leadRHipY = allPoses[tallestIndex][JointExtension.RHipIndex(poseType)].Y;
-
-            int count = 0;
-            int standCount = 0;
-            int sitCount = 0;
-            foreach (List<Vector3> pose in allPoses)
-            {
-                if (count == tallestIndex || count == secondTallestIndex)
-                {
-                    count++;
-                    continue;
-                }
-
-                bool backgroundFigureStanding = IsStanding(pose);
-                float backgroundFigureShoulderY = pose[JointExtension.RShoulderIndex(poseType)].Y;
-                float backgroundFigureHipY = pose[JointExtension.RHipIndex(poseType)].Y;
-
-                if (backgroundFigureStanding)
-                {
-                    if (backgroundFigureShoulderY < leadRShoulderY || // standing shoulder is above lead shoulder
-                        Math.Abs(leadRShoulderY - backgroundFigureShoulderY) <
-                        Math.Abs(leadRHipY - backgroundFigureHipY))
-                    {
-                        // standing shoulder and lead shoulder are square
-                        standCount++;
-                    }
-                    else
-                    {
-                        // standing shoulder is closer to lead hip
-                        sitCount++;
-                    }
-                }
-                else
-                {
-                    if (backgroundFigureShoulderY < leadRHipY)
-                    {
-                        // sitting shoulder is above lead hip
-                        standCount++;
-                    }
-                    else
-                    {
-                        // sitting shoulder is below lead hip
-                        sitCount++;
-                    }
-                }
-
-                count++;
-            }
-
-            Height = standCount > sitCount ? 1.4f : .8f;
+            FrameZeroLeadFollowFinderAndCamHeight(allPoses);
         }
         else
         {
             Match3DPoseToPoses(frameNumber);
         }
+    }
+
+    public void SetAllPosesForEveryFrame(List<List<List<Vector3>>> posesByFrame)
+    {
+        for (int i = 0; i < totalFrameCount; i++)
+        {
+            int sampleFrame = (int)Math.Round(startingFrame + i * ((posesByFrame.Count - startingFrame) / (float)totalFrameCount));
+            allPosesAndConfidencesPerFrame[i] = posesByFrame[sampleFrame];
+            recenteredRescaledAllPosesPerFrame[i] = posesByFrame[sampleFrame].Select(pose => pose.Select(vec =>
+                    new Vector3(
+                        (vec.X - size.X / 2) * PixelToMeter,
+                        -(vec.Y - size.Y / 2) * PixelToMeter, // flip
+                        vec.Z)) // keep the confidence
+                .ToList()).ToList();
+
+            if (i == 0)
+            {
+                FrameZeroLeadFollowFinderAndCamHeight(posesByFrame[sampleFrame]);
+            }
+        }
+    }
+
+    void FrameZeroLeadFollowFinderAndCamHeight(List<List<Vector3>> allPoses)
+    {
+        // find lead and follow
+        int tallestIndex = -1;
+        float tallestHeight = float.MinValue;
+        int secondTallestIndex = -1;
+        float secondTallestHeight = float.MinValue;
+        foreach (List<Vector3> pose in allPoses)
+        {
+            float height = ExtremeHeight(pose);
+            if (height > tallestHeight)
+            {
+                secondTallestHeight = tallestHeight;
+                secondTallestIndex = tallestIndex;
+                tallestHeight = height;
+                tallestIndex = allPoses.IndexOf(pose);
+            }
+            else if (height > secondTallestHeight)
+            {
+                secondTallestHeight = height;
+                secondTallestIndex = allPoses.IndexOf(pose);
+            }
+        }
+
+        leadIndicesPerFrame[0] = tallestIndex;
+        followIndicesPerFrame[0] = secondTallestIndex;
+
+        // set camera height based on what lead and background poses match levels, eg:
+        // (1) if shoulders match shoulders, or I am a torso height above a squatter's shoulders, I am standing
+
+        // (2) if lead hips match standing background person's hips, or squatting background person's shoulders,
+        // my camera is squatting
+
+        float leadRShoulderY =
+            allPoses[tallestIndex][JointExtension.RShoulderIndex(poseType)].Y;
+        float leadRHipY = allPoses[tallestIndex][JointExtension.RHipIndex(poseType)].Y;
+
+        int count = 0;
+        int standCount = 0;
+        int sitCount = 0;
+        foreach (List<Vector3> pose in allPoses)
+        {
+            if (count == tallestIndex || count == secondTallestIndex)
+            {
+                count++;
+                continue;
+            }
+
+            bool backgroundFigureStanding = IsStanding(pose);
+            float backgroundFigureShoulderY = pose[JointExtension.RShoulderIndex(poseType)].Y;
+            float backgroundFigureHipY = pose[JointExtension.RHipIndex(poseType)].Y;
+
+            if (backgroundFigureStanding)
+            {
+                if (backgroundFigureShoulderY < leadRShoulderY || // standing shoulder is above lead shoulder
+                    Math.Abs(leadRShoulderY - backgroundFigureShoulderY) <
+                    Math.Abs(leadRHipY - backgroundFigureHipY))
+                {
+                    // standing shoulder and lead shoulder are square
+                    standCount++;
+                }
+                else
+                {
+                    // standing shoulder is closer to lead hip
+                    sitCount++;
+                }
+            }
+            else
+            {
+                if (backgroundFigureShoulderY < leadRHipY)
+                {
+                    // sitting shoulder is above lead hip
+                    standCount++;
+                }
+                else
+                {
+                    // sitting shoulder is below lead hip
+                    sitCount++;
+                }
+            }
+
+            count++;
+        }
+
+        Height = standCount > sitCount ? 1.4f : .8f;
     }
 
     public void Unassign(int frameNumber)
@@ -224,7 +257,7 @@ public class CameraSetup(string name, Vector2 size, int totalFrameCount, PoseTyp
         // take each right ankle, find the alpha angle from the 3D lead forward, and calculate the radius based on the
         // height of the pose
         CameraWall.Clear();
-        
+
         int counter = 0;
         foreach (List<Vector3> pose in allPosesAndConfidencesPerFrame[frameNumber])
         {
@@ -244,8 +277,8 @@ public class CameraSetup(string name, Vector2 size, int totalFrameCount, PoseTyp
                 counter++;
                 continue;
             }
-            
-            float alpha = MathF.Atan2(imgPtRayFloorIntersection.Value.Z, imgPtRayFloorIntersection.Value.X) - 
+
+            float alpha = MathF.Atan2(imgPtRayFloorIntersection.Value.Z, imgPtRayFloorIntersection.Value.X) -
                           MathF.PI / 2; // unclear why off by 1/4 turn
 
             float poseTorsoHeightPixels = TorsoHeightPixels(pose);
@@ -536,7 +569,7 @@ public class CameraSetup(string name, Vector2 size, int totalFrameCount, PoseTyp
             Position);
 
         HipLock();
-        
+
         CalculateCameraWall(0);
     }
 
@@ -679,6 +712,7 @@ public class CameraSetup(string name, Vector2 size, int totalFrameCount, PoseTyp
         {
             alphaToSearch -= 2 * MathF.PI;
         }
+
         foreach (Tuple<float, float> alphaAndRadius in allCameraWalls)
         {
             float alpha = alphaAndRadius.Item1;
@@ -691,7 +725,7 @@ public class CameraSetup(string name, Vector2 size, int totalFrameCount, PoseTyp
 
             count++;
         }
-        
+
         float newRadius = allCameraWalls[closestAlphaIndex].Item2;
 
         if (newRadius is > 1 and < 10)
@@ -700,7 +734,7 @@ public class CameraSetup(string name, Vector2 size, int totalFrameCount, PoseTyp
             Radius = newRadius;
         }
     }
-    
+
     Vector3? ImgPtRayFloorIntersection(Vector2 imgPt)
     {
         Vector3 projectedPoint = ProjectPoint(imgPt);
@@ -992,7 +1026,7 @@ public class CameraSetup(string name, Vector2 size, int totalFrameCount, PoseTyp
 
         return totalHeight * camHeight / ankleToShoulder;
     }
-    
+
     float TorsoHeightPixels(List<Vector3> pose)
     {
         Vector3 rHip = pose[JointExtension.RHipIndex(poseType)];
