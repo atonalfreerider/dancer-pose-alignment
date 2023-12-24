@@ -174,12 +174,6 @@ public class CameraSetup(
         height = standCount > sitCount ? 1.4f : .8f;
     }
 
-    public void Unassign(int frameNumber)
-    {
-        leadIndicesPerFrame[frameNumber] = -1;
-        followIndicesPerFrame[frameNumber] = -1;
-    }
-
     public void Match3DPoseToPoses(
         int frameNumber,
         IEnumerable<Vector3> lead3D,
@@ -288,6 +282,8 @@ public class CameraSetup(
         }
     }
 
+    #region USER MARKUP
+    
     public Tuple<int, int> MarkDancer(Vector2 click, int frameNumber, string selectedButton)
     {
         (int closestIndex, int jointSelected) = GetClosestIndexAndJointSelected(click, frameNumber, []);
@@ -351,16 +347,14 @@ public class CameraSetup(
             click.Y,
             1); // 100% confidence
     }
-
-    public Tuple<int, int> LeadAndFollowIndexForFrame(int frameNumber)
+    
+    public void Unassign(int frameNumber)
     {
-        return new Tuple<int, int>(leadIndicesPerFrame[frameNumber], followIndicesPerFrame[frameNumber]);
+        leadIndicesPerFrame[frameNumber] = -1;
+        followIndicesPerFrame[frameNumber] = -1;
     }
 
-    public List<List<Vector3>> PosesPerDancerAtFrame(int frameNumber)
-    {
-        return allPosesAndConfidencesPerFrame[frameNumber];
-    }
+    #endregion
 
     #region PROJECTION
 
@@ -888,6 +882,23 @@ public class CameraSetup(
         Ray rayFromImgPoint = new Ray(Position, Vector3.Normalize(projectedPoint - Position));
 
         return Transform.RayPlaneIntersection(new Plane(Vector3.UnitY, 0), rayFromImgPoint);
+    }
+    
+    #endregion
+
+    #region GETTERS
+    
+    public Tuple<int, int> GetLeadAndFollowIndexForFrame(int frameNumber)
+    {
+        return new Tuple<int, int>(leadIndicesPerFrame[frameNumber], followIndicesPerFrame[frameNumber]);
+    }
+    
+    /// <summary>
+    /// used for drawing
+    /// </summary>
+    public List<List<Vector3>> GetPosesPerDancerAtFrame(int frameNumber)
+    {
+        return allPosesAndConfidencesPerFrame[frameNumber];
     }
 
     #endregion

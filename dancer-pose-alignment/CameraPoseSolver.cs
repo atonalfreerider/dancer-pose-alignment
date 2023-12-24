@@ -46,6 +46,9 @@ public class CameraPoseSolver(PoseType poseType)
         cameras.Add(name, camera);
     }
 
+    /// <summary>
+    /// Called when poses are calculated for every frame
+    /// </summary>
     public void SetPoseFromImage(MemoryStream imageStream, string camName)
     {
         List<List<Vector3>> poses = yolo.CalculatePosesFromImage(imageStream);
@@ -65,19 +68,17 @@ public class CameraPoseSolver(PoseType poseType)
         }
     }
 
+    /// <summary>
+    /// Called when poses are loaded from cache
+    /// </summary>
     public void SetAllPoses(List<List<List<Vector3>>> posesByFrame, string camName)
     {
         cameras[camName].SetAllPosesForEveryFrame(posesByFrame);
-        
+
         if (frameNumber == 0)
         {
             TryHomeCamera(camName);
         }
-    }
-
-    public List<List<Vector3>> PosesAtFrameAtCamera(string camName)
-    {
-        return cameras[camName].PosesPerDancerAtFrame(frameNumber);
     }
 
     public bool Advance()
@@ -89,7 +90,7 @@ public class CameraPoseSolver(PoseType poseType)
         {
             cameraSetup.CopyRotationToNextFrame(frameNumber);
             cameraSetup.Match3DPoseToPoses(
-                frameNumber, 
+                frameNumber,
                 merged3DPoseLeadPerFrame[frameNumber - 1],
                 merged3DPoseFollowPerFrame[frameNumber - 1]);
         }
@@ -103,140 +104,6 @@ public class CameraPoseSolver(PoseType poseType)
 
         frameNumber--;
         return true;
-    }
-
-    public Tuple<int, int> LeadAndFollowIndicesAtCameraAtFrame(string camName)
-    {
-        return cameras[camName].LeadAndFollowIndexForFrame(frameNumber);
-    }
-
-    /// <summary>
-    /// For the selected camera, attempt to select the figure from the closes joint
-    /// </summary>
-    /// <returns>The index of the dancer and the index of the joint</returns>
-    public Tuple<int, int> MarkDancerAtCam(string camName, Vector2 click, string selectedButton)
-    {
-        Tuple<int, int> selectionAndJoint = cameras[camName].MarkDancer(click, frameNumber, selectedButton);
-        switch (selectedButton)
-        {
-            case "Lead":
-            case "Follow":
-                cameras[camName].CalculateCameraWall(frameNumber);
-                break;
-        }
-
-        return selectionAndJoint;
-    }
-
-    public void MoveKeypointAtCam(string camName, Vector2 click, Tuple<int, int> selectedPoseAndKeypoint)
-    {
-        cameras[camName].MoveKeypoint(click, frameNumber, selectedPoseAndKeypoint);
-    }
-
-    public List<Vector2> ReverseProjectionOfPoseAtCamera(string camName, bool isLead)
-    {
-        if (isLead)
-        {
-            if (merged3DPoseLeadPerFrame.Count <= frameNumber) return [];
-
-            List<Vector2> reverseLeadProjection = merged3DPoseLeadPerFrame[frameNumber]
-                .Select(vec => cameras[camName].ReverseProjectPoint(vec, frameNumber)).ToList();
-
-            return reverseLeadProjection;
-        }
-
-        if (merged3DPoseFollowPerFrame.Count <= frameNumber) return [];
-
-        List<Vector2> reverseFollowProjection = merged3DPoseFollowPerFrame[frameNumber]
-            .Select(vec => cameras[camName].ReverseProjectPoint(vec, frameNumber)).ToList();
-
-        return reverseFollowProjection;
-    }
-
-    public List<Vector2> ReverseProjectOriginCrossAtCamera(string camName)
-    {
-        return originCross.Select(vec => cameras[camName]
-            .ReverseProjectPoint(vec, frameNumber)).ToList();
-    }
-
-    public List<Vector2> ReverseProjectCameraPositionsAtCameraAndManualPair(string camName)
-    {
-        List<Vector2> pointPairs = [];
-        foreach ((string otherCamName, Vector3 camPos) in cameraPositions)
-        {
-            if (camName == otherCamName) continue;
-
-            Vector2 point = cameras[camName].ReverseProjectPoint(camPos, frameNumber);
-            pointPairs.Add(point);
-        }
-
-        return pointPairs;
-    }
-
-    public void SaveData(string folder)
-    {
-        string jsonMerged3DPose = JsonConvert.SerializeObject(merged3DPoseLeadPerFrame, Formatting.Indented);
-        File.WriteAllText(Path.Combine(folder, "figure1.json"), jsonMerged3DPose);
-
-        string jsonMerged3DPoseFollow = JsonConvert.SerializeObject(merged3DPoseFollowPerFrame, Formatting.Indented);
-        File.WriteAllText(Path.Combine(folder, "figure2.json"), jsonMerged3DPoseFollow);
-
-        Console.WriteLine($"wrote 3d poses to {folder}");
-    }
-    
-    public void UnassignEachIndexAndMatchToClosest()
-    {
-        CalculateLeadFollow3DPoses();
-        foreach (CameraSetup cameraSetup in cameras.Values)
-        {
-            cameraSetup.Unassign(0);
-            cameraSetup.Match3DPoseToPoses(
-                0,
-                merged3DPoseLeadPerFrame[0],
-                merged3DPoseFollowPerFrame[0],
-                3000);
-        }
-    }
-
-    #region ITERATORS
-
-    public bool AreLeadAndFollowAssignedForFrame()
-    {
-        return !cameras.Values.Any(cam =>
-            cam.LeadAndFollowIndexForFrame(frameNumber).Item1 == -1 ||
-            cam.LeadAndFollowIndexForFrame(frameNumber).Item2 == -1);
-    }
-
-    public void HomeAllCameras()
-    {
-        if (frameNumber > 0) return;
-        foreach (CameraSetup cam in cameras.Values)
-        {
-            cam.Home();
-        }
-    }
-    
-    void TryHomeCamera(string camName)
-    {
-        if (frameNumber > 0) return;
-        cameras[camName].Home();
-    }
-
-    public void SetCamR()
-    {
-        List<Tuple<float, float>> cameraWall = OrderedAndSmoothedCameraWall();
-        foreach (CameraSetup camerasValue in cameras.Values)
-        {
-            camerasValue.SetRadiusFromCameraWall(cameraWall);
-        }
-    }
-
-    public void TrackCameraRotation()
-    {
-        foreach (CameraSetup cam in cameras.Values)
-        {
-            cam.TrackRotationFromLastFrame(frameNumber);
-        }
     }
 
     public void CalculateLeadFollow3DPoses()
@@ -453,23 +320,161 @@ public class CameraPoseSolver(PoseType poseType)
         return final3DPose;
     }
 
+    #region USER MARKUP
+
+    /// <summary>
+    /// For the selected camera, attempt to select the figure from the closes joint
+    /// </summary>
+    /// <returns>The index of the dancer and the index of the joint</returns>
+    public Tuple<int, int> MarkDancerAtCam(string camName, Vector2 click, string selectedButton)
+    {
+        Tuple<int, int> selectionAndJoint = cameras[camName].MarkDancer(click, frameNumber, selectedButton);
+        switch (selectedButton)
+        {
+            case "Lead":
+            case "Follow":
+                cameras[camName].CalculateCameraWall(frameNumber);
+                break;
+        }
+
+        return selectionAndJoint;
+    }
+
+    public void MoveKeypointAtCam(string camName, Vector2 click, Tuple<int, int> selectedPoseAndKeypoint)
+    {
+        cameras[camName].MoveKeypoint(click, frameNumber, selectedPoseAndKeypoint);
+    }
+
+    public void UnassignEachIndexAndMatchToClosest()
+    {
+        CalculateLeadFollow3DPoses();
+        foreach (CameraSetup cameraSetup in cameras.Values)
+        {
+            cameraSetup.Unassign(0);
+            cameraSetup.Match3DPoseToPoses(
+                0,
+                merged3DPoseLeadPerFrame[0],
+                merged3DPoseFollowPerFrame[0],
+                3000);
+        }
+    }
+
     #endregion
 
+    #region ITERATORS
+
+    public void HomeAllCameras()
+    {
+        if (frameNumber > 0) return;
+        foreach (CameraSetup cam in cameras.Values)
+        {
+            cam.Home();
+        }
+    }
+
+    void TryHomeCamera(string camName)
+    {
+        if (frameNumber > 0) return;
+        cameras[camName].Home();
+    }
+
+    public void SetCamR()
+    {
+        List<Tuple<float, float>> cameraWall = OrderedAndSmoothedCameraWall();
+        foreach (CameraSetup camerasValue in cameras.Values)
+        {
+            camerasValue.SetRadiusFromCameraWall(cameraWall);
+        }
+    }
+
+    public void TrackCameraRotation()
+    {
+        foreach (CameraSetup cam in cameras.Values)
+        {
+            cam.TrackRotationFromLastFrame(frameNumber);
+        }
+    }
+
+    #endregion
+
+    #region DRAWING
+
+    public List<List<Vector3>> GetPosesAtFrameAtCamera(string camName)
+    {
+        return cameras[camName].GetPosesPerDancerAtFrame(frameNumber);
+    }
+
+    public Tuple<int, int> GetLeadAndFollowIndicesAtCameraAtFrame(string camName)
+    {
+        return cameras[camName].GetLeadAndFollowIndexForFrame(frameNumber);
+    }
+
+    public List<Vector2> ReverseProjectionOfPoseAtCamera(string camName, bool isLead)
+    {
+        if (isLead)
+        {
+            if (merged3DPoseLeadPerFrame.Count <= frameNumber) return [];
+
+            List<Vector2> reverseLeadProjection = merged3DPoseLeadPerFrame[frameNumber]
+                .Select(vec => cameras[camName].ReverseProjectPoint(vec, frameNumber)).ToList();
+
+            return reverseLeadProjection;
+        }
+
+        if (merged3DPoseFollowPerFrame.Count <= frameNumber) return [];
+
+        List<Vector2> reverseFollowProjection = merged3DPoseFollowPerFrame[frameNumber]
+            .Select(vec => cameras[camName].ReverseProjectPoint(vec, frameNumber)).ToList();
+
+        return reverseFollowProjection;
+    }
+
+    public List<Vector2> ReverseProjectOriginCrossAtCamera(string camName)
+    {
+        return originCross.Select(vec => cameras[camName]
+            .ReverseProjectPoint(vec, frameNumber)).ToList();
+    }
+
+    public List<Vector2> ReverseProjectCameraPositionsAtCameraAndManualPair(string camName)
+    {
+        List<Vector2> pointPairs = [];
+        foreach ((string otherCamName, Vector3 camPos) in cameraPositions)
+        {
+            if (camName == otherCamName) continue;
+
+            Vector2 point = cameras[camName].ReverseProjectPoint(camPos, frameNumber);
+            pointPairs.Add(point);
+        }
+
+        return pointPairs;
+    }
+
+    #endregion
+
+    #region REFERENCE
+
+    public bool AreLeadAndFollowAssignedForFrame()
+    {
+        return !cameras.Values.Any(cam =>
+            cam.GetLeadAndFollowIndexForFrame(frameNumber).Item1 == -1 ||
+            cam.GetLeadAndFollowIndexForFrame(frameNumber).Item2 == -1);
+    }
+
     List<Tuple<float, float>> OrderedAndSmoothedCameraWall()
-    {   
-        List<Tuple<float,float>> ordered = cameras.Values
+    {
+        List<Tuple<float, float>> ordered = cameras.Values
             .SelectMany(cam => cam.CameraWall).OrderBy(x => x.Item1).ToList();
         List<Vector3> allPoints = [];
-        foreach (Tuple<float,float> tuple in ordered)
+        foreach (Tuple<float, float> tuple in ordered)
         {
             Vector3 point = new Vector3(tuple.Item2 * MathF.Sin(tuple.Item1), 0, tuple.Item2 * MathF.Cos(tuple.Item1));
             allPoints.Add(point);
         }
 
         allPoints = Transform.MovingAverageSmoothing(allPoints, 4);
-        
+
         List<Tuple<float, float>> final = [];
-        for(int i = 0; i < allPoints.Count; i++)
+        for (int i = 0; i < allPoints.Count; i++)
         {
             Vector3 point = allPoints[i];
             float rad = Vector3.Distance(Vector3.Zero, point);
@@ -479,4 +484,16 @@ public class CameraPoseSolver(PoseType poseType)
         return final;
     }
 
+    #endregion
+
+    public void SaveData(string folder)
+    {
+        string jsonMerged3DPose = JsonConvert.SerializeObject(merged3DPoseLeadPerFrame, Formatting.Indented);
+        File.WriteAllText(Path.Combine(folder, "figure1.json"), jsonMerged3DPose);
+
+        string jsonMerged3DPoseFollow = JsonConvert.SerializeObject(merged3DPoseFollowPerFrame, Formatting.Indented);
+        File.WriteAllText(Path.Combine(folder, "figure2.json"), jsonMerged3DPoseFollow);
+
+        Console.WriteLine($"wrote 3d poses to {folder}");
+    }
 }
