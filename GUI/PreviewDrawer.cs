@@ -16,7 +16,7 @@ public static class PreviewDrawer
         List<Vector2> originCross,
         List<Vector2> leadProjectionsAtFrame,
         List<Vector2> followProjectionsAtFrame,
-        List<Tuple<Vector2, Vector2>> cameraProjectionsAtFrame)
+        List<Vector2> cameraProjectionsAtFrame)
     {
         DrawingGroup drawingGroup = DrawPoses(
             poses,
@@ -32,26 +32,11 @@ public static class PreviewDrawer
         {
             Thickness = 10
         };
-
-        SolidColorBrush manualCamBrush = new SolidColorBrush(Colors.Green);
-        Pen manualCamPen = new Pen(manualCamBrush)
+        
+        foreach (Vector2 camPosAndManual in cameraProjectionsAtFrame)
         {
-            Thickness = 10
-        };
-
-        foreach (Tuple<Vector2, Vector2> camPosAndManual in cameraProjectionsAtFrame)
-        {
-            GeometryDrawing camGeometry = DrawPoint(camPosAndManual.Item1, camPen);
+            GeometryDrawing camGeometry = DrawPoint(camPosAndManual, camPen);
             drawingGroup.Children.Add(camGeometry);
-
-            if (camPosAndManual.Item2.X > 0 && camPosAndManual.Item2.Y > 0)
-            {
-                GeometryDrawing manualCamGeometry = DrawPoint(camPosAndManual.Item2, manualCamPen);
-                drawingGroup.Children.Add(manualCamGeometry);
-
-                GeometryDrawing line = DrawLine(camPosAndManual.Item1, camPosAndManual.Item2, manualCamPen);
-                drawingGroup.Children.Add(line);
-            }
         }
 
         if (leadProjectionsAtFrame.Count == 0 || followProjectionsAtFrame.Count == 0) return drawingGroup;

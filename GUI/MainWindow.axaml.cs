@@ -192,17 +192,6 @@ public partial class MainWindow : Window
 
             Size size = new Size(frameMat.Width, frameMat.Height);
 
-            // add buttons to select camera role
-            RadioButton radioButton = new RadioButton
-            {
-                Name = videoFilePath,
-                GroupName = "Role",
-                Content = Path.GetFileNameWithoutExtension(videoFilePath),
-                Margin = new Thickness(5)
-            };
-
-            DynamicRadioButtonsPanel.Children.Add(radioButton);
-
             // add frame image to canvas
             Image frameImage = new Image
             {
@@ -326,8 +315,7 @@ public partial class MainWindow : Window
         {
             SetDancer(new Vector2((float)x, (float)y), selectedCamera);
         }
-
-        cameraPoseSolver.SetCameraHeights();
+        
         cameraPoseSolver.HomeAllCameras();
         //cameraPoseSolver.SetCamR();
         
@@ -397,7 +385,7 @@ public partial class MainWindow : Window
         List<Vector2> leadProjectionsAtFrame = cameraPoseSolver.ReverseProjectionOfPoseAtCamera(camName, true);
         List<Vector2> followProjectionsAtFrame = cameraPoseSolver.ReverseProjectionOfPoseAtCamera(camName, false);
 
-        List<Tuple<Vector2, Vector2>> cameraPositions2D = cameraPoseSolver.ReverseProjectCameraPositionsAtCameraAndManualPair(camName);
+        List<Vector2> cameraPositions2D = cameraPoseSolver.ReverseProjectCameraPositionsAtCameraAndManualPair(camName);
 
         DrawingImage drawingImage = new DrawingImage();
         DrawingGroup drawingGroup = PreviewDrawer.DrawGeometry(

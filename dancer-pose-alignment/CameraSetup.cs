@@ -9,50 +9,49 @@ public class CameraSetup(
     PoseType poseType,
     int startingFrame)
 {
-    public string Name = name;
-    public float Radius = 3.5f;
-    float Height = 0;
-    public List<float> HeightsSetByOtherCameras = [];
-    public float Alpha = 0;
-    const float TorsoHeight = .4f;
-    public Vector3 Position => new(Radius * MathF.Sin(Alpha), Height, Radius * MathF.Cos(Alpha));
+    // camera cylindrical position and intrinsic
+    float radius = 3.5f;
+    float height = 0;
+    float alpha = 0;
+    float focalLength = .05f;
 
-    public readonly Quaternion[] RotationsPerFrame = new Quaternion[totalFrameCount];
-    public float FocalLength = .05f;
-
+    // cartesian position is constant (for now), rotation is tracked per frame
+    public Vector3 Position => new(radius * MathF.Sin(alpha), height, radius * MathF.Cos(alpha));
+    readonly Quaternion[] rotationsPerFrame = new Quaternion[totalFrameCount];
+    
+    // constants
+    const float TorsoHeight = .4f; // used to determine height of camera from ground
     const float PixelToMeter = 0.000264583f;
-
-    public readonly Dictionary<string, List<CameraHandAnchor>> ManualCameraPositionsByFrameByCamName = [];
-
+    
+    // unused, but collectively can be used to place other cameras at accurate radius
     public readonly List<Tuple<float, float>> CameraWall = [];
 
     Vector3 Forward(int frame) => Vector3.Transform(
         Vector3.UnitZ,
-        RotationsPerFrame[frame]);
+        rotationsPerFrame[frame]);
 
     Vector3 Up(int frame) => Vector3.Transform(
         Vector3.UnitY,
-        RotationsPerFrame[frame]);
+        rotationsPerFrame[frame]);
 
     Vector3 Right(int frame) => Vector3.Transform(
         Vector3.UnitX,
-        RotationsPerFrame[frame]);
+        rotationsPerFrame[frame]);
 
-    readonly List<Vector3>[] leadProjectionsPerFrame = new List<Vector3>[totalFrameCount];
-    readonly List<Vector3>[] followProjectionsPerFrame = new List<Vector3>[totalFrameCount];
-
+    // all poses in reference to image (x, -y, confidence) and camera center (x, y, confidence)
     readonly List<List<Vector3>>[] allPosesAndConfidencesPerFrame = new List<List<Vector3>>[totalFrameCount];
     readonly List<List<Vector3>>[] recenteredRescaledAllPosesPerFrame = new List<List<Vector3>>[totalFrameCount];
 
+    // indices referencing above pose lists
     readonly int[] leadIndicesPerFrame = new int[totalFrameCount];
     readonly int[] followIndicesPerFrame = new int[totalFrameCount];
-
-    public List<Vector3> CurrentLead3DPose;
-    public List<Vector3> CurrentFollow3DPose;
-    Dictionary<string, Vector3> currentOtherCameraPositions = [];
+    
+    // these poses are projected onto the image plane and used to calculate the 3D pose from ray projection
+    readonly List<Vector3>[] leadProjectionsPerFrame = new List<Vector3>[totalFrameCount];
+    readonly List<Vector3>[] followProjectionsPerFrame = new List<Vector3>[totalFrameCount];
 
     /// <summary>
-    /// Called when poses are being calculated every frame
+    /// Called when poses are calculated for every frame
     /// </summary>
     public void SetAllPosesAtFrame(List<List<Vector3>> allPoses, int frameNumber)
     {
@@ -63,17 +62,11 @@ public class CameraSetup(
                     -(vec.Y - size.Y / 2) * PixelToMeter, // flip
                     vec.Z)) // keep the confidence
             .ToList()).ToList();
-
-        if (frameNumber == 0)
-        {
-            FrameZeroLeadFollowFinderAndCamHeight(allPoses);
-        }
-        else
-        {
-            Match3DPoseToPoses(frameNumber);
-        }
     }
 
+    /// <summary>
+    /// Called when poses are loaded from cache
+    /// </summary>
     public void SetAllPosesForEveryFrame(List<List<List<Vector3>>> posesByFrame)
     {
         for (int i = 0; i < totalFrameCount; i++)
@@ -94,7 +87,7 @@ public class CameraSetup(
         }
     }
 
-    void FrameZeroLeadFollowFinderAndCamHeight(List<List<Vector3>> allPoses)
+    public void FrameZeroLeadFollowFinderAndCamHeight(List<List<Vector3>> allPoses)
     {
         // find lead and follow
         int tallestIndex = -1;
@@ -178,7 +171,7 @@ public class CameraSetup(
             count++;
         }
 
-        Height = standCount > sitCount ? 1.4f : .8f;
+        height = standCount > sitCount ? 1.4f : .8f;
     }
 
     public void Unassign(int frameNumber)
@@ -187,7 +180,11 @@ public class CameraSetup(
         followIndicesPerFrame[frameNumber] = -1;
     }
 
-    public void Match3DPoseToPoses(int frameNumber, int distanceLimit = 500)
+    public void Match3DPoseToPoses(
+        int frameNumber,
+        IEnumerable<Vector3> lead3D,
+        IEnumerable<Vector3> follow3D, 
+        int distanceLimit = 500)
     {
         // take the last 3d pose on this camera and match the profile to the closest pose here, within a threshold
         float lowestLeadError = float.MaxValue;
@@ -202,9 +199,9 @@ public class CameraSetup(
         int count = 0;
         foreach (List<Vector3> pose in allPosesAndConfidencesPerFrame[frameNumber])
         {
-            float leadPoseError = PoseError(pose, true, frameNumber);
+            float leadPoseError = PoseError(pose, lead3D, frameNumber);
 
-            float followPoseError = PoseError(pose, false, frameNumber);
+            float followPoseError = PoseError(pose, follow3D, frameNumber);
 
             if (leadPoseError < lowestLeadError)
             {
@@ -283,7 +280,7 @@ public class CameraSetup(
 
             float poseTorsoHeightPixels = TorsoHeightPixels(pose);
             float poseTorsoHeight = poseTorsoHeightPixels * PixelToMeter;
-            float poseAlphaFromGround = MathF.Atan2(poseTorsoHeight, FocalLength);
+            float poseAlphaFromGround = MathF.Atan2(poseTorsoHeight, focalLength);
             float poseRadius = Math.Abs(TorsoHeight / MathF.Tan(poseAlphaFromGround)) / 2; // arbitrary divide by 2
 
             CameraWall.Add(new Tuple<float, float>(alpha, poseRadius));
@@ -309,35 +306,7 @@ public class CameraSetup(
                     click.Y,
                     allPosesAndConfidencesPerFrame[frameNumber][closestIndex][jointSelected].Z); // move
                 break;
-            default:
-                // set camera position
-                if (leadIndicesPerFrame[frameNumber] == closestIndex ||
-                    followIndicesPerFrame[frameNumber] == closestIndex)
-                {
-                    (closestIndex, jointSelected) = GetClosestIndexAndJointSelected(click, frameNumber,
-                        [leadIndicesPerFrame[frameNumber], followIndicesPerFrame[frameNumber]]);
-                }
-
-                if (ManualCameraPositionsByFrameByCamName.TryGetValue(selectedButton,
-                        out List<CameraHandAnchor> positionsByFrame))
-                {
-                    positionsByFrame[frameNumber] = new CameraHandAnchor(click, closestIndex, jointSelected);
-                }
-                else
-                {
-                    ManualCameraPositionsByFrameByCamName[selectedButton] = new List<CameraHandAnchor>(totalFrameCount);
-                    for (int i = 0; i < totalFrameCount; i++)
-                    {
-                        ManualCameraPositionsByFrameByCamName[selectedButton]
-                            .Add(new CameraHandAnchor(Vector2.Zero, -1, -1));
-                    }
-
-                    ManualCameraPositionsByFrameByCamName[selectedButton][frameNumber] =
-                        new CameraHandAnchor(click, closestIndex, jointSelected);
-                    ;
-                }
-
-                break;
+            
         }
 
         return new Tuple<int, int>(closestIndex, jointSelected);
@@ -440,19 +409,19 @@ public class CameraSetup(
         List<Vector3> adjustedKeypoints = keypoints.Select(vec => Position + vec).ToList();
 
         // Rotate keypoints around the camera center by the camera's rotation quaternion 
-        Quaternion rotation = RotationsPerFrame[frame];
+        Quaternion rotation = rotationsPerFrame[frame];
         for (int i = 0; i < adjustedKeypoints.Count; i++)
         {
             adjustedKeypoints[i] = Vector3.Transform(adjustedKeypoints[i] - Position, rotation) + Position;
         }
 
         // Translate keypoints to the camera's focal length 
-        return adjustedKeypoints.Select(vec => vec + Forward(frame) * FocalLength).ToList();
+        return adjustedKeypoints.Select(vec => vec + Forward(frame) * focalLength).ToList();
     }
 
     public Vector2 ReverseProjectPoint(Vector3 worldPoint, int frameNumber, bool overdraw = false)
     {
-        Vector3 target = TargetAtFrame(worldPoint);
+        Vector3 target = Vector3.Normalize(worldPoint - Position);
         Vector2 imagePlaneCoordinates = GetImagePlaneCoordinates(target, frameNumber);
 
         Vector2 offcenterAndRescaleAndFlip = new Vector2(
@@ -490,7 +459,7 @@ public class CameraSetup(
     Vector2 GetImagePlaneCoordinates(Vector3 rayDirection, int frameNumber)
     {
         // Calculate the intersection point with the image plane
-        float t = FocalLength / Vector3.Dot(Forward(frameNumber), rayDirection);
+        float t = focalLength / Vector3.Dot(Forward(frameNumber), rayDirection);
         Vector3 intersectionPoint = t * rayDirection;
 
         // Calculate the coordinates relative to the image plane center
@@ -499,14 +468,6 @@ public class CameraSetup(
             Vector3.Dot(intersectionPoint, Up(frameNumber)));
 
         return imagePlaneCoordinates;
-    }
-
-    /// <summary>
-    /// Provides a normalized vector from this camera to a target in 3D space at a given frame
-    /// </summary>
-    Vector3 TargetAtFrame(Vector3 vector3)
-    {
-        return Vector3.Normalize(vector3 - Position);
     }
 
     #endregion
@@ -538,8 +499,8 @@ public class CameraSetup(
         float lowestDiff = float.MaxValue;
         for (float alpha = -MathF.PI; alpha < MathF.PI; alpha += .001f)
         {
-            Alpha = alpha;
-            RotationsPerFrame[0] = Transform.LookAt(
+            this.alpha = alpha;
+            rotationsPerFrame[0] = Transform.LookAt(
                 Vector3.Zero,
                 Quaternion.Identity,
                 Position);
@@ -561,9 +522,9 @@ public class CameraSetup(
         }
 
         // convert back to alpha using atan2
-        Alpha = lowestAlpha;
+        alpha = lowestAlpha;
 
-        RotationsPerFrame[0] = Transform.LookAt(
+        rotationsPerFrame[0] = Transform.LookAt(
             Vector3.Zero,
             Quaternion.Identity,
             Position);
@@ -608,7 +569,7 @@ public class CameraSetup(
         {
             if (leadHipY < opticalHipHeight)
             {
-                FocalLength += .001f;
+                focalLength += .001f;
                 CenterRoll();
                 CenterRightLeadAnkleOnOrigin(leadRightAnkle);
                 CenterRoll();
@@ -616,7 +577,7 @@ public class CameraSetup(
             }
             else
             {
-                FocalLength -= .001f;
+                focalLength -= .001f;
                 CenterRoll();
                 CenterRightLeadAnkleOnOrigin(leadRightAnkle);
                 CenterRoll();
@@ -642,22 +603,22 @@ public class CameraSetup(
         {
             if (leadRightAnkle.X < origin.X)
             {
-                RotationsPerFrame[0] *= Quaternion.CreateFromAxisAngle(Vector3.UnitY, .001f);
+                rotationsPerFrame[0] *= Quaternion.CreateFromAxisAngle(Vector3.UnitY, .001f);
             }
             else
             {
-                RotationsPerFrame[0] *= Quaternion.CreateFromAxisAngle(Vector3.UnitY, -.001f);
+                rotationsPerFrame[0] *= Quaternion.CreateFromAxisAngle(Vector3.UnitY, -.001f);
             }
 
             if (leadRightAnkle.Y > origin.Y)
             {
                 // pitch up 
-                RotationsPerFrame[0] *= Quaternion.CreateFromAxisAngle(Vector3.UnitX, -.001f);
+                rotationsPerFrame[0] *= Quaternion.CreateFromAxisAngle(Vector3.UnitX, -.001f);
             }
             else
             {
                 // pitch down 
-                RotationsPerFrame[0] *= Quaternion.CreateFromAxisAngle(Vector3.UnitX, .001f);
+                rotationsPerFrame[0] *= Quaternion.CreateFromAxisAngle(Vector3.UnitX, .001f);
             }
 
             origin = ReverseProjectPoint(Vector3.Zero, 0, true);
@@ -680,12 +641,12 @@ public class CameraSetup(
             if (unitY.X < origin.X)
             {
                 // roll left 
-                RotationsPerFrame[0] *= Quaternion.CreateFromAxisAngle(Vector3.UnitZ, .001f);
+                rotationsPerFrame[0] *= Quaternion.CreateFromAxisAngle(Vector3.UnitZ, .001f);
             }
             else
             {
                 // roll right 
-                RotationsPerFrame[0] *= Quaternion.CreateFromAxisAngle(Vector3.UnitZ, -.001f);
+                rotationsPerFrame[0] *= Quaternion.CreateFromAxisAngle(Vector3.UnitZ, -.001f);
             }
 
             origin = ReverseProjectPoint(Vector3.Zero, 0, true);
@@ -707,7 +668,7 @@ public class CameraSetup(
         int closestAlphaIndex = -1;
         float closestAlphaDistance = float.MaxValue;
         int count = 0;
-        float alphaToSearch = Alpha + MathF.PI;
+        float alphaToSearch = alpha + MathF.PI;
         if (alphaToSearch > MathF.PI)
         {
             alphaToSearch -= 2 * MathF.PI;
@@ -730,60 +691,9 @@ public class CameraSetup(
 
         if (newRadius is > 1 and < 10)
         {
-            Console.WriteLine(Name + " radius: " + Radius + " -> " + newRadius);
-            Radius = newRadius;
+            Console.WriteLine(name + " radius: " + radius + " -> " + newRadius);
+            radius = newRadius;
         }
-    }
-
-    Vector3? ImgPtRayFloorIntersection(Vector2 imgPt)
-    {
-        Vector3 projectedPoint = ProjectPoint(imgPt);
-        Ray rayFromImgPoint = new Ray(Position, Vector3.Normalize(projectedPoint - Position));
-
-        return Transform.RayPlaneIntersection(new Plane(Vector3.UnitY, 0), rayFromImgPoint);
-    }
- 
-    #endregion
-
-    #region REFERENCE
-
-    public bool HasPoseAtFrame(int frameNumber, bool isLead)
-    {
-        if (isLead && leadIndicesPerFrame[frameNumber] == -1)
-        {
-            return false;
-        }
-
-        if (!isLead && followIndicesPerFrame[frameNumber] == -1)
-        {
-            return false;
-        }
-
-        return isLead
-            ? recenteredRescaledAllPosesPerFrame[frameNumber][leadIndicesPerFrame[frameNumber]].Count > 0
-            : recenteredRescaledAllPosesPerFrame[frameNumber][followIndicesPerFrame[frameNumber]].Count > 0;
-    }
-
-    public Ray PoseRay(int frameNumber, int jointNumber, bool isLead)
-    {
-        Ray rayToJoint = new Ray(
-            Position,
-            Vector3.Normalize(isLead
-                ? leadProjectionsPerFrame[frameNumber][jointNumber] - Position
-                : followProjectionsPerFrame[frameNumber][jointNumber] - Position));
-        return rayToJoint;
-    }
-
-    public float JointConfidence(int frameNumber, int jointNumber, bool isLead)
-    {
-        return isLead
-            ? recenteredRescaledAllPosesPerFrame[frameNumber][leadIndicesPerFrame[frameNumber]][jointNumber].Z
-            : recenteredRescaledAllPosesPerFrame[frameNumber][followIndicesPerFrame[frameNumber]][jointNumber].Z;
-    }
-
-    public void CopyRotationToNextFrame(int frameNumber)
-    {
-        RotationsPerFrame[frameNumber] = RotationsPerFrame[frameNumber - 1];
     }
     
     public void TrackRotationFromLastFrame(int frameNumber)
@@ -856,32 +766,66 @@ public class CameraSetup(
             allMotionVectors.Select(vec => vec.X).Sum() / allMotionVectors.Count,
             allMotionVectors.Select(vec => vec.Y).Sum() / allMotionVectors.Count);
         
-        float pitchAlpha = MathF.Atan2(meanMotionVector.Y, FocalLength);
-        float yawAlpha = MathF.Atan2(meanMotionVector.X, FocalLength);
+        float pitchAlpha = MathF.Atan2(meanMotionVector.Y, focalLength);
+        float yawAlpha = MathF.Atan2(meanMotionVector.X, focalLength);
         
-        RotationsPerFrame[frameNumber] = Quaternion.CreateFromAxisAngle(Vector3.UnitX, -pitchAlpha) *
+        rotationsPerFrame[frameNumber] = Quaternion.CreateFromAxisAngle(Vector3.UnitX, -pitchAlpha) *
                                          Quaternion.CreateFromAxisAngle(Vector3.UnitY, -yawAlpha) *
-                                         RotationsPerFrame[frameNumber - 1];
+                                         rotationsPerFrame[frameNumber - 1];
     }
-    
-    float PoseError(IReadOnlyList<Vector3> pose, bool isLead, int frameNumber)
-    {
-        if (isLead)
-        {
-            List<Vector2> reverseProjectedLead =
-                CurrentLead3DPose.Select(vec => ReverseProjectPoint(vec, frameNumber, true)).ToList();
+ 
+    #endregion
 
-            return reverseProjectedLead.Select((target, i) => Vector2.Distance(
-                target,
-                new Vector2(pose[i].X, pose[i].Y)) * pose[i].Z).Sum(); // multiply by confidence -> high confidence is high error
+    #region REFERENCE
+
+    public bool HasPoseAtFrame(int frameNumber, bool isLead)
+    {
+        if (isLead && leadIndicesPerFrame[frameNumber] == -1)
+        {
+            return false;
         }
 
-        List<Vector2> reverseProjectedFollow =
-            CurrentFollow3DPose.Select(vec => ReverseProjectPoint(vec, frameNumber, true)).ToList();
+        if (!isLead && followIndicesPerFrame[frameNumber] == -1)
+        {
+            return false;
+        }
 
-        return reverseProjectedFollow.Select((target, i) => Vector2.Distance(
-            target,
-            new Vector2(pose[i].X, pose[i].Y)) * pose[i].Z).Sum();
+        return isLead
+            ? recenteredRescaledAllPosesPerFrame[frameNumber][leadIndicesPerFrame[frameNumber]].Count > 0
+            : recenteredRescaledAllPosesPerFrame[frameNumber][followIndicesPerFrame[frameNumber]].Count > 0;
+    }
+
+    public Ray PoseRay(int frameNumber, int jointNumber, bool isLead)
+    {
+        Ray rayToJoint = new Ray(
+            Position,
+            Vector3.Normalize(isLead
+                ? leadProjectionsPerFrame[frameNumber][jointNumber] - Position
+                : followProjectionsPerFrame[frameNumber][jointNumber] - Position));
+        return rayToJoint;
+    }
+
+    public float JointConfidence(int frameNumber, int jointNumber, bool isLead)
+    {
+        return isLead
+            ? recenteredRescaledAllPosesPerFrame[frameNumber][leadIndicesPerFrame[frameNumber]][jointNumber].Z
+            : recenteredRescaledAllPosesPerFrame[frameNumber][followIndicesPerFrame[frameNumber]][jointNumber].Z;
+    }
+
+    public void CopyRotationToNextFrame(int frameNumber)
+    {
+        rotationsPerFrame[frameNumber] = rotationsPerFrame[frameNumber - 1];
+    }
+
+    float PoseError(IReadOnlyList<Vector3> pose, IEnumerable<Vector3> pose3D, int frameNumber)
+    {
+        List<Vector2> reverseProjectedLead =
+            pose3D.Select(vec => ReverseProjectPoint(vec, frameNumber, true)).ToList();
+
+        return reverseProjectedLead.Select((target, i) => Vector2.Distance(
+                target,
+                new Vector2(pose[i].X, pose[i].Y)) * pose[i].Z)
+            .Sum(); // multiply by confidence -> high confidence is high error
     }
 
     public float PoseHeight(int index, float camYImgComponent)
@@ -937,13 +881,14 @@ public class CameraSetup(
 
         return squatPrct > .8f;
     }
+    
+    Vector3? ImgPtRayFloorIntersection(Vector2 imgPt)
+    {
+        Vector3 projectedPoint = ProjectPoint(imgPt);
+        Ray rayFromImgPoint = new Ray(Position, Vector3.Normalize(projectedPoint - Position));
+
+        return Transform.RayPlaneIntersection(new Plane(Vector3.UnitY, 0), rayFromImgPoint);
+    }
 
     #endregion
-
-    public class CameraHandAnchor(Vector2 imgPosition, int poseIndex, int jointIndex)
-    {
-        public Vector2 ImgPosition = imgPosition;
-        public int PoseIndex = poseIndex;
-        public int JointIndex = jointIndex;
-    }
 }

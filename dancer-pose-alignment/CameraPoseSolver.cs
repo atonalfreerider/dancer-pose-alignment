@@ -7,6 +7,7 @@ namespace dancer_pose_alignment;
 
 public class CameraPoseSolver(PoseType poseType)
 {
+    // these are the 3D pose values that will be output
     readonly List<List<Vector3>> merged3DPoseLeadPerFrame = [];
     readonly List<List<Vector3>> merged3DPoseFollowPerFrame = [];
 
@@ -14,12 +15,13 @@ public class CameraPoseSolver(PoseType poseType)
     int frameNumber = 0;
     public int MaximumFrameCount = int.MaxValue;
 
-    const float leadLegLimbLenth = .4f;
-    const float followLegLimbLength = .4f;
+    // body limb constants so that 3D pose is constrained
+    const float LeadLegLimbLength = .4f;
+    const float FollowLegLimbLength = .4f;
+    const float LeadShoulderHipArmLength = .3f;
+    const float FollowShoulderHipArmLength = .28f;
 
-    const float leadShoulderHipArmLength = .3f;
-    const float followShoulderHipArmLength = .28f;
-
+    // drawing variables
     Dictionary<string, Vector3> cameraPositions => cameras.ToDictionary(
         pair => pair.Key,
         pair => pair.Value.Position);
@@ -32,7 +34,7 @@ public class CameraPoseSolver(PoseType poseType)
         Vector3.UnitZ
     ];
 
-    readonly Yolo yolo = new("yolov8x-pose.onnx"); // this is in the assembly dir 
+    readonly Yolo yolo = new("yolov8x-pose.onnx"); // this must be placed in the assembly directory
 
     public void CreateCamera(
         string name,
@@ -51,7 +53,15 @@ public class CameraPoseSolver(PoseType poseType)
 
         if (frameNumber == 0)
         {
+            cameras[camName].FrameZeroLeadFollowFinderAndCamHeight(poses);
             TryHomeCamera(camName);
+        }
+        else
+        {
+            cameras[camName].Match3DPoseToPoses(
+                frameNumber,
+                merged3DPoseLeadPerFrame[frameNumber - 1],
+                merged3DPoseFollowPerFrame[frameNumber - 1]);
         }
     }
 
@@ -78,7 +88,10 @@ public class CameraPoseSolver(PoseType poseType)
         foreach (CameraSetup cameraSetup in cameras.Values)
         {
             cameraSetup.CopyRotationToNextFrame(frameNumber);
-            cameraSetup.Match3DPoseToPoses(frameNumber);
+            cameraSetup.Match3DPoseToPoses(
+                frameNumber, 
+                merged3DPoseLeadPerFrame[frameNumber - 1],
+                merged3DPoseFollowPerFrame[frameNumber - 1]);
         }
 
         return true;
@@ -146,24 +159,15 @@ public class CameraPoseSolver(PoseType poseType)
             .ReverseProjectPoint(vec, frameNumber)).ToList();
     }
 
-    public List<Tuple<Vector2, Vector2>> ReverseProjectCameraPositionsAtCameraAndManualPair(string camName)
+    public List<Vector2> ReverseProjectCameraPositionsAtCameraAndManualPair(string camName)
     {
-        List<Tuple<Vector2, Vector2>> pointPairs = [];
+        List<Vector2> pointPairs = [];
         foreach ((string otherCamName, Vector3 camPos) in cameraPositions)
         {
             if (camName == otherCamName) continue;
 
             Vector2 point = cameras[camName].ReverseProjectPoint(camPos, frameNumber);
-            if (cameras[camName].ManualCameraPositionsByFrameByCamName.ContainsKey(otherCamName))
-            {
-                Vector2 manualPos = cameras[camName].ManualCameraPositionsByFrameByCamName[otherCamName][frameNumber]
-                    .ImgPosition;
-                pointPairs.Add(new Tuple<Vector2, Vector2>(point, manualPos));
-            }
-            else
-            {
-                pointPairs.Add(new Tuple<Vector2, Vector2>(point, new Vector2(-1, -1)));
-            }
+            pointPairs.Add(point);
         }
 
         return pointPairs;
@@ -186,7 +190,11 @@ public class CameraPoseSolver(PoseType poseType)
         foreach (CameraSetup cameraSetup in cameras.Values)
         {
             cameraSetup.Unassign(0);
-            cameraSetup.Match3DPoseToPoses(0, 3000);
+            cameraSetup.Match3DPoseToPoses(
+                0,
+                merged3DPoseLeadPerFrame[0],
+                merged3DPoseFollowPerFrame[0],
+                3000);
         }
     }
 
@@ -220,29 +228,6 @@ public class CameraPoseSolver(PoseType poseType)
         foreach (CameraSetup camerasValue in cameras.Values)
         {
             camerasValue.SetRadiusFromCameraWall(cameraWall);
-        }
-    }
-
-    public void SetCameraHeights()
-    {
-        if (frameNumber > 0) return;
-
-        foreach (CameraSetup cam in cameras.Values)
-        {
-            cam.HeightsSetByOtherCameras.Clear();
-        }
-
-        foreach (CameraSetup cam in cameras.Values)
-        {
-            foreach ((string otherCamName, List<CameraSetup.CameraHandAnchor> cameraHandAnchorList) in cam
-                         .ManualCameraPositionsByFrameByCamName)
-            {
-                CameraSetup.CameraHandAnchor cameraHandAnchor = cameraHandAnchorList[0];
-                float poseHeight = cam.PoseHeight(cameraHandAnchor.PoseIndex, cameraHandAnchor.ImgPosition.Y);
-
-                CameraSetup otherCam = cameras[otherCamName];
-                otherCam.HeightsSetByOtherCameras.Add(poseHeight);
-            }
         }
     }
 
@@ -280,12 +265,6 @@ public class CameraPoseSolver(PoseType poseType)
 
         merged3DPoseLeadPerFrame[frameNumber] = merged3DPoseLead;
         merged3DPoseFollowPerFrame[frameNumber] = merged3DPoseFollow;
-
-        foreach (CameraSetup cameraSetup in cameras.Values)
-        {
-            cameraSetup.CurrentLead3DPose = merged3DPoseLead;
-            cameraSetup.CurrentFollow3DPose = merged3DPoseFollow;
-        }
     }
 
     List<Vector3> Calculate3DPose(bool isLead)
@@ -359,7 +338,7 @@ public class CameraPoseSolver(PoseType poseType)
             ? Vector3.Zero // root to origin
             : scatterPose[JointExtension.RAnkleIndex(poseType)];
         Vector3 lAnklePos = isLead && frameNumber == 0
-            ? new Vector3(-leadShoulderHipArmLength, 0, 0) // root to stance
+            ? new Vector3(-LeadShoulderHipArmLength, 0, 0) // root to stance
             : scatterPose[JointExtension.LAnkleIndex(poseType)];
 
         Vector3 rKneePos = scatterPose[JointExtension.RKneeIndex(poseType)];
@@ -373,33 +352,33 @@ public class CameraPoseSolver(PoseType poseType)
             // right ankle is lower to the ground
             final3DPose[JointExtension.RAnkleIndex(poseType)] = rAnklePos with { Y = 0 };
             rKneePos = rAnklePos + Vector3.Normalize(rKneePos - rAnklePos) *
-                (isLead ? leadLegLimbLenth : followLegLimbLength);
+                (isLead ? LeadLegLimbLength : FollowLegLimbLength);
             final3DPose[JointExtension.RKneeIndex(poseType)] = rKneePos;
             rHipPos = rKneePos + Vector3.Normalize(rHipPos - rKneePos) *
-                (isLead ? leadLegLimbLenth : followLegLimbLength);
+                (isLead ? LeadLegLimbLength : FollowLegLimbLength);
             final3DPose[JointExtension.RHipIndex(poseType)] = rHipPos;
 
             if (frameNumber == 0)
             {
                 final3DPose[JointExtension.LAnkleIndex(poseType)] = lAnklePos with { Y = 0 };
                 lKneePos = lAnklePos + Vector3.Normalize(lKneePos - lAnklePos) *
-                    (isLead ? leadLegLimbLenth : followLegLimbLength);
+                    (isLead ? LeadLegLimbLength : FollowLegLimbLength);
                 final3DPose[JointExtension.LKneeIndex(poseType)] = lKneePos;
                 lHipPos = lKneePos + Vector3.Normalize(lHipPos - lKneePos) *
-                    (isLead ? leadLegLimbLenth : followLegLimbLength);
+                    (isLead ? LeadLegLimbLength : FollowLegLimbLength);
                 final3DPose[JointExtension.LHipIndex(poseType)] = lHipPos;
             }
             else
             {
                 lHipPos = rHipPos + Vector3.Normalize(lHipPos - rHipPos) *
-                    (isLead ? leadShoulderHipArmLength : followShoulderHipArmLength);
+                    (isLead ? LeadShoulderHipArmLength : FollowShoulderHipArmLength);
                 final3DPose[JointExtension.LHipIndex(poseType)] = lHipPos;
                 lKneePos = lHipPos +
-                           Vector3.Normalize(lKneePos - lHipPos) * (isLead ? leadLegLimbLenth : followLegLimbLength);
+                           Vector3.Normalize(lKneePos - lHipPos) * (isLead ? LeadLegLimbLength : FollowLegLimbLength);
                 final3DPose[JointExtension.LKneeIndex(poseType)] = lKneePos;
                 lAnklePos = lKneePos + Vector3.Normalize(lAnklePos - lKneePos) * (isLead
-                    ? leadLegLimbLenth
-                    : followLegLimbLength);
+                    ? LeadLegLimbLength
+                    : FollowLegLimbLength);
                 final3DPose[JointExtension.LAnkleIndex(poseType)] = lAnklePos;
             }
         }
@@ -407,34 +386,34 @@ public class CameraPoseSolver(PoseType poseType)
         {
             final3DPose[JointExtension.LAnkleIndex(poseType)] = lAnklePos;
             lKneePos = lAnklePos + Vector3.Normalize(lKneePos - lAnklePos) * (isLead
-                ? leadLegLimbLenth
-                : followLegLimbLength);
+                ? LeadLegLimbLength
+                : FollowLegLimbLength);
             final3DPose[JointExtension.LKneeIndex(poseType)] = lKneePos;
             lHipPos = lKneePos +
-                      Vector3.Normalize(lHipPos - lKneePos) * (isLead ? leadLegLimbLenth : followLegLimbLength);
+                      Vector3.Normalize(lHipPos - lKneePos) * (isLead ? LeadLegLimbLength : FollowLegLimbLength);
             final3DPose[JointExtension.LHipIndex(poseType)] = lHipPos;
 
             if (frameNumber == 0)
             {
                 final3DPose[JointExtension.RAnkleIndex(poseType)] = rAnklePos with { Y = 0 };
                 rKneePos = rAnklePos + Vector3.Normalize(rKneePos - rAnklePos) *
-                    (isLead ? leadLegLimbLenth : followLegLimbLength);
+                    (isLead ? LeadLegLimbLength : FollowLegLimbLength);
                 final3DPose[JointExtension.RKneeIndex(poseType)] = rKneePos;
                 rHipPos = rKneePos + Vector3.Normalize(rHipPos - rKneePos) *
-                    (isLead ? leadLegLimbLenth : followLegLimbLength);
+                    (isLead ? LeadLegLimbLength : FollowLegLimbLength);
                 final3DPose[JointExtension.RHipIndex(poseType)] = rHipPos;
             }
             else
             {
                 rHipPos = lHipPos + Vector3.Normalize(rHipPos - lHipPos) *
-                    (isLead ? leadShoulderHipArmLength : followShoulderHipArmLength);
+                    (isLead ? LeadShoulderHipArmLength : FollowShoulderHipArmLength);
                 final3DPose[JointExtension.RHipIndex(poseType)] = rHipPos;
                 rKneePos = rHipPos +
-                           Vector3.Normalize(rKneePos - rHipPos) * (isLead ? leadLegLimbLenth : followLegLimbLength);
+                           Vector3.Normalize(rKneePos - rHipPos) * (isLead ? LeadLegLimbLength : FollowLegLimbLength);
                 final3DPose[JointExtension.RKneeIndex(poseType)] = rKneePos;
                 rAnklePos = rKneePos + Vector3.Normalize(rAnklePos - rKneePos) * (isLead
-                    ? leadLegLimbLenth
-                    : followLegLimbLength);
+                    ? LeadLegLimbLength
+                    : FollowLegLimbLength);
                 final3DPose[JointExtension.RAnkleIndex(poseType)] = rAnklePos;
             }
         }
@@ -451,18 +430,18 @@ public class CameraPoseSolver(PoseType poseType)
 
         final3DPose[JointExtension.RShoulderIndex(poseType)] = rShoulderPos;
         rElbowPos = rShoulderPos + Vector3.Normalize(rElbowPos - rShoulderPos) *
-            (isLead ? leadShoulderHipArmLength : followShoulderHipArmLength);
+            (isLead ? LeadShoulderHipArmLength : FollowShoulderHipArmLength);
         final3DPose[JointExtension.RElbowIndex(poseType)] = rElbowPos;
         rWristPos = rElbowPos + Vector3.Normalize(rWristPos - rElbowPos) *
-            (isLead ? leadShoulderHipArmLength : followShoulderHipArmLength);
+            (isLead ? LeadShoulderHipArmLength : FollowShoulderHipArmLength);
         final3DPose[JointExtension.RWristIndex(poseType)] = rWristPos;
 
         final3DPose[JointExtension.LShoulderIndex(poseType)] = lShoulderPos;
         lElbowPos = lShoulderPos + Vector3.Normalize(lElbowPos - lShoulderPos) *
-            (isLead ? leadShoulderHipArmLength : followShoulderHipArmLength);
+            (isLead ? LeadShoulderHipArmLength : FollowShoulderHipArmLength);
         final3DPose[JointExtension.LElbowIndex(poseType)] = lElbowPos;
         lWristPos = lElbowPos + Vector3.Normalize(lWristPos - lElbowPos) *
-            (isLead ? leadShoulderHipArmLength : followShoulderHipArmLength);
+            (isLead ? LeadShoulderHipArmLength : FollowShoulderHipArmLength);
         final3DPose[JointExtension.LWristIndex(poseType)] = lWristPos;
 
         final3DPose[JointExtension.NoseIndex(poseType)] = scatterPose[JointExtension.NoseIndex(poseType)];
