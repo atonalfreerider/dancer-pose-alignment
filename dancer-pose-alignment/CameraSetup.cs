@@ -25,6 +25,7 @@ public class CameraSetup(
     
     // unused, but collectively can be used to place other cameras at accurate radius
     public readonly List<Tuple<float, float>> CameraWall = [];
+    List<Vector2> backgroundChestCenters = []; // relative to origin, used for tracking
 
     Vector3 Forward(int frame) => Vector3.Transform(
         Vector3.UnitZ,
@@ -83,6 +84,7 @@ public class CameraSetup(
             if (i == 0)
             {
                 FrameZeroLeadFollowFinderAndCamHeight(posesByFrame[sampleFrame]);
+                SetFrameZeroChestPositions();
             }
         }
     }
@@ -226,6 +228,7 @@ public class CameraSetup(
 
         if (lowestLeadError < distanceLimit)
         {
+            // TODO predict next pose location and match
             leadIndicesPerFrame[frameNumber] = leadIndex;
         }
 
@@ -233,6 +236,41 @@ public class CameraSetup(
         {
             followIndicesPerFrame[frameNumber] = followIndex;
         }
+    }
+
+    public void SetFrameZeroChestPositions()
+    {
+        if (leadIndicesPerFrame[0] == -1) return;
+
+        // take each right ankle, find the alpha angle from the 3D lead forward, and calculate the radius based on the
+        // height of the pose
+        backgroundChestCenters = BackgroundChestCenters(0);
+    }
+
+    List<Vector2> BackgroundChestCenters(int frameNumber)
+    {
+        List<Vector2> chestCenters = [];
+        int counter = 0;
+        foreach (List<Vector3> pose in recenteredRescaledAllPosesPerFrame[frameNumber])
+        {
+            if (leadIndicesPerFrame[frameNumber] == counter || followIndicesPerFrame[frameNumber] == counter)
+            {
+                counter++;
+                continue;
+            }
+            
+            Vector2 leftShoulder = new Vector2(
+                pose[JointExtension.LShoulderIndex(poseType)].X,
+                pose[JointExtension.LShoulderIndex(poseType)].Y);
+            
+            Vector2 rightShoulder = new Vector2(
+                pose[JointExtension.RShoulderIndex(poseType)].X,
+                pose[JointExtension.RShoulderIndex(poseType)].Y);
+            
+            chestCenters.Add((leftShoulder + rightShoulder) / 2);
+        }
+
+        return chestCenters;
     }
 
     /// <summary>
@@ -692,80 +730,27 @@ public class CameraSetup(
     
     public void TrackRotationFromLastFrame(int frameNumber)
     {
-        List<List<Vector3>> backgroundRecenteredFromLast = [];
-        int count = 0;
-        foreach (List<Vector3> vector3s in recenteredRescaledAllPosesPerFrame[frameNumber -1])
+        List<Vector2> chestCentersForFrame = BackgroundChestCenters(frameNumber);
+
+        
+        foreach (Vector2 vector2 in chestCentersForFrame)
         {
-            if (count == leadIndicesPerFrame[frameNumber - 1] || count == followIndicesPerFrame[frameNumber - 1])
+            float lowestDistance = float.MaxValue;
+            Vector2 closestOriginalChestCenter = new Vector2();
+            foreach (Vector2 backgroundChestCenter in backgroundChestCenters)
             {
-                count++;
-                continue;
+                float distance = Vector2.Distance(vector2, backgroundChestCenter);
             }
-            
-            backgroundRecenteredFromLast.Add(vector3s);
-            count++;
         }
         
-        List<List<Vector3>> backgroundRecenteredFromThis = [];
-        count = 0;
-        foreach (List<Vector3> vector3s in recenteredRescaledAllPosesPerFrame[frameNumber])
-        {
-            if (count == leadIndicesPerFrame[frameNumber] || count == followIndicesPerFrame[frameNumber])
-            {
-                count++;
-                continue;
-            }
-            
-            backgroundRecenteredFromThis.Add(vector3s);
-            count++;
-        }
-        
-        Vector2 meanMotionVector = Vector2.Zero;
-        List<Vector3> allMotionVectors = [];
-        foreach (List<Vector3> lastPose in backgroundRecenteredFromLast)
-        {
-            for (int i = 0; i < JointExtension.PoseCount(PoseType.Coco); i++)
-            {
-                int closestJointIndex = -1;
-                float closestJointDistance = float.MaxValue;
-                Vector3 lastJoint = lastPose[i];
-                foreach (List<Vector3> currentPose in backgroundRecenteredFromThis)
-                {
-                    Vector3 thisJoint = currentPose[i];
-                    float distance = Vector2.Distance(
-                        new Vector2(thisJoint.X, thisJoint.Y),
-                        new Vector2(lastJoint.X, lastJoint.Y)); // lower is better
-                    
-                    float confidencePenalty = (1 - thisJoint.Z) * (1 - lastJoint.Z); // lower is better
-                    if (distance * confidencePenalty < closestJointDistance)
-                    {
-                        closestJointDistance = distance * confidencePenalty;
-                        closestJointIndex = backgroundRecenteredFromThis.IndexOf(currentPose);
-                    }
-                }
 
-                Vector3 closestJoint = backgroundRecenteredFromThis[closestJointIndex][i];
-                Vector3 motionVector = new Vector3(
-                    closestJoint.X - lastJoint.X,
-                    closestJoint.Y - lastJoint.Y,
-                    closestJointDistance);
-                allMotionVectors.Add(motionVector);
-            }
-        }
-
-        allMotionVectors = allMotionVectors.OrderByDescending(vec => vec.Z).Reverse().ToList();
-        // remove second half of list
-        allMotionVectors = allMotionVectors.Take(allMotionVectors.Count / 2).ToList();
-        meanMotionVector = new Vector2(
-            allMotionVectors.Select(vec => vec.X).Sum() / allMotionVectors.Count,
-            allMotionVectors.Select(vec => vec.Y).Sum() / allMotionVectors.Count);
         
         float pitchAlpha = MathF.Atan2(meanMotionVector.Y, focalLength);
         float yawAlpha = MathF.Atan2(meanMotionVector.X, focalLength);
         
         rotationsPerFrame[frameNumber] = Quaternion.CreateFromAxisAngle(Vector3.UnitX, -pitchAlpha) *
                                          Quaternion.CreateFromAxisAngle(Vector3.UnitY, -yawAlpha) *
-                                         rotationsPerFrame[frameNumber - 1];
+                                         rotationsPerFrame[0];
     }
  
     #endregion

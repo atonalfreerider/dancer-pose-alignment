@@ -58,6 +58,7 @@ public class CameraPoseSolver(PoseType poseType)
         {
             cameras[camName].FrameZeroLeadFollowFinderAndCamHeight(poses);
             TryHomeCamera(camName);
+            cameras[camName].SetFrameZeroChestPositions();
         }
         else
         {
@@ -334,6 +335,11 @@ public class CameraPoseSolver(PoseType poseType)
             case "Lead":
             case "Follow":
                 cameras[camName].CalculateCameraWall(frameNumber);
+                if (frameNumber == 0)
+                {
+                    cameras[camName].SetFrameZeroChestPositions();
+                }
+
                 break;
         }
 
