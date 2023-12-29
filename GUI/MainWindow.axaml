@@ -35,6 +35,7 @@
                                 Click="SolverNextFrameButton_Click" />
                         <Button Name="RunUntilNext" Content="Run Until Next Discontinuity" Height="30" Margin="5"
                                 Click="RunUntilEnd_Click" />
+                        <CheckBox Name="ShowVideoCheckbox" IsChecked="True"/>
                         <Button Content="Save" Margin="5" Click="Save3D_Click" />
                     </StackPanel>
                 </StackPanel>

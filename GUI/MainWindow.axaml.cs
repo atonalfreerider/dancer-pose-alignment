@@ -262,36 +262,43 @@ public partial class MainWindow : Window
     {
         foreach ((string videoFilePath, VideoCapture videoCapture) in videoFiles)
         {
-            videoCapture.Set(
-                VideoCaptureProperties.PosFrames,
-                (int)((highestPositiveOffsetSeconds - videoOffsets[videoFilePath] + timeFromStart)
-                      * videoFrameRates[videoFilePath]));
-
-            OutputArray outputArray = new Mat();
-            videoCapture.Read(outputArray);
-
-            Mat frameMat = outputArray.GetMat();
-
-            Bitmap frame;
-            try
+            if (ShowVideoCheckbox.IsChecked == true)
             {
-                frame = Bitmap.DecodeToWidth(frameMat.ToMemoryStream(), frameMat.Width);
+                videoCapture.Set(
+                    VideoCaptureProperties.PosFrames,
+                    (int)((highestPositiveOffsetSeconds - videoOffsets[videoFilePath] + timeFromStart)
+                          * videoFrameRates[videoFilePath]));
+
+                OutputArray outputArray = new Mat();
+                videoCapture.Read(outputArray);
+
+                Mat frameMat = outputArray.GetMat();
+
+                Bitmap frame;
+                try
+                {
+                    frame = Bitmap.DecodeToWidth(frameMat.ToMemoryStream(), frameMat.Width);
+                }
+                catch (OpenCVException openCvException)
+                {
+                    // end of video
+                    Console.WriteLine(openCvException.Message);
+                    continue;
+                }
+
+                frameImages[videoFilePath].Source = frame;
+
+                if (!File.Exists(Path.Combine(videoFilePath, ".json")))
+                {
+                    // if poses are note pre-cached, calculate from image
+                    cameraPoseSolver.SetPoseFromImage(frameMat.ToMemoryStream(), videoFilePath);
+                }
             }
-            catch (OpenCVException openCvException)
+            else
             {
-                // end of video
-                Console.WriteLine(openCvException.Message);
-                continue;
+                frameImages[videoFilePath].Source = null;
             }
 
-            frameImages[videoFilePath].Source = frame;
-
-            // if pre-cached json, load it
-            if (!File.Exists(Path.Combine(videoFilePath, ".json")))
-            {
-                cameraPoseSolver.SetPoseFromImage(frameMat.ToMemoryStream(), videoFilePath);
-            }
-            
             if (cameraPoseSolver.AreLeadAndFollowAssignedForFrame())
             {
                 cameraPoseSolver.CalculateLeadFollow3DPoses();
