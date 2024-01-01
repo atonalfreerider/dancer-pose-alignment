@@ -180,6 +180,8 @@ public class CameraSetup(
         IEnumerable<Vector3> follow3D, 
         int distanceLimit = 500)
     {
+        if (allPosesAndConfidencesPerFrame[frameNumber] == null) return;
+        
         // take the last 3d pose on this camera and match the profile to the closest pose here, within a threshold
         float lowestLeadError = float.MaxValue;
         int leadIndex = -1;
@@ -692,6 +694,8 @@ public class CameraSetup(
     
     public void TrackRotationFromLastFrame(int frameNumber)
     {
+        if (recenteredRescaledAllPosesPerFrame[frameNumber] == null) return;
+        
         List<List<Vector3>> backgroundRecenteredFromLast = [];
         int count = 0;
         foreach (List<Vector3> vector3s in recenteredRescaledAllPosesPerFrame[frameNumber -1])
