@@ -27,7 +27,7 @@ public static class Transform
         up = Vector3.Cross(direction, right);
 
         // Create a look rotation matrix
-        Matrix4x4 lookAtMatrix = new Matrix4x4(
+        Matrix4x4 lookAtMatrix = new(
             right.X, right.Y, right.Z, 0,
             up.X, up.Y, up.Z, 0,
             direction.X, direction.Y, direction.Z, 0,
@@ -116,7 +116,7 @@ public static class Transform
                 }
             }
 
-            Vector3 averagePoint = new Vector3(sumX / count, sumY / count, sumZ / count);
+            Vector3 averagePoint = new(sumX / count, sumY / count, sumZ / count);
             smoothedPoints.Add(averagePoint);
         }
 

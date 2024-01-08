@@ -51,7 +51,7 @@ static class Program
                         false,
                         0.04);
 
-                    Mat pointsMat = new Mat(points.Length, 1, MatType.CV_32FC2);
+                    Mat pointsMat = new(points.Length, 1, MatType.CV_32FC2);
                     pointsMat.SetArray(points);
 
                     InputOutputArray pointsToTrack = InputOutputArray.Create(pointsMat);
@@ -109,13 +109,13 @@ static class Program
 
         public Yolo(string modelPath)
         {
-            ModelSelector modelSelector = new ModelSelector(modelPath);
+            ModelSelector modelSelector = new(modelPath);
             yolo = new YoloV8(modelSelector);
         }
 
         public IEnumerable<List<Vector3>> CalculatePosesFromImage(Stream imageStream)
         {
-            ImageSelector imageSelector = new ImageSelector(imageStream);
+            ImageSelector imageSelector = new(imageStream);
             IPoseResult result = yolo.Pose(imageSelector);
 
             return result.Boxes

@@ -173,7 +173,7 @@ public class CameraPoseSolver(PoseType poseType)
         using ReadOnlyBuffer<float> jointConfidenceBuffer = GraphicsDevice.GetDefault()
             .AllocateReadOnlyBuffer(jointConfidencePerCameraPerJoint.ToArray());
 
-        MidpointFinder midpointFinder = new MidpointFinder(
+        MidpointFinder midpointFinder = new(
             minMidpointBuffer,
             rayOriginBuffer,
             rayDirectionBuffer,
@@ -467,7 +467,7 @@ public class CameraPoseSolver(PoseType poseType)
         List<Vector3> allPoints = [];
         foreach (Tuple<float, float> tuple in ordered)
         {
-            Vector3 point = new Vector3(tuple.Item2 * MathF.Sin(tuple.Item1), 0, tuple.Item2 * MathF.Cos(tuple.Item1));
+            Vector3 point = new(tuple.Item2 * MathF.Sin(tuple.Item1), 0, tuple.Item2 * MathF.Cos(tuple.Item1));
             allPoints.Add(point);
         }
 

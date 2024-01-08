@@ -68,11 +68,11 @@ public partial class MainWindow : Window
         List<AudioTrack> audioTracks = [];
         foreach (string videoPath in Directory.EnumerateFiles(videoDirectory, "*.mp4"))
         {
-            AudioTrack audioTrack = new AudioTrack(new FileInfo(videoPath));
+            AudioTrack audioTrack = new(new FileInfo(videoPath));
             audioTracks.Add(audioTrack);
         }
 
-        HaitsmaKalkerFingerprintingModel model = new HaitsmaKalkerFingerprintingModel();
+        HaitsmaKalkerFingerprintingModel model = new();
         model.FingerprintingFinished += delegate
         {
             model.FindAllMatches(
@@ -152,7 +152,7 @@ public partial class MainWindow : Window
         foreach ((string videoFilePath, double myOffset) in videoFilePathsAndOffsets)
         {
             // initialize video capture
-            VideoCapture videoCapture = new VideoCapture(videoFilePath);
+            VideoCapture videoCapture = new(videoFilePath);
             videoFiles.Add(videoFilePath, videoCapture);
             indexToVideoFilePath.Add(camCount, videoFilePath);
 
@@ -190,10 +190,10 @@ public partial class MainWindow : Window
                 continue;
             }
 
-            Size size = new Size(frameMat.Width, frameMat.Height);
+            Size size = new(frameMat.Width, frameMat.Height);
 
             // add frame image to canvas
-            Image frameImage = new Image
+            Image frameImage = new()
             {
                 Width = size.Width,
                 Height = size.Height,
@@ -201,7 +201,7 @@ public partial class MainWindow : Window
             };
             frameImages.Add(videoFilePath, frameImage);
 
-            Canvas canvas = new Canvas
+            Canvas canvas = new()
             {
                 Width = size.Width,
                 Height = size.Height
@@ -244,8 +244,8 @@ public partial class MainWindow : Window
                 // do nothing
             }
 
-            DrawingImage drawingImage = new DrawingImage();
-            Image poseDrawingImage = new Image
+            DrawingImage drawingImage = new();
+            Image poseDrawingImage = new()
             {
                 Width = size.Width,
                 Height = size.Height,
@@ -402,7 +402,7 @@ public partial class MainWindow : Window
 
         List<Vector2> cameraPositions2D = cameraPoseSolver.ReverseProjectCameraPositionsAtCameraAndManualPair(camName);
 
-        DrawingImage drawingImage = new DrawingImage();
+        DrawingImage drawingImage = new();
         DrawingGroup drawingGroup = PreviewDrawer.DrawGeometry(
             cameraPoseSolver.GetPosesAtFrameAtCamera(camName),
             new Size(graphicsImages[camName].Width, graphicsImages[camName].Height),

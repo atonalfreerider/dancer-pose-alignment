@@ -260,7 +260,7 @@ public class CameraSetup(
                 continue;
             }
 
-            Vector2 poseRightAnkle = new Vector2(
+            Vector2 poseRightAnkle = new(
                 pose[JointExtension.RAnkleIndex(poseType)].X,
                 pose[JointExtension.RAnkleIndex(poseType)].Y);
 
@@ -390,7 +390,7 @@ public class CameraSetup(
     Vector3 ProjectPoint(Vector2 imgPoint)
     {
         // rescale point
-        Vector3 rescaledPt = new Vector3(
+        Vector3 rescaledPt = new(
             (imgPoint.X - size.X / 2) * PixelToMeter,
             -(imgPoint.Y - size.Y / 2) * PixelToMeter, // flip
             0);
@@ -420,7 +420,7 @@ public class CameraSetup(
         Vector3 target = Vector3.Normalize(worldPoint - Position);
         Vector2 imagePlaneCoordinates = GetImagePlaneCoordinates(target, frameNumber);
 
-        Vector2 offcenterAndRescaleAndFlip = new Vector2(
+        Vector2 offcenterAndRescaleAndFlip = new(
             imagePlaneCoordinates.X / PixelToMeter + size.X / 2,
             -imagePlaneCoordinates.Y / PixelToMeter + size.Y / 2);
 
@@ -459,7 +459,7 @@ public class CameraSetup(
         Vector3 intersectionPoint = t * rayDirection;
 
         // Calculate the coordinates relative to the image plane center
-        Vector2 imagePlaneCoordinates = new Vector2(
+        Vector2 imagePlaneCoordinates = new(
             Vector3.Dot(intersectionPoint, Right(frameNumber)),
             Vector3.Dot(intersectionPoint, Up(frameNumber)));
 
@@ -478,17 +478,17 @@ public class CameraSetup(
         if (leadIndicesPerFrame[0] == -1) return;
 
         // 1 - ORBIT 
-        Vector2 leadLeftAnkle = new Vector2(
+        Vector2 leadLeftAnkle = new(
             allPosesAndConfidencesPerFrame[0][leadIndicesPerFrame[0]][JointExtension.LAnkleIndex(poseType)].X,
             allPosesAndConfidencesPerFrame[0][leadIndicesPerFrame[0]][JointExtension.LAnkleIndex(poseType)].Y);
 
-        Vector2 leadRightAnkle = new Vector2(
+        Vector2 leadRightAnkle = new(
             allPosesAndConfidencesPerFrame[0][leadIndicesPerFrame[0]][JointExtension.RAnkleIndex(poseType)].X,
             allPosesAndConfidencesPerFrame[0][leadIndicesPerFrame[0]][JointExtension.RAnkleIndex(poseType)].Y);
 
         (bool isFacingLead, float leadPoseAnkleSlope) = FacingAndStanceSlope(leadRightAnkle, leadLeftAnkle);
 
-        Vector3 stanceWidth = new Vector3(-.3f, 0f, 0f);
+        Vector3 stanceWidth = new(-.3f, 0f, 0f);
 
         // rotate camera in circle at 5m radius and 1.5m elevation pointed at origin until orientation and slope matches 
         float lowestAlpha = 0;
@@ -545,7 +545,7 @@ public class CameraSetup(
 
     void HipLock()
     {
-        Vector2 leadRightAnkle = new Vector2(
+        Vector2 leadRightAnkle = new(
             allPosesAndConfidencesPerFrame[0][leadIndicesPerFrame[0]][JointExtension.RAnkleIndex(poseType)].X,
             allPosesAndConfidencesPerFrame[0][leadIndicesPerFrame[0]][JointExtension.RAnkleIndex(poseType)].Y);
 
@@ -749,7 +749,7 @@ public class CameraSetup(
                 }
 
                 Vector3 closestJoint = backgroundRecenteredFromThis[closestJointIndex][i];
-                Vector3 motionVector = new Vector3(
+                Vector3 motionVector = new(
                     closestJoint.X - lastJoint.X,
                     closestJoint.Y - lastJoint.Y,
                     closestJointDistance);
@@ -795,7 +795,7 @@ public class CameraSetup(
 
     public Ray PoseRay(int frameNumber, int jointNumber, bool isLead)
     {
-        Ray rayToJoint = new Ray(
+        Ray rayToJoint = new(
             Position,
             Vector3.Normalize(isLead
                 ? leadProjectionsPerFrame[frameNumber][jointNumber] - Position
@@ -883,7 +883,7 @@ public class CameraSetup(
     Vector3? ImgPtRayFloorIntersection(Vector2 imgPt)
     {
         Vector3 projectedPoint = ProjectPoint(imgPt);
-        Ray rayFromImgPoint = new Ray(Position, Vector3.Normalize(projectedPoint - Position));
+        Ray rayFromImgPoint = new(Position, Vector3.Normalize(projectedPoint - Position));
 
         return Transform.RayPlaneIntersection(new Plane(Vector3.UnitY, 0), rayFromImgPoint);
     }

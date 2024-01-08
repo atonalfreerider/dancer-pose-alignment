@@ -27,8 +27,8 @@ public static class PreviewDrawer
 
         drawingGroup = DrawOriginCross(drawingGroup, originCross);
 
-        SolidColorBrush camBrush = new SolidColorBrush(Colors.DarkGreen);
-        Pen camPen = new Pen(camBrush)
+        SolidColorBrush camBrush = new(Colors.DarkGreen);
+        Pen camPen = new(camBrush)
         {
             Thickness = 10
         };
@@ -41,8 +41,8 @@ public static class PreviewDrawer
 
         if (leadProjectionsAtFrame.Count == 0 || followProjectionsAtFrame.Count == 0) return drawingGroup;
 
-        SolidColorBrush brush = new SolidColorBrush(Colors.DarkRed);
-        Pen pen = new Pen(brush)
+        SolidColorBrush brush = new(Colors.DarkRed);
+        Pen pen = new(brush)
         {
             Thickness = 4
         };
@@ -61,8 +61,8 @@ public static class PreviewDrawer
             _ => throw new ArgumentOutOfRangeException(nameof(poseType), poseType, null)
         };
 
-        SolidColorBrush followBrush = new SolidColorBrush(Colors.DarkMagenta);
-        Pen followPen = new Pen(followBrush)
+        SolidColorBrush followBrush = new(Colors.DarkMagenta);
+        Pen followPen = new(followBrush)
         {
             Thickness = 4
         };
@@ -92,11 +92,11 @@ public static class PreviewDrawer
         int currentFollowIndex,
         PoseType poseType)
     {
-        DrawingGroup drawingGroup = new DrawingGroup();
+        DrawingGroup drawingGroup = new();
 
         // HACK: add small dots to the corners of the image to force the overlay to not resize
-        SolidColorBrush dotBrush = new SolidColorBrush(Colors.Gray);
-        Pen dotPen = new Pen(dotBrush)
+        SolidColorBrush dotBrush = new(Colors.Gray);
+        Pen dotPen = new(dotBrush)
         {
             Thickness = .1
         };
@@ -122,8 +122,8 @@ public static class PreviewDrawer
 
             foreach (Vector3 joint in pose)
             {
-                SolidColorBrush brush = new SolidColorBrush(ColorForConfidence(joint.Z, role));
-                Pen pen = new Pen(brush)
+                SolidColorBrush brush = new(ColorForConfidence(joint.Z, role));
+                Pen pen = new(brush)
                 {
                     Thickness = 4
                 };
@@ -230,17 +230,17 @@ public static class PreviewDrawer
         if (originCross.Count == 0) return drawingGroup;
 
         // draw red line to positive xuint
-        SolidColorBrush xBrush = new SolidColorBrush(Colors.Red);
-        Pen xPen = new Pen(xBrush)
+        SolidColorBrush xBrush = new(Colors.Red);
+        Pen xPen = new(xBrush)
         {
             Thickness = 10
         };
-        LineGeometry xLine = new LineGeometry
+        LineGeometry xLine = new()
         {
             StartPoint = new Point(originCross[0].X, originCross[0].Y),
             EndPoint = new Point(originCross[1].X, originCross[1].Y)
         };
-        GeometryDrawing xGeometry = new GeometryDrawing
+        GeometryDrawing xGeometry = new()
         {
             Pen = xPen,
             Geometry = xLine
@@ -248,17 +248,17 @@ public static class PreviewDrawer
         drawingGroup.Children.Add(xGeometry);
 
         // draw green line to positive y
-        SolidColorBrush yBrush = new SolidColorBrush(Colors.Green);
-        Pen yPen = new Pen(yBrush)
+        SolidColorBrush yBrush = new(Colors.Green);
+        Pen yPen = new(yBrush)
         {
             Thickness = 10
         };
-        LineGeometry yLine = new LineGeometry
+        LineGeometry yLine = new()
         {
             StartPoint = new Point(originCross[0].X, originCross[0].Y),
             EndPoint = new Point(originCross[2].X, originCross[2].Y)
         };
-        GeometryDrawing yGeometry = new GeometryDrawing
+        GeometryDrawing yGeometry = new()
         {
             Pen = yPen,
             Geometry = yLine
@@ -266,17 +266,17 @@ public static class PreviewDrawer
         drawingGroup.Children.Add(yGeometry);
 
         // draw blue line to positive z
-        SolidColorBrush zBrush = new SolidColorBrush(Colors.Blue);
-        Pen zPen = new Pen(zBrush)
+        SolidColorBrush zBrush = new(Colors.Blue);
+        Pen zPen = new(zBrush)
         {
             Thickness = 10
         };
-        LineGeometry zLine = new LineGeometry
+        LineGeometry zLine = new()
         {
             StartPoint = new Point(originCross[0].X, originCross[0].Y),
             EndPoint = new Point(originCross[3].X, originCross[3].Y)
         };
-        GeometryDrawing zGeometry = new GeometryDrawing
+        GeometryDrawing zGeometry = new()
         {
             Pen = zPen,
             Geometry = zLine
@@ -288,23 +288,23 @@ public static class PreviewDrawer
 
     static GeometryDrawing DrawLine(Vector3 start, Vector3 end, int role)
     {
-        LinearGradientBrush linearGradientBrush = new LinearGradientBrush
+        LinearGradientBrush linearGradientBrush = new()
         {
             StartPoint = new RelativePoint(new Point(start.X, start.Y), RelativeUnit.Absolute),
             EndPoint = new RelativePoint(new Point(end.X, end.Y), RelativeUnit.Absolute)
         };
         linearGradientBrush.GradientStops.Add(new GradientStop(ColorForConfidence(start.Z, role), 0));
         linearGradientBrush.GradientStops.Add(new GradientStop(ColorForConfidence(end.Z, role), 1));
-        Pen linePen = new Pen(linearGradientBrush)
+        Pen linePen = new(linearGradientBrush)
         {
             Thickness = 4
         };
-        GeometryDrawing poseGeometry = new GeometryDrawing
+        GeometryDrawing poseGeometry = new()
         {
             Pen = linePen
         };
 
-        LineGeometry lineGeometry = new LineGeometry
+        LineGeometry lineGeometry = new()
         {
             StartPoint = new Point(start.X, start.Y),
             EndPoint = new Point(end.X, end.Y)
@@ -316,12 +316,12 @@ public static class PreviewDrawer
 
     static GeometryDrawing DrawLine(Vector2 start, Vector2 end, Pen linePen)
     {
-        GeometryDrawing poseGeometry = new GeometryDrawing
+        GeometryDrawing poseGeometry = new()
         {
             Pen = linePen
         };
 
-        LineGeometry lineGeometry = new LineGeometry
+        LineGeometry lineGeometry = new()
         {
             StartPoint = new Point(start.X, start.Y),
             EndPoint = new Point(end.X, end.Y)
@@ -376,12 +376,12 @@ public static class PreviewDrawer
 
     static GeometryDrawing DrawPoint(Vector2 point, Pen pen)
     {
-        GeometryDrawing poseGeometry = new GeometryDrawing
+        GeometryDrawing poseGeometry = new()
         {
             Pen = pen
         };
 
-        EllipseGeometry ellipseGeometry = new EllipseGeometry
+        EllipseGeometry ellipseGeometry = new()
         {
             Center = new Point(point.X, point.Y),
             RadiusX = .2,

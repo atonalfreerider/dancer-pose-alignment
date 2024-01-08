@@ -9,13 +9,13 @@ public class Yolo
     readonly YoloV8 yolo;
     public Yolo(string modelPath)
     {
-        ModelSelector modelSelector = new ModelSelector(modelPath);
+        ModelSelector modelSelector = new(modelPath);
         yolo = new YoloV8(modelSelector);
     }
 
     public List<List<Vector3>> CalculatePosesFromImage(Stream imageStream)
     {
-        ImageSelector imageSelector = new ImageSelector(imageStream);
+        ImageSelector imageSelector = new(imageStream);
         IPoseResult result = yolo.Pose(imageSelector);
 
         return result.Boxes
