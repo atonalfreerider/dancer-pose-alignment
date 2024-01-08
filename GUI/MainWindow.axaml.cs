@@ -35,9 +35,6 @@ public partial class MainWindow : Window
 
     double timeFromStart = 0;
     double highestPositiveOffsetSeconds = 0;
-    
-    Dictionary<string, InputArray> previousImages = [];
-    Dictionary<string, InputArray> previousTrackingPoints = [];
 
     public MainWindow()
     {
@@ -55,14 +52,9 @@ public partial class MainWindow : Window
 
     void LoadVideosButton_Click(object sender, RoutedEventArgs e)
     {
-        string? videoDirectory = VideoInputPath.Text;
-        if (string.IsNullOrEmpty(videoDirectory)) return;
-        if (!videoDirectory.EndsWith('/') && !videoDirectory.EndsWith('\\'))
-        {
-            videoDirectory += '/';
-        }
+        string videoDirectory = VideoDirectory();
 
-        if (!Directory.Exists(videoDirectory)) return;
+        if (string.IsNullOrEmpty(videoDirectory) || !Directory.Exists(videoDirectory)) return;
 
         if (File.Exists(Path.Combine(videoDirectory, "camera-time-offsets.json")))
         {
@@ -142,6 +134,10 @@ public partial class MainWindow : Window
 
     void LoadVideos(Dictionary<string, double> videoFilePathsAndOffsets)
     {
+        string videoDirectory = VideoDirectory();
+        string poseDirectory = Path.Combine(videoDirectory, "pose/");
+        string affineDirectory = Path.Combine(videoDirectory, "affine/");
+        
         cameraPoseSolver = new CameraPoseSolver(PoseType.Coco);
 
         videoFiles.Clear();
@@ -180,19 +176,6 @@ public partial class MainWindow : Window
             videoCapture.Read(outputArray);
 
             Mat frameMat = outputArray.GetMat();
-            
-            // initial optical flow img and pts
-            InputArray toGray = InputArray.Create(frameMat);
-            OutputArray grayImg = new Mat();
-            Cv2.CvtColor(toGray, grayImg, ColorConversionCodes.BGR2GRAY);
-            InputArray toTrack = InputArray.Create(grayImg.GetMat());
-            Point2f[] points = Cv2.GoodFeaturesToTrack(toTrack, 100, 0.01, 10, null, 3, false, 0.04);
-            
-            Mat pointsMat = new Mat(points.Length, 1, MatType.CV_32FC2);
-            pointsMat.SetArray(points);
-
-            previousImages[videoFilePath] = toTrack;
-            previousTrackingPoints[videoFilePath] = pointsMat;
 
             // render image
             Bitmap frame;
@@ -235,16 +218,30 @@ public partial class MainWindow : Window
                 framesAt30Fps,
                 startingFrame);
 
+            string fileName = Path.GetFileNameWithoutExtension(videoFilePath);
+            string posePath = Path.Combine(poseDirectory, fileName + ".mp4.json");
             // if pre-cached json, load it
-            if (File.Exists(videoFilePath + ".json"))
+            if (File.Exists(posePath))
             {
                 List<List<List<Vector3>>> posesByFrame = JsonConvert.DeserializeObject<List<List<List<Vector3>>>>(
-                    File.ReadAllText(videoFilePath + ".json"));
+                    File.ReadAllText(posePath));
                 cameraPoseSolver.SetAllPoses(posesByFrame, videoFilePath);
             }
             else
             {
                 cameraPoseSolver.SetPoseFromImage(frameMat.ToMemoryStream(), videoFilePath);
+            }
+            
+            string affinePath = Path.Combine(affineDirectory, fileName + ".mp4.json");
+            // if pre-cached json, load it
+            if (File.Exists(affinePath))
+            {
+                List<Vector3> affineTransform = JsonConvert.DeserializeObject<List<Vector3>>(
+                    File.ReadAllText(affinePath));
+            }
+            else
+            {
+                // do nothing
             }
 
             DrawingImage drawingImage = new DrawingImage();
@@ -288,47 +285,6 @@ public partial class MainWindow : Window
             videoCapture.Read(outputArray);
 
             Mat frameMat = outputArray.GetMat();
-            
-            // optical flow for camera motion
-            InputArray toGray = InputArray.Create(frameMat);
-            OutputArray grayImg = new Mat();
-            Cv2.CvtColor(toGray, grayImg, ColorConversionCodes.BGR2GRAY);
-            InputArray toTrack = InputArray.Create(grayImg.GetMat());
-            Point2f[] points = Cv2.GoodFeaturesToTrack(
-                toTrack, 
-                100, 
-                0.01, 
-                10, 
-                null, 
-                3, 
-                false, 
-                0.04);
-            
-            Mat pointsMat = new Mat(points.Length, 1, MatType.CV_32FC2);
-            pointsMat.SetArray(points);
-            
-            InputOutputArray pointsToTrack = InputOutputArray.Create(pointsMat);
-            OutputArray status = new Mat();
-            OutputArray err = new Mat();
-            Cv2.CalcOpticalFlowPyrLK(
-                previousImages[videoFilePath], // previous img
-                toTrack, // current img
-                previousTrackingPoints[videoFilePath],
-                pointsToTrack,
-                status,
-                err);
-
-            Mat transform = Cv2.EstimateAffinePartial2D(previousTrackingPoints[videoFilePath], pointsToTrack.GetMat()); 
-            
-            // Extract translation
-            double dx = transform.At<double>(0,2);
-            double dy = transform.At<double>(1,2);
-     
-            // Extract rotation angle
-            double da = Math.Atan2(transform.At<double>(1,0), transform.At<double>(0,0));
-            
-            previousImages[videoFilePath] = toTrack;
-            previousTrackingPoints[videoFilePath] = pointsToTrack.GetMat();
 
             // render frame
             Bitmap frame;
@@ -510,5 +466,17 @@ public partial class MainWindow : Window
     void Save3D_Click(object sender, RoutedEventArgs e)
     {
         cameraPoseSolver.SaveData(VideoInputPath.Text);
+    }
+
+    string VideoDirectory()
+    {
+        string? videoDirectory = VideoInputPath.Text;
+        if (string.IsNullOrEmpty(videoDirectory)) return "";
+        if (!videoDirectory.EndsWith('/') && !videoDirectory.EndsWith('\\'))
+        {
+            videoDirectory += '/';
+        }
+
+        return videoDirectory;
     }
 }
