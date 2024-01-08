@@ -137,7 +137,7 @@ public partial class MainWindow : Window
         string videoDirectory = VideoDirectory();
         string poseDirectory = Path.Combine(videoDirectory, "pose/");
         string affineDirectory = Path.Combine(videoDirectory, "affine/");
-        
+
         cameraPoseSolver = new CameraPoseSolver(PoseType.Coco);
 
         videoFiles.Clear();
@@ -231,7 +231,7 @@ public partial class MainWindow : Window
             {
                 cameraPoseSolver.SetPoseFromImage(frameMat.ToMemoryStream(), videoFilePath);
             }
-            
+
             string affinePath = Path.Combine(affineDirectory, fileName + ".mp4.json");
             // if pre-cached json, load it
             if (File.Exists(affinePath))
@@ -259,13 +259,13 @@ public partial class MainWindow : Window
 
             camCount++;
         }
-             
+
         if (cameraPoseSolver.AreLeadAndFollowAssignedForFrame())
         {
             // make sure each matches to the closest, not just tallest
             cameraPoseSolver.UnassignEachIndexAndMatchToClosest();
         }
-        
+
         cameraPoseSolver.HomeAllCameras();
         //cameraPoseSolver.SetCamR();
         //cameraPoseSolver.HomeAllCameras();
@@ -306,7 +306,7 @@ public partial class MainWindow : Window
             {
                 cameraPoseSolver.SetPoseFromImage(frameMat.ToMemoryStream(), videoFilePath);
             }
-            
+
             if (cameraPoseSolver.AreLeadAndFollowAssignedForFrame())
             {
                 cameraPoseSolver.CalculateLeadFollow3DPoses();
@@ -330,10 +330,10 @@ public partial class MainWindow : Window
         {
             SetDancer(new Vector2((float)x, (float)y), selectedCamera);
         }
-        
+
         cameraPoseSolver.HomeAllCameras();
         //cameraPoseSolver.SetCamR();
-        
+
         RecalculateAndRedraw();
     }
 
@@ -343,7 +343,7 @@ public partial class MainWindow : Window
         {
             cameraPoseSolver.CalculateLeadFollow3DPoses();
         }
-        
+
         foreach (string videoFilesKey in videoFiles.Keys)
         {
             RedrawCamera(videoFilesKey);
@@ -423,12 +423,12 @@ public partial class MainWindow : Window
         if (!cameraPoseSolver.Advance()) return;
 
         timeFromStart += 1d / 30d;
-        
+
         if (cameraPoseSolver.AreLeadAndFollowAssignedForFrame())
         {
             cameraPoseSolver.TrackCameraRotation();
         }
-        
+
         SetPreviewsToFrame();
     }
 
@@ -451,7 +451,7 @@ public partial class MainWindow : Window
             {
                 break;
             }
-            
+
             cameraPoseSolver.TrackCameraRotation();
             cameraPoseSolver.CalculateLeadFollow3DPoses();
             count++;
@@ -460,12 +460,47 @@ public partial class MainWindow : Window
                 break;
             }
         }
+
         SetPreviewsToFrame();
     }
 
     void Save3D_Click(object sender, RoutedEventArgs e)
     {
         cameraPoseSolver.SaveData(VideoInputPath.Text);
+    }
+
+    void Train_Click(object sender, RoutedEventArgs e)
+    {
+        // save 640x640 images to train with txt file of same name with bounding box center xy and width height
+        string trainDir = Path.Combine(VideoInputPath.Text, "datasets");
+        string labelDir = Path.Combine(trainDir, "labels");
+        string imageDir = Path.Combine(trainDir, "images");
+        Directory.CreateDirectory(trainDir);
+        foreach ((string videoPath, Image frame) in frameImages)
+        {
+            Tuple<Vector4, Vector4> leadAndFollowBoundingBoxes = cameraPoseSolver
+                .GetLeadAndFollowBoundingBoxAtCameraAtFrame(videoPath);
+
+            // WIP
+            Bitmap bitmap = (Bitmap)frame.Source;
+            Bitmap rescaled = bitmap.CreateScaledBitmap(new PixelSize(640, 640));
+            rescaled.Save(Path.Combine(imageDir, Path.GetFileNameWithoutExtension(videoPath) + "-" + cameraPoseSolver.GetFrameNumber() + ".jpg"));
+
+            float leadW = leadAndFollowBoundingBoxes.Item1.Z / (float)bitmap.Size.Width;
+            float leadX = leadAndFollowBoundingBoxes.Item1.X / (float)bitmap.Size.Width + leadW / 2f;
+
+            float leadH = leadAndFollowBoundingBoxes.Item1.W / (float)bitmap.Size.Height;
+            float leadY = leadAndFollowBoundingBoxes.Item1.Y / (float)bitmap.Size.Height + leadH / 2f;
+
+            float followW = leadAndFollowBoundingBoxes.Item2.Z / (float)bitmap.Size.Width;
+            float followX = leadAndFollowBoundingBoxes.Item2.X / (float)bitmap.Size.Width + followW / 2f;
+
+            float followH = leadAndFollowBoundingBoxes.Item2.W / (float)bitmap.Size.Height;
+            float followY = leadAndFollowBoundingBoxes.Item2.Y / (float)bitmap.Size.Height + followH / 2f;
+
+            string toWrite = $"0 {leadX} {leadY} {leadW} {leadH}\n1 {followX} {followY} {followW} {followH}\n";
+            File.WriteAllText(Path.Combine(labelDir, Path.GetFileNameWithoutExtension(videoPath) + "-" + cameraPoseSolver.GetFrameNumber() + ".txt"), toWrite);
+        }
     }
 
     string VideoDirectory()

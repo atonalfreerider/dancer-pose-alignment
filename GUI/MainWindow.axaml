@@ -36,6 +36,7 @@
                         <Button Name="RunUntilNext" Content="Run Until Next Discontinuity" Height="30" Margin="5"
                                 Click="RunUntilEnd_Click" />
                         <Button Content="Save" Margin="5" Click="Save3D_Click" />
+                        <Button Content="Train" Margin="5" Click="Train_Click" />
                     </StackPanel>
                 </StackPanel>
                 <ScrollViewer HorizontalScrollBarVisibility="Auto" VerticalScrollBarVisibility="Auto">

@@ -20,8 +20,8 @@ public class Yolo
 
         return result.Boxes
             .Select(poseBoundingBox => poseBoundingBox.Keypoints
-            .Select(kp => new Vector3(kp.Point.X, kp.Point.Y, kp.Confidence))
-            .ToList()).ToList();
+                .Select(kp => new Vector3(kp.Point.X, kp.Point.Y, kp.Confidence))
+                .ToList()).ToList();
     }
     
     public List<Tuple<Vector4, List<Vector3>>> CalculateBoxesAndPosesFromImage(Stream imageStream) 

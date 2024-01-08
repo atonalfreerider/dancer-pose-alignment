@@ -41,6 +41,8 @@ public class CameraSetup(
     // all poses in reference to image (x, -y, confidence) and camera center (x, y, confidence)
     readonly List<List<Vector3>>[] allPosesAndConfidencesPerFrame = new List<List<Vector3>>[totalFrameCount];
     readonly List<List<Vector3>>[] recenteredRescaledAllPosesPerFrame = new List<List<Vector3>>[totalFrameCount];
+    
+    readonly List<Vector4>[] allBoundingBoxesPerFrame = new List<Vector4>[totalFrameCount];
 
     // indices referencing above pose lists
     readonly int[] leadIndicesPerFrame = new int[totalFrameCount];
@@ -53,9 +55,10 @@ public class CameraSetup(
     /// <summary>
     /// Called when poses are calculated for every frame
     /// </summary>
-    public void SetAllPosesAtFrame(List<List<Vector3>> allPoses, int frameNumber)
+    public void SetAllPosesAtFrame(List<List<Vector3>> allPoses, List<Vector4> boxes, int frameNumber)
     {
         allPosesAndConfidencesPerFrame[frameNumber] = allPoses;
+        allBoundingBoxesPerFrame[frameNumber] = boxes;
         recenteredRescaledAllPosesPerFrame[frameNumber] = allPoses.Select(pose => pose.Select(vec =>
                 new Vector3(
                     (vec.X - size.X / 2) * PixelToMeter,
@@ -895,6 +898,13 @@ public class CameraSetup(
     public Tuple<int, int> GetLeadAndFollowIndexForFrame(int frameNumber)
     {
         return new Tuple<int, int>(leadIndicesPerFrame[frameNumber], followIndicesPerFrame[frameNumber]);
+    }
+    
+    public Tuple<Vector4, Vector4> GetLeadAndFollowBoundingBoxForFrame(int frameNumber)
+    {
+        return new Tuple<Vector4, Vector4>(
+            allBoundingBoxesPerFrame[frameNumber][leadIndicesPerFrame[frameNumber]],
+            allBoundingBoxesPerFrame[frameNumber][followIndicesPerFrame[frameNumber]]);
     }
     
     /// <summary>

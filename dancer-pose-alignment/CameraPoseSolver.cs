@@ -51,8 +51,10 @@ public class CameraPoseSolver(PoseType poseType)
     /// </summary>
     public void SetPoseFromImage(MemoryStream imageStream, string camName)
     {
-        List<List<Vector3>> poses = yolo.CalculatePosesFromImage(imageStream);
-        cameras[camName].SetAllPosesAtFrame(poses, frameNumber);
+        List<Tuple< Vector4, List<Vector3>>> boxesAndPoses = yolo.CalculateBoxesAndPosesFromImage(imageStream);
+        List<List<Vector3>> poses = boxesAndPoses.Select(tuple => tuple.Item2).ToList();
+        List<Vector4> boxes = boxesAndPoses.Select(tuple => tuple.Item1).ToList();
+        cameras[camName].SetAllPosesAtFrame(poses, boxes, frameNumber);
 
         if (frameNumber == 0)
         {
@@ -484,6 +486,11 @@ public class CameraPoseSolver(PoseType poseType)
         return final;
     }
 
+    public Tuple<Vector4, Vector4> GetLeadAndFollowBoundingBoxAtCameraAtFrame(string cameraName)
+    {
+        return cameras[cameraName].GetLeadAndFollowBoundingBoxForFrame(frameNumber);
+    }
+
     #endregion
 
     public void SaveData(string folder)
@@ -495,5 +502,10 @@ public class CameraPoseSolver(PoseType poseType)
         File.WriteAllText(Path.Combine(folder, "figure2.json"), jsonMerged3DPoseFollow);
 
         Console.WriteLine($"wrote 3d poses to {folder}");
+    }
+    
+    public int GetFrameNumber()
+    {
+        return frameNumber;
     }
 }
