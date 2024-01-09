@@ -23,4 +23,26 @@ public class Yolo
             .Select(kp => new Vector3(kp.Point.X, kp.Point.Y, kp.Confidence))
             .ToList()).ToList();
     }
+    
+    public List<Tuple<Vector4, List<Vector3>>> CalculateBoxesAndPosesFromImage(Stream imageStream) 
+    { 
+        ImageSelector imageSelector = new(imageStream); 
+        IPoseResult result = yolo.Pose(imageSelector); 
+         
+        List<Tuple<Vector4, List<Vector3>>> poses = []; 
+        foreach (IPoseBoundingBox poseBoundingBox in result.Boxes) 
+        { 
+            List<Vector3> keypoints = poseBoundingBox.Keypoints 
+                .Select(kp => new Vector3(kp.Point.X, kp.Point.Y, kp.Confidence)) 
+                .ToList(); 
+            Vector4 box = new( 
+                poseBoundingBox.Bounds.X, 
+                poseBoundingBox.Bounds.Y, 
+                poseBoundingBox.Bounds.Width, 
+                poseBoundingBox.Bounds.Height); 
+            poses.Add(new Tuple<Vector4, List<Vector3>>(box, keypoints)); 
+        } 
+ 
+        return poses; 
+    } 
 }

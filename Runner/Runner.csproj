@@ -7,10 +7,21 @@
         <Nullable>enable</Nullable>
     </PropertyGroup>
 
+    <PropertyGroup Condition=" '$(Configuration)' == 'Debug' ">
+      <AllowUnsafeBlocks>true</AllowUnsafeBlocks>
+    </PropertyGroup>
+
+    <PropertyGroup Condition=" '$(Configuration)' == 'Release' ">
+      <AllowUnsafeBlocks>true</AllowUnsafeBlocks>
+    </PropertyGroup>
+
     <ItemGroup>
       <PackageReference Include="Newtonsoft.Json" Version="13.0.3" />
-      <PackageReference Include="OpenCvSharp4.Windows" Version="4.8.0.20230708" />
-      <PackageReference Include="YoloV8.Gpu" Version="3.0.0" />
+      <PackageReference Include="OpenCvSharp4.Windows" Version="4.9.0.20240103" />
+    </ItemGroup>
+
+    <ItemGroup>
+      <ProjectReference Include="..\dancer-pose-alignment\dancer-pose-alignment.csproj" />
     </ItemGroup>
 
 </Project>
