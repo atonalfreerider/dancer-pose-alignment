@@ -1,0 +1,483 @@
+﻿using LinearAssignment;
+using OpenCvSharp;
+
+namespace dancer_pose_alignment;
+
+public class Sort(int maxAge = 1, int minHits = 3, double iouThreshold = 0.3)
+{
+    readonly List<KalmanBoxTracker> trackers = [];
+    int frameCount = 0;
+    
+    static double[][] IouBatch(double[][] bbTest, double[][] bbGt)
+    {
+        int n = bbTest.Length;
+        int m = bbGt.Length;
+        double[][] iouMatrix = new double[n][];
+        for (int i = 0; i < n; i++)
+        {
+            iouMatrix[i] = new double[m];
+        }
+
+        for (int i = 0; i < n; i++)
+        {
+            for (int j = 0; j < m; j++)
+            {
+                double[] bbTestBox = bbTest[i];
+                double[] bbGtBox = bbGt[j];
+
+                double xx1 = Math.Max(bbTestBox[0], bbGtBox[0]);
+                double yy1 = Math.Max(bbTestBox[1], bbGtBox[1]);
+                double xx2 = Math.Min(bbTestBox[2], bbGtBox[2]);
+                double yy2 = Math.Min(bbTestBox[3], bbGtBox[3]);
+
+                double w = Math.Max(0.0, xx2 - xx1);
+                double h = Math.Max(0.0, yy2 - yy1);
+                double wh = w * h;
+
+                double o = wh / ((bbTestBox[2] - bbTestBox[0]) * (bbTestBox[3] - bbTestBox[1]) +
+                    (bbGtBox[2] - bbGtBox[0]) * (bbGtBox[3] - bbGtBox[1]) - wh);
+
+                iouMatrix[i][j] = o;
+            }
+        }
+
+        return iouMatrix;
+    }
+
+    public class KalmanBoxTracker
+    {
+        static int count = 0;
+        readonly KalmanFilter kf;
+        public int TimeSinceUpdate;
+        public readonly int Id;
+        readonly List<double[]> history;
+        public int Hits;
+        public int HitStreak;
+        public int Age;
+        List<Tuple<double, double>> centroidArr;
+        int detClass;
+        List<double[]> bboxHistory;
+
+        public KalmanBoxTracker(double[] bbox)
+        {
+            kf = new KalmanFilter(7, 4);
+            kf.TransitionMatrix = ToMat(new double[,] // F
+            {
+                { 1, 0, 0, 0, 1, 0, 0 },
+                { 0, 1, 0, 0, 0, 1, 0 },
+                { 0, 0, 1, 0, 0, 0, 1 },
+                { 0, 0, 0, 1, 0, 0, 0 },
+                { 0, 0, 0, 0, 1, 0, 0 },
+                { 0, 0, 0, 0, 0, 1, 0 },
+                { 0, 0, 0, 0, 0, 0, 1 }
+            });
+            kf.MeasurementMatrix = ToMat(new double[,] // H
+            {
+                { 1, 0, 0, 0, 0, 0, 0 },
+                { 0, 1, 0, 0, 0, 0, 0 },
+                { 0, 0, 1, 0, 0, 0, 0 },
+                { 0, 0, 0, 1, 0, 0, 0 }
+            });
+
+            kf.MeasurementNoiseCov[2, kf.MeasurementNoiseCov.Rows - 2, 2, kf.MeasurementNoiseCov.Cols - 2] *= 10.0; // R
+
+            kf.ErrorCovPre[4, kf.ErrorCovPre.Rows - 4, 4, kf.ErrorCovPre.Cols - 4] *= 1000.0; // P
+            kf.ErrorCovPre *= 10.0; // P
+            kf.ProcessNoiseCov *= 0.5; // Q
+            kf.ProcessNoiseCov[4, kf.ProcessNoiseCov.Rows - 4, 4, kf.ProcessNoiseCov.Cols - 4] *= 0.5; // Q
+
+            double[] conv = ConvertBboxToZ(bbox); // X
+            kf.StatePre.Set(0, conv[0]);
+            kf.StatePre.Set(1, conv[1]);
+            kf.StatePre.Set(2, conv[2]);
+            kf.StatePre.Set(3, conv[3]);
+            
+            TimeSinceUpdate = 0;
+            Id = count;
+            count++;
+            history = new List<double[]>();
+            Hits = 0;
+            HitStreak = 0;
+            Age = 0;
+            centroidArr = new List<Tuple<double, double>>();
+            double cx = (bbox[0] + bbox[2]) / 2.0;
+            double cy = (bbox[1] + bbox[3]) / 2.0;
+            centroidArr.Add(new Tuple<double, double>(cx, cy));
+            detClass = (int)bbox[5];
+            bboxHistory = new List<double[]>
+            {
+                bbox
+            };
+        }
+
+        public void Update(double[] bbox)
+        {
+            TimeSinceUpdate = 0;
+            history.Clear();
+            Hits++;
+            HitStreak++;
+            double[] z =
+            [
+                bbox[0] + (bbox[2] - bbox[0]) / 2.0, bbox[1] + (bbox[3] - bbox[1]) / 2.0,
+                (bbox[2] - bbox[0]) * (bbox[3] - bbox[1]), (bbox[2] - bbox[0]) / (bbox[3] - bbox[1])
+            ];
+            kf.Predict(ToMat(z));
+            detClass = (int)bbox[5];
+            double cx = (bbox[0] + bbox[2]) / 2.0;
+            double cy = (bbox[1] + bbox[3]) / 2.0;
+            centroidArr.Add(new Tuple<double, double>(cx, cy));
+            bboxHistory.Add(bbox);
+        }
+
+        public double[] Predict()
+        {
+            if (kf.StatePre.Get<double>(6) + kf.StatePre.Get<double>(2) <= 0)
+            {
+                kf.StatePre.Set(6, 0.0);
+            }
+
+            kf.Predict();
+            Age++;
+
+            if (TimeSinceUpdate > 0)
+            {
+                HitStreak = 0;
+            }
+
+            TimeSinceUpdate++;
+
+            history.Add(ConvertXToBbox(ToVec(kf.StatePre)));
+            return history[^1];
+        }
+
+        public double[] GetState()
+        {
+            double[] detClassArray = [detClass];
+            double[] uDotArray = [kf.StatePre.Get<double>(4)];
+            double[] vDotArray = [kf.StatePre.Get<double>(5)];
+            double[] sDotArray = [kf.StatePre.Get<double>(6)];
+
+            return new[]
+                {
+                    kf.StatePre.Get<double>(0),
+                    kf.StatePre.Get<double>(1),
+                    kf.StatePre.Get<double>(2), 
+                    kf.StatePre.Get<double>(3)
+                }
+                .Concatenate(detClassArray).Concatenate(uDotArray)
+                .Concatenate(vDotArray).Concatenate(sDotArray);
+        }
+        
+        static double[] ConvertBboxToZ(double[] bbox)
+        {
+            double w = bbox[2] - bbox[0];
+            double h = bbox[3] - bbox[1];
+            double x = bbox[0] + w / 2.0;
+            double y = bbox[1] + h / 2.0;
+            double s = w * h;
+            double r = w / h;
+
+            return [x, y, s, r];
+        }
+
+        static double[] ConvertXToBbox(double[] x, double? score = null)
+        {
+            double w = Math.Sqrt(x[2] * x[3]);
+            double h = x[2] / w;
+            double x1 = x[0] - w / 2.0;
+            double y1 = x[1] - h / 2.0;
+            double x2 = x[0] + w / 2.0;
+            double y2 = x[1] + h / 2.0;
+
+            if (score == null)
+            {
+                return [x1, y1, x2, y2];
+            }
+            else
+            {
+                return [x1, y1, x2, y2, score.Value];
+            }
+        }
+    }
+
+    public List<KalmanBoxTracker> GetTrackers()
+    {
+        return trackers;
+    }
+
+    public double[][] Update(double[][] dets)
+    {
+        frameCount++;
+        int n = trackers.Count;
+        int m = dets.Length;
+        double[][] trks = new double[n][];
+        List<int> toDel = [];
+        List<double[]> ret = [];
+
+        for (int i = 0; i < n; i++)
+        {
+            double[] pos = trackers[i].Predict();
+            trks[i] = [pos[0], pos[1], pos[2], pos[3], 0.0, 0.0];
+            if (double.IsNaN(pos[0]) || double.IsNaN(pos[1]))
+            {
+                toDel.Add(i);
+            }
+        }
+
+        foreach (int t in toDel)
+        {
+            trackers.RemoveAt(t);
+        }
+
+        int[] matched;
+        int[] unmatchedDets;
+        int[] unmatchedTrks;
+
+        AssociateDetectionsToTrackers(
+            dets,
+            trks,
+            iouThreshold,
+            out matched,
+            out unmatchedDets,
+            out unmatchedTrks);
+
+        for (int i = 0; i < matched.Length; i++)
+        {
+            trackers[matched[i]].Update(dets[i]);
+        }
+
+        foreach (int i in unmatchedDets)
+        {
+            KalmanBoxTracker trk = new KalmanBoxTracker(dets[i]);
+            trackers.Add(trk);
+        }
+
+        int ii = trackers.Count;
+
+        for (int i = ii - 1; i >= 0; i--)
+        {
+            double[] d = trackers[i].GetState();
+            if (trackers[i].TimeSinceUpdate < 1 && (trackers[i].HitStreak >= minHits || frameCount <= minHits))
+            {
+                d[4] = trackers[i].Id + 1;
+                ret.Add(d);
+            }
+
+            ii--;
+
+            if (trackers[i].TimeSinceUpdate > maxAge)
+            {
+                trackers.RemoveAt(i);
+            }
+        }
+
+        if (ret.Count > 0)
+        {
+            return ret.ToArray();
+        }
+
+        return Array.Empty<double[]>();
+    }
+
+    static void AssociateDetectionsToTrackers(
+        double[][] detections,
+        double[][] trackers,
+        double iouThreshold,
+        out int[] matches,
+        out int[] unmatchedDetections,
+        out int[] unmatchedTrackers)
+    {
+        if (trackers.Length == 0)
+        {
+            matches = Array.Empty<int>();
+            unmatchedDetections = Enumerable.Range(0, detections.Length).ToArray();
+            unmatchedTrackers = Array.Empty<int>();
+            return;
+        }
+
+        double[][] iouMatrix = IouBatch(detections, trackers);
+
+        if (Math.Min(iouMatrix.GetLength(0), iouMatrix.GetLength(1)) > 0)
+        {
+            int[,] a = new int[iouMatrix.GetLength(0), iouMatrix.GetLength(1)];
+
+            for (int i = 0; i < iouMatrix.GetLength(0); i++)
+            {
+                for (int j = 0; j < iouMatrix.GetLength(1); j++)
+                {
+                    a[i, j] = iouMatrix[i][j] > iouThreshold ? 1 : 0;
+                }
+            }
+
+            int[] rowSums = new int[iouMatrix.GetLength(0)];
+            int[] colSums = new int[iouMatrix.GetLength(1)];
+
+            for (int i = 0; i < iouMatrix.GetLength(0); i++)
+            {
+                for (int j = 0; j < iouMatrix.GetLength(1); j++)
+                {
+                    rowSums[i] += a[i, j];
+                    colSums[j] += a[i, j];
+                }
+            }
+
+            bool validAssignment = rowSums.Max() == 1 && colSums.Max() == 1;
+
+            int[,] matchedIndices;
+
+            if (validAssignment)
+            {
+                matchedIndices = new int[iouMatrix.GetLength(0), iouMatrix.GetLength(1)];
+
+                for (int i = 0; i < iouMatrix.GetLength(0); i++)
+                {
+                    for (int j = 0; j < iouMatrix.GetLength(1); j++)
+                    {
+                        if (a[i, j] == 1)
+                        {
+                            matchedIndices[i, 0] = i;
+                            matchedIndices[i, 1] = j;
+                        }
+                    }
+                }
+            }
+            else
+            {
+                // invert iouMatrix
+                for (int i = 0; i < iouMatrix.GetLength(0); i++)
+                {
+                    for (int j = 0; j < iouMatrix.GetLength(1); j++)
+                    {
+                        iouMatrix[i][j] = -iouMatrix[i][j];
+                    }
+                }
+
+                Assignment assignment = Solver.Solve(ToMat(iouMatrix));
+                matchedIndices = new int[assignment.RowAssignment.Length, assignment.ColumnAssignment.Length];
+                for (int i = 0; i < assignment.ColumnAssignment.Length; i++)
+                {
+                    for(int j = 0; j < assignment.RowAssignment.Length; j++)
+                    {
+                        matchedIndices[i, j] = assignment.ColumnAssignment[i];
+                    }
+                }
+            }
+
+            List<int> unmatchedDetectionsList = [];
+            List<int> unmatchedTrackersList = [];
+            List<int> matchesList = [];
+
+            for (int i = 0; i < detections.Length; i++)
+            {
+                unmatchedDetectionsList.Add(i);
+            }
+
+            for (int i = 0; i < trackers.Length; i++)
+            {
+                unmatchedTrackersList.Add(i);
+            }
+
+            for (int i = 0; i < matchedIndices.GetLength(0); i++)
+            {
+                int detectionIndex = matchedIndices[i, 0];
+                int trackerIndex = matchedIndices[i, 1];
+
+                if (iouMatrix[detectionIndex][trackerIndex] < iouThreshold)
+                {
+                    unmatchedDetectionsList.Add(detectionIndex);
+                    unmatchedTrackersList.Add(trackerIndex);
+                }
+                else
+                {
+                    matchesList.Add(detectionIndex);
+                }
+            }
+
+            matches = matchesList.ToArray();
+            unmatchedDetections = unmatchedDetectionsList.ToArray();
+            unmatchedTrackers = unmatchedTrackersList.ToArray();
+        }
+        else
+        {
+            matches = Array.Empty<int>();
+            unmatchedDetections = Enumerable.Range(0, detections.Length).ToArray();
+            unmatchedTrackers = Enumerable.Range(0, trackers.Length).ToArray();
+        }
+    }
+
+    static Mat ToMat(double[,] array)
+    {
+        int rows = array.GetLength(0);
+        int cols = array.GetLength(1);
+        Mat mat = new(rows, cols, MatType.CV_64FC1);
+        for (int i = 0; i < rows; i++)
+        {
+            for (int j = 0; j < cols; j++)
+            {
+                mat.Set(i, j, array[i, j]);
+            }
+        }
+
+        return mat;
+    }
+
+    static Mat ToMat(double[] vector)
+    {
+        int rows = vector.Length;
+        Mat mat = new(rows, 1, MatType.CV_64FC1);
+        for (int i = 0; i < rows; i++)
+        {
+            mat.Set(i, 0, vector[i]);
+        }
+
+        return mat;
+    }
+    
+    static double[] ToVec(Mat mat){
+        int rows = mat.Rows;
+        double[] vector = new double[rows];
+        for (int i = 0; i < rows; i++)
+        {
+            vector[i] = mat.At<double>(i, 0);
+        }
+
+        return vector;
+    }
+    
+    static double[,] ToMat(double[][] array)
+    {
+        int rows = array.Length;
+        int cols = array[0].Length;
+        double[,] mat = new double[rows, cols];
+        for (int i = 0; i < rows; i++)
+        {
+            for (int j = 0; j < cols; j++)
+            {
+                mat[i, j] = array[i][j];
+            }
+        }
+
+        return mat;
+    }
+}
+
+public static class Extensions
+{
+    public static T[] Concatenate<T>(this T[] first, T[] second)
+    {
+        if (first == null)
+        {
+            throw new ArgumentNullException(nameof(first));
+        }
+
+        if (second == null)
+        {
+            throw new ArgumentNullException(nameof(second));
+        }
+
+        T[] result = new T[first.Length + second.Length];
+        first.CopyTo(result, 0);
+        second.CopyTo(result, first.Length);
+        return result;
+    }
+}

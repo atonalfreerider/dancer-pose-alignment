@@ -11,6 +11,10 @@ static class Program
         Yolo yolo = new("yolov8x-pose.onnx"); // this is in the assembly dir 
         Directory.CreateDirectory(rootFolder + "/pose");
         Directory.CreateDirectory(rootFolder + "/affine");
+        
+        int sort_max_age = 5 ;
+        int sort_min_hits = 2;
+        double sort_iou_thresh = 0.2;
 
         foreach (string videoPath in Directory.EnumerateFiles(rootFolder, "*.mp4"))
         {
@@ -30,8 +34,18 @@ static class Program
                     frameSource.NextFrame(outputArray);
 
                     Mat frameMat = outputArray.GetMat();
-                    List<List<Vector3>> posesAtFrame = yolo.CalculatePosesFromImage(frameMat.ToMemoryStream()).ToList();
-                    posesByFrame.Add(posesAtFrame);
+                    List<Tuple<Vector4, List<Vector3>>> posesAtFrame = yolo
+                        .CalculateBoxesAndPosesFromImage(frameMat.ToMemoryStream()).ToList();
+
+                    double[][] dets_to_sort = posesAtFrame.Select(pose =>
+                    {
+                        Vector4 box = pose.Item1;
+                        return new double[] { box.X, box.Y, box.X + box.Z, box.Y + box.W };
+                    }).ToArray();
+
+                    Sort sort = new(sort_max_age, sort_min_hits, sort_iou_thresh);
+                    double[][] tracked_dets = sort.Update(dets_to_sort);
+                    List<Sort.KalmanBoxTracker> tracks = sort.GetTrackers();
 
                     if (frameCount == 1)
                     {
