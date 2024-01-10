@@ -52,11 +52,17 @@ public class CameraPoseSolver(PoseType poseType)
     public void SetPoseFromImage(MemoryStream imageStream, string camName)
     {
         List<List<Vector3>> poses = yolo.CalculatePosesFromImage(imageStream);
-        cameras[camName].SetAllPosesAtFrame(poses, frameNumber);
+        Dictionary<int, List<Vector3>> posesByDancer = [];
+        foreach (List<Vector3> pose in poses)
+        {
+            posesByDancer.Add(poses.IndexOf(pose), pose);
+        }
+        
+        cameras[camName].SetAllPosesAtFrame(posesByDancer, frameNumber);
 
         if (frameNumber == 0)
         {
-            cameras[camName].FrameZeroLeadFollowFinderAndCamHeight(poses);
+            cameras[camName].FrameZeroLeadFollowFinderAndCamHeight(posesByDancer);
             TryHomeCamera(camName);
         }
         else
@@ -399,7 +405,7 @@ public class CameraPoseSolver(PoseType poseType)
 
     #region DRAWING
 
-    public List<List<Vector3>> GetPosesAtFrameAtCamera(string camName)
+    public Dictionary<int, List<Vector3>> GetPosesAtFrameAtCamera(string camName)
     {
         return cameras[camName].GetPosesPerDancerAtFrame(frameNumber);
     }

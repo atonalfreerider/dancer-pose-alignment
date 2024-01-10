@@ -39,8 +39,8 @@ public class CameraSetup(
         rotationsPerFrame[frame]);
 
     // all poses in reference to image (x, -y, confidence) and camera center (x, y, confidence)
-    readonly List<List<Vector3>>[] allPosesAndConfidencesPerFrame = new List<List<Vector3>>[totalFrameCount];
-    readonly List<List<Vector3>>[] recenteredRescaledAllPosesPerFrame = new List<List<Vector3>>[totalFrameCount];
+    readonly Dictionary<int, List<Vector3>>[] allPosesAndConfidencesPerFrame = new Dictionary<int, List<Vector3>>[totalFrameCount];
+    readonly Dictionary<int, List<Vector3>>[] recenteredRescaledAllPosesPerFrame = new Dictionary<int, List<Vector3>>[totalFrameCount];
 
     // indices referencing above pose lists
     readonly int[] leadIndicesPerFrame = new int[totalFrameCount];
@@ -53,15 +53,15 @@ public class CameraSetup(
     /// <summary>
     /// Called when poses are calculated for every frame
     /// </summary>
-    public void SetAllPosesAtFrame(List<List<Vector3>> allPoses, int frameNumber)
+    public void SetAllPosesAtFrame(Dictionary<int, List<Vector3>> posesAtFrame, int frameNumber)
     {
-        allPosesAndConfidencesPerFrame[frameNumber] = allPoses;
-        recenteredRescaledAllPosesPerFrame[frameNumber] = allPoses.Select(pose => pose.Select(vec =>
+        allPosesAndConfidencesPerFrame[frameNumber] = posesAtFrame;
+        recenteredRescaledAllPosesPerFrame[frameNumber] = posesAtFrame
+            .ToDictionary(x => x.Key, x => x.Value.Select(vec =>
                 new Vector3(
                     (vec.X - size.X / 2) * PixelToMeter,
                     -(vec.Y - size.Y / 2) * PixelToMeter, // flip
-                    vec.Z)) // keep the confidence
-            .ToList()).ToList();
+                    vec.Z)).ToList()); // keep the confidence;
     }
 
     /// <summary>
@@ -72,29 +72,32 @@ public class CameraSetup(
         for (int i = 0; i < totalFrameCount; i++)
         {
             int sampleFrame = (int)Math.Round(startingFrame + i * ((posesByFrame.Count - startingFrame) / (float)totalFrameCount));
-            allPosesAndConfidencesPerFrame[i] = posesByFrame[sampleFrame];
-            recenteredRescaledAllPosesPerFrame[i] = posesByFrame[sampleFrame].Select(pose => pose.Select(vec =>
+            Dictionary<int, List<Vector3>> nonEmptyPosesAtFrame = posesByFrame[sampleFrame]
+                .Where(x => x.Count != 0)
+                .ToDictionary(x => posesByFrame[sampleFrame].IndexOf(x), x => x);
+            allPosesAndConfidencesPerFrame[i] = nonEmptyPosesAtFrame;
+            recenteredRescaledAllPosesPerFrame[i] = nonEmptyPosesAtFrame
+                .ToDictionary(x => x.Key, x => x.Value.Select(vec =>
                     new Vector3(
                         (vec.X - size.X / 2) * PixelToMeter,
                         -(vec.Y - size.Y / 2) * PixelToMeter, // flip
-                        vec.Z)) // keep the confidence
-                .ToList()).ToList();
+                        vec.Z)).ToList()); // keep the confidence;
 
             if (i == 0)
             {
-                FrameZeroLeadFollowFinderAndCamHeight(posesByFrame[sampleFrame]);
+                FrameZeroLeadFollowFinderAndCamHeight(nonEmptyPosesAtFrame);
             }
         }
     }
 
-    public void FrameZeroLeadFollowFinderAndCamHeight(List<List<Vector3>> allPoses)
+    public void FrameZeroLeadFollowFinderAndCamHeight(Dictionary<int, List<Vector3>> allPoses)
     {
         // find lead and follow
         int tallestIndex = -1;
         float tallestHeight = float.MinValue;
         int secondTallestIndex = -1;
         float secondTallestHeight = float.MinValue;
-        foreach (List<Vector3> pose in allPoses)
+        foreach ((int key, List<Vector3> pose) in allPoses)
         {
             float height = ExtremeHeight(pose);
             if (height > tallestHeight)
@@ -102,12 +105,12 @@ public class CameraSetup(
                 secondTallestHeight = tallestHeight;
                 secondTallestIndex = tallestIndex;
                 tallestHeight = height;
-                tallestIndex = allPoses.IndexOf(pose);
+                tallestIndex = key;
             }
             else if (height > secondTallestHeight)
             {
                 secondTallestHeight = height;
-                secondTallestIndex = allPoses.IndexOf(pose);
+                secondTallestIndex = key;
             }
         }
 
@@ -123,15 +126,13 @@ public class CameraSetup(
         float leadRShoulderY =
             allPoses[tallestIndex][JointExtension.RShoulderIndex(poseType)].Y;
         float leadRHipY = allPoses[tallestIndex][JointExtension.RHipIndex(poseType)].Y;
-
-        int count = 0;
+        
         int standCount = 0;
         int sitCount = 0;
-        foreach (List<Vector3> pose in allPoses)
+        foreach ((int key, List<Vector3> pose) in allPoses)
         {
-            if (count == tallestIndex || count == secondTallestIndex)
+            if (key == tallestIndex || key == secondTallestIndex)
             {
-                count++;
                 continue;
             }
 
@@ -167,8 +168,6 @@ public class CameraSetup(
                     sitCount++;
                 }
             }
-
-            count++;
         }
 
         height = standCount > sitCount ? 1.4f : .8f;
@@ -192,8 +191,7 @@ public class CameraSetup(
         float secondLowestFollowError = float.MaxValue;
         int secondFollowIndex = -1;
 
-        int count = 0;
-        foreach (List<Vector3> pose in allPosesAndConfidencesPerFrame[frameNumber])
+        foreach ((int key, List<Vector3> pose) in allPosesAndConfidencesPerFrame[frameNumber])
         {
             float leadPoseError = PoseError(pose, lead3D, frameNumber);
 
@@ -201,7 +199,7 @@ public class CameraSetup(
 
             if (leadPoseError < lowestLeadError)
             {
-                leadIndex = count;
+                leadIndex = key;
                 lowestLeadError = leadPoseError;
             }
 
@@ -209,16 +207,14 @@ public class CameraSetup(
             {
                 secondFollowIndex = followIndex;
                 secondLowestFollowError = lowestFollowError;
-                followIndex = count;
+                followIndex = key;
                 lowestFollowError = followPoseError;
             }
             else if (followPoseError < secondLowestFollowError)
             {
-                secondFollowIndex = count;
+                secondFollowIndex = key;
                 secondLowestFollowError = followPoseError;
             }
-
-            count++;
         }
 
         if (leadIndex == followIndex)
@@ -250,13 +246,11 @@ public class CameraSetup(
         // take each right ankle, find the alpha angle from the 3D lead forward, and calculate the radius based on the
         // height of the pose
         CameraWall.Clear();
-
-        int counter = 0;
-        foreach (List<Vector3> pose in allPosesAndConfidencesPerFrame[frameNumber])
+        
+        foreach ((int key, List<Vector3> pose) in allPosesAndConfidencesPerFrame[frameNumber])
         {
-            if (leadIndicesPerFrame[frameNumber] == counter || followIndicesPerFrame[frameNumber] == counter)
+            if (leadIndicesPerFrame[frameNumber] == key || followIndicesPerFrame[frameNumber] == key)
             {
-                counter++;
                 continue;
             }
 
@@ -267,7 +261,6 @@ public class CameraSetup(
             Vector3? imgPtRayFloorIntersection = ImgPtRayFloorIntersection(poseRightAnkle);
             if (imgPtRayFloorIntersection == null)
             {
-                counter++;
                 continue;
             }
 
@@ -280,7 +273,6 @@ public class CameraSetup(
             float poseRadius = Math.Abs(TorsoHeight / MathF.Tan(poseAlphaFromGround)) / 2; // arbitrary divide by 2
 
             CameraWall.Add(new Tuple<float, float>(alpha, poseRadius));
-            counter++;
         }
     }
 
@@ -315,13 +307,11 @@ public class CameraSetup(
         int closestIndex = -1;
         int jointSelected = -1;
         float closestDistance = float.MaxValue;
-
-        int counter = 0;
-        foreach (List<Vector3> pose in allPosesAndConfidencesPerFrame[frameNumber])
+        
+        foreach ((int key, List<Vector3> pose) in allPosesAndConfidencesPerFrame[frameNumber])
         {
-            if (indicesToSkip.Contains(counter))
+            if (indicesToSkip.Contains(key))
             {
-                counter++;
                 continue;
             }
 
@@ -329,13 +319,11 @@ public class CameraSetup(
             {
                 if (Vector2.Distance(click, new Vector2(joint.X, joint.Y)) < closestDistance)
                 {
-                    closestIndex = counter;
+                    closestIndex = key;
                     jointSelected = pose.IndexOf(joint);
                     closestDistance = Vector2.Distance(click, new Vector2(joint.X, joint.Y));
                 }
             }
-
-            counter++;
         }
 
         return new Tuple<int, int>(closestIndex, jointSelected);
@@ -697,31 +685,25 @@ public class CameraSetup(
         if (recenteredRescaledAllPosesPerFrame[frameNumber] == null) return;
         
         List<List<Vector3>> backgroundRecenteredFromLast = [];
-        int count = 0;
-        foreach (List<Vector3> vector3s in recenteredRescaledAllPosesPerFrame[frameNumber -1])
+        foreach ((int key, List<Vector3> vector3s) in recenteredRescaledAllPosesPerFrame[frameNumber -1])
         {
-            if (count == leadIndicesPerFrame[frameNumber - 1] || count == followIndicesPerFrame[frameNumber - 1])
+            if (key == leadIndicesPerFrame[frameNumber - 1] || key == followIndicesPerFrame[frameNumber - 1])
             {
-                count++;
                 continue;
             }
             
             backgroundRecenteredFromLast.Add(vector3s);
-            count++;
         }
         
         List<List<Vector3>> backgroundRecenteredFromThis = [];
-        count = 0;
-        foreach (List<Vector3> vector3s in recenteredRescaledAllPosesPerFrame[frameNumber])
+        foreach ((int key, List<Vector3> vector3s) in recenteredRescaledAllPosesPerFrame[frameNumber])
         {
-            if (count == leadIndicesPerFrame[frameNumber] || count == followIndicesPerFrame[frameNumber])
+            if (key == leadIndicesPerFrame[frameNumber] || key == followIndicesPerFrame[frameNumber])
             {
-                count++;
                 continue;
             }
             
             backgroundRecenteredFromThis.Add(vector3s);
-            count++;
         }
         
         Vector2 meanMotionVector = Vector2.Zero;
@@ -900,7 +882,7 @@ public class CameraSetup(
     /// <summary>
     /// used for drawing
     /// </summary>
-    public List<List<Vector3>> GetPosesPerDancerAtFrame(int frameNumber)
+    public Dictionary<int, List<Vector3>> GetPosesPerDancerAtFrame(int frameNumber)
     {
         return allPosesAndConfidencesPerFrame[frameNumber];
     }

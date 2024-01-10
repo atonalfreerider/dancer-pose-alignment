@@ -13,9 +13,9 @@ static class Program
         Directory.CreateDirectory(rootFolder + "/pose");
         Directory.CreateDirectory(rootFolder + "/affine");
 
-        int sort_max_age = 5;
-        int sort_min_hits = 2;
-        double sort_iou_thresh = 0.2;
+        const int sort_max_age = 5;
+        const int sort_min_hits = 2;
+        const double sort_iou_thresh = 0.2;
 
         foreach (string videoPath in Directory.EnumerateFiles(rootFolder, "*.mp4"))
         {
@@ -27,19 +27,21 @@ static class Program
             Affine affine = new();
             int frameCount = 0;
             int totalDetections = -1;
+            
+            Sort sort = new(sort_max_age, sort_min_hits, sort_iou_thresh);
             while (true)
             {
                 try
                 {
                     OutputArray outputArray = new Mat();
                     Console.WriteLine(frameCount++);
+
                     frameSource.NextFrame(outputArray);
 
                     Mat frameMat = outputArray.GetMat();
                     List<IPoseBoundingBox> posesAndBoxesAtFrame = yolo
                         .CalculateBoxesAndPosesFromImage(frameMat.ToMemoryStream()).ToList();
 
-                    Sort sort = new(sort_max_age, sort_min_hits, sort_iou_thresh);
                     double[][] tracked_dets = sort.Update(posesAndBoxesAtFrame);
                     List<Sort.KalmanBoxTracker> tracks = sort.GetTrackers();
 

@@ -8,7 +8,7 @@ namespace GUI;
 public static class PreviewDrawer
 {
     public static DrawingGroup DrawGeometry(
-        List<List<Vector3>> poses,
+        Dictionary<int, List<Vector3>> poses,
         Size imgSize,
         int currentLeadIndex,
         int currentFollowIndex,
@@ -86,7 +86,7 @@ public static class PreviewDrawer
     }
 
     static DrawingGroup DrawPoses(
-        List<List<Vector3>> poses,
+        Dictionary<int, List<Vector3>> poses,
         Size imgSize,
         int currentLeadIndex,
         int currentFollowIndex,
@@ -108,7 +108,7 @@ public static class PreviewDrawer
         drawingGroup.Children.Add(lineGeometryDrawingBottomCorner);
 
         int poseCount = 0;
-        foreach (List<Vector3> pose in poses)
+        foreach (List<Vector3> pose in poses.Values)
         {
             int role = -1;
             if (currentLeadIndex > -1 && poseCount == currentLeadIndex)
