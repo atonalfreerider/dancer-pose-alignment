@@ -1,4 +1,6 @@
-﻿using LinearAssignment;
+﻿using System.Numerics;
+using Compunet.YoloV8.Data;
+using LinearAssignment;
 using OpenCvSharp;
 
 namespace dancer_pose_alignment;
@@ -8,9 +10,9 @@ public class Sort(int maxAge = 1, int minHits = 3, double iouThreshold = 0.3)
     readonly List<KalmanBoxTracker> trackers = [];
     int frameCount = 0;
     
-    static double[][] IouBatch(double[][] bbTest, double[][] bbGt)
+    static double[][] IouBatch(List<IPoseBoundingBox> bbTest, double[][] bbGt)
     {
-        int n = bbTest.Length;
+        int n = bbTest.Count;
         int m = bbGt.Length;
         double[][] iouMatrix = new double[n][];
         for (int i = 0; i < n; i++)
@@ -22,7 +24,11 @@ public class Sort(int maxAge = 1, int minHits = 3, double iouThreshold = 0.3)
         {
             for (int j = 0; j < m; j++)
             {
-                double[] bbTestBox = bbTest[i];
+                
+                double[] bbTestBox = 
+                [
+                    bbTest[i].Bounds.Left,bbTest[i].Bounds.Top, bbTest[i].Bounds.Right, bbTest[i].Bounds.Bottom
+                ];
                 double[] bbGtBox = bbGt[j];
 
                 double xx1 = Math.Max(bbTestBox[0], bbGtBox[0]);
@@ -54,11 +60,19 @@ public class Sort(int maxAge = 1, int minHits = 3, double iouThreshold = 0.3)
         public int Hits;
         public int HitStreak;
         public int Age;
-        List<Tuple<double, double>> centroidArr;
+        public readonly List<Tuple<double, double>> CentroidArr;
         int detClass;
-        List<double[]> bboxHistory;
+        List<IPoseBoundingBox> bboxHistory;
+        
+        public List<Vector3> LastKeypoints
+        {
+            get
+            {
+                return bboxHistory[^1].Keypoints.Select(kp => new Vector3(kp.Point.X, kp.Point.Y, kp.Confidence)).ToList();
+            }
+        }
 
-        public KalmanBoxTracker(double[] bbox)
+        public KalmanBoxTracker(IPoseBoundingBox bbox)
         {
             kf = new KalmanFilter(7, 4);
             kf.TransitionMatrix = ToMat(new double[,] // F
@@ -79,12 +93,12 @@ public class Sort(int maxAge = 1, int minHits = 3, double iouThreshold = 0.3)
                 { 0, 0, 0, 1, 0, 0, 0 }
             });
 
-            kf.MeasurementNoiseCov[2, kf.MeasurementNoiseCov.Rows - 2, 2, kf.MeasurementNoiseCov.Cols - 2] *= 10.0; // R
+            kf.MeasurementNoiseCov[2, kf.MeasurementNoiseCov.Rows, 2, kf.MeasurementNoiseCov.Cols] *= 10.0; // R
 
-            kf.ErrorCovPre[4, kf.ErrorCovPre.Rows - 4, 4, kf.ErrorCovPre.Cols - 4] *= 1000.0; // P
+            kf.ErrorCovPre[4, kf.ErrorCovPre.Rows, 4, kf.ErrorCovPre.Cols] *= 1000.0; // P
             kf.ErrorCovPre *= 10.0; // P
             kf.ProcessNoiseCov *= 0.5; // Q
-            kf.ProcessNoiseCov[4, kf.ProcessNoiseCov.Rows - 4, 4, kf.ProcessNoiseCov.Cols - 4] *= 0.5; // Q
+            kf.ProcessNoiseCov[4, kf.ProcessNoiseCov.Rows, 4, kf.ProcessNoiseCov.Cols] *= 0.5; // Q
 
             double[] conv = ConvertBboxToZ(bbox); // X
             kf.StatePre.Set(0, conv[0]);
@@ -99,18 +113,18 @@ public class Sort(int maxAge = 1, int minHits = 3, double iouThreshold = 0.3)
             Hits = 0;
             HitStreak = 0;
             Age = 0;
-            centroidArr = new List<Tuple<double, double>>();
-            double cx = (bbox[0] + bbox[2]) / 2.0;
-            double cy = (bbox[1] + bbox[3]) / 2.0;
-            centroidArr.Add(new Tuple<double, double>(cx, cy));
-            detClass = (int)bbox[5];
-            bboxHistory = new List<double[]>
+            CentroidArr = new List<Tuple<double, double>>();
+            double cx = bbox.Bounds.X;
+            double cy = bbox.Bounds.Y;
+            CentroidArr.Add(new Tuple<double, double>(cx, cy));
+            detClass = bbox.Class.Id;
+            bboxHistory = new List<IPoseBoundingBox>
             {
                 bbox
             };
         }
 
-        public void Update(double[] bbox)
+        public void Update(IPoseBoundingBox bbox)
         {
             TimeSinceUpdate = 0;
             history.Clear();
@@ -118,14 +132,15 @@ public class Sort(int maxAge = 1, int minHits = 3, double iouThreshold = 0.3)
             HitStreak++;
             double[] z =
             [
-                bbox[0] + (bbox[2] - bbox[0]) / 2.0, bbox[1] + (bbox[3] - bbox[1]) / 2.0,
-                (bbox[2] - bbox[0]) * (bbox[3] - bbox[1]), (bbox[2] - bbox[0]) / (bbox[3] - bbox[1])
+                bbox.Bounds.X, bbox.Bounds.Y,
+                bbox.Bounds.Width * bbox.Bounds.Height,
+                (double)bbox.Bounds.Width / bbox.Bounds.Height
             ];
             kf.Predict(ToMat(z));
-            detClass = (int)bbox[5];
-            double cx = (bbox[0] + bbox[2]) / 2.0;
-            double cy = (bbox[1] + bbox[3]) / 2.0;
-            centroidArr.Add(new Tuple<double, double>(cx, cy));
+            detClass = bbox.Class.Id;
+            double cx = bbox.Bounds.X;
+            double cy = bbox.Bounds.Y;
+            CentroidArr.Add(new Tuple<double, double>(cx, cy));
             bboxHistory.Add(bbox);
         }
 
@@ -168,16 +183,12 @@ public class Sort(int maxAge = 1, int minHits = 3, double iouThreshold = 0.3)
                 .Concatenate(vDotArray).Concatenate(sDotArray);
         }
         
-        static double[] ConvertBboxToZ(double[] bbox)
+        static double[] ConvertBboxToZ(IPoseBoundingBox bbox)
         {
-            double w = bbox[2] - bbox[0];
-            double h = bbox[3] - bbox[1];
-            double x = bbox[0] + w / 2.0;
-            double y = bbox[1] + h / 2.0;
-            double s = w * h;
-            double r = w / h;
+            double s = bbox.Bounds.Width * bbox.Bounds.Height;
+            double r = bbox.Bounds.Width / bbox.Bounds.Height;
 
-            return [x, y, s, r];
+            return [bbox.Bounds.X, bbox.Bounds.Y, s, r];
         }
 
         static double[] ConvertXToBbox(double[] x, double? score = null)
@@ -205,11 +216,11 @@ public class Sort(int maxAge = 1, int minHits = 3, double iouThreshold = 0.3)
         return trackers;
     }
 
-    public double[][] Update(double[][] dets)
+    public double[][] Update(List<IPoseBoundingBox> dets)
     {
         frameCount++;
         int n = trackers.Count;
-        int m = dets.Length;
+        int m = dets.Count;
         double[][] trks = new double[n][];
         List<int> toDel = [];
         List<double[]> ret = [];
@@ -248,7 +259,7 @@ public class Sort(int maxAge = 1, int minHits = 3, double iouThreshold = 0.3)
 
         foreach (int i in unmatchedDets)
         {
-            KalmanBoxTracker trk = new KalmanBoxTracker(dets[i]);
+            KalmanBoxTracker trk = new(dets[i]);
             trackers.Add(trk);
         }
 
@@ -280,7 +291,7 @@ public class Sort(int maxAge = 1, int minHits = 3, double iouThreshold = 0.3)
     }
 
     static void AssociateDetectionsToTrackers(
-        double[][] detections,
+        List<IPoseBoundingBox> detections,
         double[][] trackers,
         double iouThreshold,
         out int[] matches,
@@ -290,7 +301,7 @@ public class Sort(int maxAge = 1, int minHits = 3, double iouThreshold = 0.3)
         if (trackers.Length == 0)
         {
             matches = Array.Empty<int>();
-            unmatchedDetections = Enumerable.Range(0, detections.Length).ToArray();
+            unmatchedDetections = Enumerable.Range(0, detections.Count).ToArray();
             unmatchedTrackers = Array.Empty<int>();
             return;
         }
@@ -367,7 +378,7 @@ public class Sort(int maxAge = 1, int minHits = 3, double iouThreshold = 0.3)
             List<int> unmatchedTrackersList = [];
             List<int> matchesList = [];
 
-            for (int i = 0; i < detections.Length; i++)
+            for (int i = 0; i < detections.Count; i++)
             {
                 unmatchedDetectionsList.Add(i);
             }
@@ -400,7 +411,7 @@ public class Sort(int maxAge = 1, int minHits = 3, double iouThreshold = 0.3)
         else
         {
             matches = Array.Empty<int>();
-            unmatchedDetections = Enumerable.Range(0, detections.Length).ToArray();
+            unmatchedDetections = Enumerable.Range(0, detections.Count).ToArray();
             unmatchedTrackers = Enumerable.Range(0, trackers.Length).ToArray();
         }
     }

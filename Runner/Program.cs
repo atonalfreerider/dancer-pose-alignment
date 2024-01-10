@@ -1,4 +1,5 @@
 ﻿using System.Numerics;
+using Compunet.YoloV8.Data;
 using dancer_pose_alignment;
 using Newtonsoft.Json;
 using OpenCvSharp;
@@ -11,8 +12,8 @@ static class Program
         Yolo yolo = new("yolov8x-pose.onnx"); // this is in the assembly dir 
         Directory.CreateDirectory(rootFolder + "/pose");
         Directory.CreateDirectory(rootFolder + "/affine");
-        
-        int sort_max_age = 5 ;
+
+        int sort_max_age = 5;
         int sort_min_hits = 2;
         double sort_iou_thresh = 0.2;
 
@@ -25,6 +26,7 @@ static class Program
 
             Affine affine = new();
             int frameCount = 0;
+            int totalDetections = -1;
             while (true)
             {
                 try
@@ -34,18 +36,42 @@ static class Program
                     frameSource.NextFrame(outputArray);
 
                     Mat frameMat = outputArray.GetMat();
-                    List<Tuple<Vector4, List<Vector3>>> posesAtFrame = yolo
+                    List<IPoseBoundingBox> posesAndBoxesAtFrame = yolo
                         .CalculateBoxesAndPosesFromImage(frameMat.ToMemoryStream()).ToList();
 
-                    double[][] dets_to_sort = posesAtFrame.Select(pose =>
-                    {
-                        Vector4 box = pose.Item1;
-                        return new double[] { box.X, box.Y, box.X + box.Z, box.Y + box.W };
-                    }).ToArray();
-
                     Sort sort = new(sort_max_age, sort_min_hits, sort_iou_thresh);
-                    double[][] tracked_dets = sort.Update(dets_to_sort);
+                    double[][] tracked_dets = sort.Update(posesAndBoxesAtFrame);
                     List<Sort.KalmanBoxTracker> tracks = sort.GetTrackers();
+
+                    List<List<Vector3>> posesAtFrameByTrack = [];
+                    foreach (Sort.KalmanBoxTracker track in tracks)
+                    {
+                        if (track.Id > totalDetections)
+                        {
+                            totalDetections = track.Id;
+                        }
+                    }
+
+                    for (int i = 0; i < totalDetections; i++)
+                    {
+                        bool matched = false;
+                        foreach (Sort.KalmanBoxTracker track in tracks)
+                        {
+                            if (track.Id == i)
+                            {
+                                posesAtFrameByTrack.Add(track.LastKeypoints);
+                                matched = true;
+                                break;
+                            }
+                        }
+                        
+                        if(!matched)
+                        {
+                            posesAtFrameByTrack.Add([]);
+                        }
+                    }
+
+                    posesByFrame.Add(posesAtFrameByTrack);
 
                     if (frameCount == 1)
                     {
@@ -56,7 +82,6 @@ static class Program
                         Vector3 affineVector = affine.GetAffine(frameMat, videoPath);
                         affineTransform.Add(affineVector);
                     }
-             
                 }
                 catch (Exception e)
                 {
