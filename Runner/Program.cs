@@ -43,7 +43,7 @@ static class Program
                         .CalculateBoxesAndPosesFromImage(frameMat.ToMemoryStream()).ToList();
 
                     float[][] tracked_dets = kalmanFilter.Update(posesAndBoxesAtFrame);
-                    List<KalmanBoxTracker> tracks = kalmanFilter.GetTrackers();
+                    List<KalmanBoxTracker> tracks = kalmanFilter.Trackers;
 
                     List<List<Vector3>> posesAtFrameByTrack = [];
                     foreach (KalmanBoxTracker track in tracks)

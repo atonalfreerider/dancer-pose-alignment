@@ -1,65 +1,16 @@
 ﻿using Compunet.YoloV8.Data;
-using LinearAssignment;
-using OpenCvSharp;
 
 namespace dancer_pose_alignment;
 
 public class KalmanFilterSort(int maxAge = 1, int minHits = 3, float iouThreshold = 0.3f)
 {
-    readonly List<KalmanBoxTracker> trackers = [];
+    public readonly List<KalmanBoxTracker> Trackers = [];
     int frameCount = 0;
-
-    static float[][] IouBatch(List<IPoseBoundingBox> bboxTest, float[][] bboxGt)
-    {
-        int n = bboxTest.Count;
-        int m = bboxGt.Length;
-        float[][] iouMatrix = new float[n][];
-        for (int i = 0; i < n; i++)
-        {
-            iouMatrix[i] = new float[m];
-        }
-
-        for (int i = 0; i < n; i++)
-        {
-            for (int j = 0; j < m; j++)
-            {
-                float[] bbTestBox =
-                [
-                    bboxTest[i].Bounds.Left,
-                    bboxTest[i].Bounds.Top,
-                    bboxTest[i].Bounds.Right,
-                    bboxTest[i].Bounds.Bottom
-                ];
-                float[] bbGtBox = bboxGt[j];
-
-                float xx1 = Math.Max(bbTestBox[0], bbGtBox[0]);
-                float yy1 = Math.Max(bbTestBox[1], bbGtBox[1]);
-                float xx2 = Math.Min(bbTestBox[2], bbGtBox[2]);
-                float yy2 = Math.Min(bbTestBox[3], bbGtBox[3]);
-
-                float w = MathF.Max(0, xx2 - xx1);
-                float h = MathF.Max(0, yy2 - yy1);
-                float wh = w * h;
-
-                float o = wh / ((bbTestBox[2] - bbTestBox[0]) * (bbTestBox[3] - bbTestBox[1]) +
-                    (bbGtBox[2] - bbGtBox[0]) * (bbGtBox[3] - bbGtBox[1]) - wh);
-
-                iouMatrix[i][j] = o;
-            }
-        }
-
-        return iouMatrix;
-    }
-
-    public List<KalmanBoxTracker> GetTrackers()
-    {
-        return trackers;
-    }
 
     public float[][] Update(List<IPoseBoundingBox> detections)
     {
         frameCount++;
-        int n = trackers.Count;
+        int n = Trackers.Count;
         int m = detections.Count;
         float[][] trks = new float[n][];
         List<int> toDel = [];
@@ -67,7 +18,7 @@ public class KalmanFilterSort(int maxAge = 1, int minHits = 3, float iouThreshol
 
         for (int i = 0; i < n; i++)
         {
-            float[] pos = trackers[i].Predict();
+            float[] pos = Trackers[i].Predict();
             trks[i] = [pos[0], pos[1], pos[2], pos[3], 0, 0];
             if (float.IsNaN(pos[0]) || float.IsNaN(pos[1]))
             {
@@ -77,199 +28,154 @@ public class KalmanFilterSort(int maxAge = 1, int minHits = 3, float iouThreshol
 
         foreach (int t in toDel)
         {
-            trackers.RemoveAt(t);
+            Trackers.RemoveAt(t);
         }
 
-        int[] matched;
-        int[] unmatchedDets;
-        int[] unmatchedTrks;
-
-        AssociateDetectionsToTrackers(
+        (int[] matched, int[] unmatchedDets) = AssociateDetectionsToTrackers(
             detections,
             trks,
-            iouThreshold,
-            out matched,
-            out unmatchedDets,
-            out unmatchedTrks);
+            iouThreshold);
 
         for (int i = 0; i < matched.Length; i++)
         {
-            trackers[matched[i]].Correct(detections[i]);
+            Trackers[matched[i]].Correct(detections[i]);
         }
 
         foreach (int i in unmatchedDets)
         {
             KalmanBoxTracker trk = new(detections[i]);
-            trackers.Add(trk);
+            Trackers.Add(trk);
         }
 
-        int ii = trackers.Count;
+        int ii = Trackers.Count;
 
         for (int i = ii - 1; i >= 0; i--)
         {
-            float[] d = trackers[i].GetState();
-            if (trackers[i].TimeSinceUpdate < 1 && (trackers[i].HitStreak >= minHits || frameCount <= minHits))
+            float[] d = Trackers[i].GetState();
+            if (Trackers[i].TimeSinceUpdate < 1 && (Trackers[i].HitStreak >= minHits || frameCount <= minHits))
             {
-                d[4] = trackers[i].Id + 1;
+                d[4] = Trackers[i].Id + 1;
                 ret.Add(d);
             }
 
             ii--;
 
-            if (trackers[i].TimeSinceUpdate > maxAge)
+            if (Trackers[i].TimeSinceUpdate > maxAge)
             {
-                trackers.RemoveAt(i);
+                Trackers.RemoveAt(i);
             }
         }
 
-        if (ret.Count > 0)
-        {
-            return ret.ToArray();
-        }
-
-        return Array.Empty<float[]>();
+        return ret.Count > 0 
+            ? ret.ToArray() 
+            : Array.Empty<float[]>();
     }
 
-    static void AssociateDetectionsToTrackers(
+    static (int[] MatchedIndices, int[] UnmatchedDetections) AssociateDetectionsToTrackers(
         List<IPoseBoundingBox> detections,
         float[][] trackers,
-        float iouThreshold,
-        out int[] matches,
-        out int[] unmatchedDetections,
-        out int[] unmatchedTrackers)
+        double iouThreshold = 0.3)
     {
-        if (trackers.Length == 0)
+        if (!IsJaggedArrayNonEmpty(trackers))
         {
-            matches = Array.Empty<int>();
-            unmatchedDetections = Enumerable.Range(0, detections.Count).ToArray();
-            unmatchedTrackers = Array.Empty<int>();
-            return;
+            return (Array.Empty<int>(), Enumerable.Range(0, detections.Count).ToArray());
         }
 
-        float[][] iouMatrix = IouBatch(detections, trackers);
+        double[,] iouMatrix = CalculateIoUMatrix(detections, trackers);
 
-        if (IsJaggedArrayNonEmpty(iouMatrix))
+        if (Math.Min(iouMatrix.GetLength(0), iouMatrix.GetLength(1)) <= 0)
         {
-            int[,] a = new int[iouMatrix.GetLength(0), iouMatrix.GetLength(1)];
-
-            for (int i = 0; i < iouMatrix.GetLength(0); i++)
-            {
-                for (int j = 0; j < iouMatrix.GetLength(1); j++)
-                {
-                    a[i, j] = iouMatrix[i][j] > iouThreshold ? 1 : 0;
-                }
-            }
-
-            int[] rowSums = new int[iouMatrix.GetLength(0)];
-            int[] colSums = new int[iouMatrix.GetLength(1)];
-
-            for (int i = 0; i < iouMatrix.GetLength(0); i++)
-            {
-                for (int j = 0; j < iouMatrix.GetLength(1); j++)
-                {
-                    rowSums[i] += a[i, j];
-                    colSums[j] += a[i, j];
-                }
-            }
-
-            bool validAssignment = rowSums.Max() == 1 && colSums.Max() == 1;
-
-            int[,] matchedIndices;
-
-            if (validAssignment)
-            {
-                matchedIndices = new int[iouMatrix.GetLength(0), iouMatrix.GetLength(1)];
-
-                for (int i = 0; i < iouMatrix.GetLength(0); i++)
-                {
-                    for (int j = 0; j < iouMatrix.GetLength(1); j++)
-                    {
-                        if (a[i, j] == 1)
-                        {
-                            matchedIndices[i, 0] = i;
-                            matchedIndices[i, 1] = j;
-                        }
-                    }
-                }
-            }
-            else
-            {
-                // invert iouMatrix
-                for (int i = 0; i < iouMatrix.GetLength(0); i++)
-                {
-                    for (int j = 0; j < iouMatrix.GetLength(1); j++)
-                    {
-                        iouMatrix[i][j] = -iouMatrix[i][j];
-                    }
-                }
-
-                Assignment assignment = Solver.Solve(ToMat(iouMatrix));
-                matchedIndices = new int[assignment.RowAssignment.Length, assignment.ColumnAssignment.Length];
-                for (int i = 0; i < assignment.ColumnAssignment.Length; i++)
-                {
-                    for (int j = 0; j < assignment.RowAssignment.Length; j++)
-                    {
-                        matchedIndices[i, j] = assignment.ColumnAssignment[i];
-                    }
-                }
-            }
-
-            List<int> unmatchedDetectionsList = [];
-            List<int> unmatchedTrackersList = [];
-            List<int> matchesList = [];
-
-            for (int i = 0; i < detections.Count; i++)
-            {
-                unmatchedDetectionsList.Add(i);
-            }
-
-            for (int i = 0; i < trackers.Length; i++)
-            {
-                unmatchedTrackersList.Add(i);
-            }
-
-            for (int i = 0; i < matchedIndices.GetLength(0); i++)
-            {
-                int detectionIndex = matchedIndices[i, 0];
-                int trackerIndex = matchedIndices[i, 1];
-
-                if (iouMatrix[detectionIndex][trackerIndex] < iouThreshold)
-                {
-                    unmatchedDetectionsList.Add(detectionIndex);
-                    unmatchedTrackersList.Add(trackerIndex);
-                }
-                else
-                {
-                    matchesList.Add(detectionIndex);
-                }
-            }
-
-            matches = matchesList.ToArray();
-            unmatchedDetections = unmatchedDetectionsList.ToArray();
-            unmatchedTrackers = unmatchedTrackersList.ToArray();
+            return (Array.Empty<int>(), Enumerable.Range(0, detections.Count).ToArray());
         }
-        else
-        {
-            matches = Array.Empty<int>();
-            unmatchedDetections = Enumerable.Range(0, detections.Count).ToArray();
-            unmatchedTrackers = Enumerable.Range(0, trackers.Length).ToArray();
-        }
+
+        int[,] a = CalculateMatchingMatrix(iouMatrix, iouThreshold);
+        int[] matchedIndices = FindMatchedIndices(a);
+        int[] unmatchedDetections = FindUnmatchedDetections(detections.Count, matchedIndices);
+        return (matchedIndices, unmatchedDetections);
     }
 
-    static double[,] ToMat(float[][] array)
+    static int[] FindUnmatchedDetections(int numDetections, int[] matchedIndices)
     {
-        int rows = array.Length;
-        int cols = array[0].Length;
-        double[,] mat = new double[rows, cols];
-        for (int i = 0; i < rows; i++)
+        HashSet<int> matchedSet = [..matchedIndices];
+        List<int> unmatchedDetections = [];
+
+        for (int i = 0; i < numDetections; i++)
         {
-            for (int j = 0; j < cols; j++)
+            if (!matchedSet.Contains(i))
             {
-                mat[i, j] = array[i][j];
+                unmatchedDetections.Add(i);
             }
         }
 
-        return mat;
+        return unmatchedDetections.ToArray();
+    }
+
+    static double[,] CalculateIoUMatrix(List<IPoseBoundingBox> detections, float[][] trackers)
+    {
+        int numDetections = detections.Count;
+        int numTrackers = trackers.GetLength(0);
+        double[,] iouMatrix = new double[numDetections, numTrackers];
+
+        for (int i = 0; i < numDetections; i++)
+        {
+            for (int j = 0; j < numTrackers; j++)
+            {
+                // find smallest intersection box
+                double xx1 = Math.Max(detections[i].Bounds.Left, trackers[j][0]);
+                double yy1 = Math.Max(detections[i].Bounds.Top, trackers[j][1]);
+                double xx2 = Math.Min(detections[i].Bounds.Right, trackers[j][2]);
+                double yy2 = Math.Min(detections[i].Bounds.Bottom, trackers[j][3]);
+                double w = Math.Max(0.0, xx2 - xx1);
+                double h = Math.Max(0.0, yy2 - yy1);
+                double intersection = w * h;
+                double detArea = detections[i].Bounds.Width * detections[i].Bounds.Height;
+                double trkArea = (trackers[j][2] - trackers[j][0]) * (trackers[j][3] - trackers[j][1]);
+                double union = detArea + trkArea - intersection;
+                double iou = intersection / union;
+                iouMatrix[i, j] = iou;
+            }
+        }
+
+        return iouMatrix;
+    }
+
+    static int[,] CalculateMatchingMatrix(double[,] iouMatrix, double iouThreshold)
+    {
+        int numRows = iouMatrix.GetLength(0);
+        int numCols = iouMatrix.GetLength(1);
+        int[,] matchingMatrix = new int[numRows, numCols];
+
+        for (int i = 0; i < numRows; i++)
+        {
+            for (int j = 0; j < numCols; j++)
+            {
+                matchingMatrix[i, j] = (iouMatrix[i, j] > iouThreshold) ? 1 : 0;
+            }
+        }
+
+        return matchingMatrix;
+    }
+
+    static int[] FindMatchedIndices(int[,] matchingMatrix)
+    {
+        int numRows = matchingMatrix.GetLength(0);
+        int numCols = matchingMatrix.GetLength(1);
+
+        List<int> matchedIndices = [];
+
+        for (int i = 0; i < numRows; i++)
+        {
+            for (int j = 0; j < numCols; j++)
+            {
+                if (matchingMatrix[i, j] == 1)
+                {
+                    matchedIndices.Add(i);
+                    break;
+                }
+            }
+        }
+
+        return matchedIndices.ToArray();
     }
 
     static bool IsJaggedArrayNonEmpty(float[][] jaggedArray)
@@ -284,6 +190,7 @@ public class KalmanFilterSort(int maxAge = 1, int minHits = 3, float iouThreshol
                 }
             }
         }
+
         return false; // Jagged array is empty or all rows are empty
     }
 }
