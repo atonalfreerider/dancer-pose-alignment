@@ -66,8 +66,8 @@ public class KalmanFilterSort(int maxAge = 1, int minHits = 3, float iouThreshol
             }
         }
 
-        return ret.Count > 0 
-            ? ret.ToArray() 
+        return ret.Count > 0
+            ? ret.ToArray()
             : Array.Empty<float[]>();
     }
 
@@ -83,15 +83,48 @@ public class KalmanFilterSort(int maxAge = 1, int minHits = 3, float iouThreshol
 
         double[,] iouMatrix = CalculateIoUMatrix(detections, trackers);
 
-        if (Math.Min(iouMatrix.GetLength(0), iouMatrix.GetLength(1)) <= 0)
+        if (Math.Min(iouMatrix.GetLength(0), iouMatrix.GetLength(1)) > 0)
         {
-            return (Array.Empty<int>(), Enumerable.Range(0, detections.Count).ToArray());
+            int[,] a = CalculateMatchingMatrix(iouMatrix, iouThreshold);
+            int[] matchedIndices;
+
+            if (a.GetLength(0) == 1 && a.GetLength(1) == 1)
+            {
+                matchedIndices = new int[,] { { 0, 0 } }.Cast<int>().ToArray();
+            }
+            else
+            {
+                double[,] negatedIoUMatrix = new double[iouMatrix.GetLength(0), iouMatrix.GetLength(1)];
+
+                for (int i = 0; i < iouMatrix.GetLength(0); i++)
+                {
+                    for (int j = 0; j < iouMatrix.GetLength(1); j++)
+                    {
+                        negatedIoUMatrix[i, j] = -iouMatrix[i, j];
+                    }
+                }
+
+                LinearAssignment.Assignment assignment = LinearAssignment.Solver.Solve(negatedIoUMatrix);
+                List<int> matchedIndicesList = [];
+                for (int i = 0; i < assignment.RowAssignment.Length; i++)
+                {
+                    for (int j = 0; j < assignment.ColumnAssignment.Length; j++)
+                    {
+                        if (assignment.RowAssignment[i] == j)
+                        {
+                            matchedIndicesList.Add(i);
+                        }
+                    }
+                }
+
+                matchedIndices = matchedIndicesList.ToArray();
+            }
+
+            int[] unmatchedDetections = FindUnmatchedDetections(detections.Count, matchedIndices);
+            return (matchedIndices, unmatchedDetections);
         }
 
-        int[,] a = CalculateMatchingMatrix(iouMatrix, iouThreshold);
-        int[] matchedIndices = FindMatchedIndices(a);
-        int[] unmatchedDetections = FindUnmatchedDetections(detections.Count, matchedIndices);
-        return (matchedIndices, unmatchedDetections);
+        return (Array.Empty<int>(), Enumerable.Range(0, detections.Count).ToArray());
     }
 
     static int[] FindUnmatchedDetections(int numDetections, int[] matchedIndices)
@@ -154,28 +187,6 @@ public class KalmanFilterSort(int maxAge = 1, int minHits = 3, float iouThreshol
         }
 
         return matchingMatrix;
-    }
-
-    static int[] FindMatchedIndices(int[,] matchingMatrix)
-    {
-        int numRows = matchingMatrix.GetLength(0);
-        int numCols = matchingMatrix.GetLength(1);
-
-        List<int> matchedIndices = [];
-
-        for (int i = 0; i < numRows; i++)
-        {
-            for (int j = 0; j < numCols; j++)
-            {
-                if (matchingMatrix[i, j] == 1)
-                {
-                    matchedIndices.Add(i);
-                    break;
-                }
-            }
-        }
-
-        return matchedIndices.ToArray();
     }
 
     static bool IsJaggedArrayNonEmpty(float[][] jaggedArray)
