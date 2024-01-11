@@ -28,7 +28,7 @@ static class Program
             int frameCount = 0;
             int totalDetections = -1;
             
-            Sort sort = new(sort_max_age, sort_min_hits, sort_iou_thresh);
+            KalmanFilterSort kalmanFilter = new(sort_max_age, sort_min_hits, sort_iou_thresh);
             while (true)
             {
                 try
@@ -42,11 +42,11 @@ static class Program
                     List<IPoseBoundingBox> posesAndBoxesAtFrame = yolo
                         .CalculateBoxesAndPosesFromImage(frameMat.ToMemoryStream()).ToList();
 
-                    double[][] tracked_dets = sort.Update(posesAndBoxesAtFrame);
-                    List<Sort.KalmanBoxTracker> tracks = sort.GetTrackers();
+                    double[][] tracked_dets = kalmanFilter.Update(posesAndBoxesAtFrame);
+                    List<KalmanFilterSort.KalmanBoxTracker> tracks = kalmanFilter.GetTrackers();
 
                     List<List<Vector3>> posesAtFrameByTrack = [];
-                    foreach (Sort.KalmanBoxTracker track in tracks)
+                    foreach (KalmanFilterSort.KalmanBoxTracker track in tracks)
                     {
                         if (track.Id > totalDetections)
                         {
@@ -57,7 +57,7 @@ static class Program
                     for (int i = 0; i < totalDetections; i++)
                     {
                         bool matched = false;
-                        foreach (Sort.KalmanBoxTracker track in tracks)
+                        foreach (KalmanFilterSort.KalmanBoxTracker track in tracks)
                         {
                             if (track.Id == i)
                             {

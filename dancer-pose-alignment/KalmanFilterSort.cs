@@ -5,7 +5,7 @@ using OpenCvSharp;
 
 namespace dancer_pose_alignment;
 
-public class Sort(int maxAge = 1, int minHits = 3, double iouThreshold = 0.3)
+public class KalmanFilterSort(int maxAge = 1, int minHits = 3, double iouThreshold = 0.3)
 {
     readonly List<KalmanBoxTracker> trackers = [];
     int frameCount = 0;
@@ -24,10 +24,12 @@ public class Sort(int maxAge = 1, int minHits = 3, double iouThreshold = 0.3)
         {
             for (int j = 0; j < m; j++)
             {
-                
                 double[] bbTestBox = 
                 [
-                    bbTest[i].Bounds.Left,bbTest[i].Bounds.Top, bbTest[i].Bounds.Right, bbTest[i].Bounds.Bottom
+                    bbTest[i].Bounds.Left,
+                    bbTest[i].Bounds.Top, 
+                    bbTest[i].Bounds.Right,
+                    bbTest[i].Bounds.Bottom
                 ];
                 double[] bbGtBox = bbGt[j];
 
@@ -54,15 +56,18 @@ public class Sort(int maxAge = 1, int minHits = 3, double iouThreshold = 0.3)
     {
         static int count = 0;
         readonly KalmanFilter kf;
-        public int TimeSinceUpdate;
+        
         public readonly int Id;
-        readonly List<double[]> history;
-        public int Hits;
-        public int HitStreak;
-        public int Age;
-        public readonly List<Tuple<double, double>> CentroidArr;
         int detClass;
-        List<IPoseBoundingBox> bboxHistory;
+        
+        public int TimeSinceUpdate = 0;
+        public int Hits = 0;
+        public int HitStreak = 0;
+        public int Age = 0;
+        
+        readonly List<double[]> history = [];
+        readonly List<Tuple<double, double>> centroidArr = [];
+        readonly List<IPoseBoundingBox> bboxHistory = [];
         
         public List<Vector3> LastKeypoints
         {
@@ -100,47 +105,40 @@ public class Sort(int maxAge = 1, int minHits = 3, double iouThreshold = 0.3)
             kf.ProcessNoiseCov *= 0.5; // Q
             kf.ProcessNoiseCov[4, kf.ProcessNoiseCov.Rows, 4, kf.ProcessNoiseCov.Cols] *= 0.5; // Q
 
+            // initialize state
             double[] conv = ConvertBboxToZ(bbox); // X
             kf.StatePre.Set(0, conv[0]);
             kf.StatePre.Set(1, conv[1]);
             kf.StatePre.Set(2, conv[2]);
             kf.StatePre.Set(3, conv[3]);
             
-            TimeSinceUpdate = 0;
+            kf.StatePost.Set(0, conv[0]);
+            kf.StatePost.Set(1, conv[1]);
+            kf.StatePost.Set(2, conv[2]);
+            kf.StatePost.Set(3, conv[3]);
+            
+            // reset global state
             Id = count;
             count++;
-            history = new List<double[]>();
-            Hits = 0;
-            HitStreak = 0;
-            Age = 0;
-            CentroidArr = new List<Tuple<double, double>>();
+            detClass = bbox.Class.Id;
+            
             double cx = bbox.Bounds.X;
             double cy = bbox.Bounds.Y;
-            CentroidArr.Add(new Tuple<double, double>(cx, cy));
-            detClass = bbox.Class.Id;
-            bboxHistory = new List<IPoseBoundingBox>
-            {
-                bbox
-            };
+            centroidArr.Add(new Tuple<double, double>(cx, cy));
+            bboxHistory.Add(bbox);
         }
 
-        public void Update(IPoseBoundingBox bbox)
+        public void Correct(IPoseBoundingBox bbox)
         {
             TimeSinceUpdate = 0;
             history.Clear();
             Hits++;
             HitStreak++;
-            double[] z =
-            [
-                bbox.Bounds.X, bbox.Bounds.Y,
-                bbox.Bounds.Width * bbox.Bounds.Height,
-                (double)bbox.Bounds.Width / bbox.Bounds.Height
-            ];
-            kf.Predict(ToMat(z));
+            kf.Correct(ToMat(ConvertBboxToZ(bbox)));
             detClass = bbox.Class.Id;
             double cx = bbox.Bounds.X;
             double cy = bbox.Bounds.Y;
-            CentroidArr.Add(new Tuple<double, double>(cx, cy));
+            centroidArr.Add(new Tuple<double, double>(cx, cy));
             bboxHistory.Add(bbox);
         }
 
@@ -148,7 +146,7 @@ public class Sort(int maxAge = 1, int minHits = 3, double iouThreshold = 0.3)
         {
             if (kf.StatePre.Get<double>(6) + kf.StatePre.Get<double>(2) <= 0)
             {
-                kf.StatePre.Set(6, 0.0);
+                kf.StatePre.Set(6, 0.0); // X
             }
 
             kf.Predict();
@@ -161,23 +159,24 @@ public class Sort(int maxAge = 1, int minHits = 3, double iouThreshold = 0.3)
 
             TimeSinceUpdate++;
 
-            history.Add(ConvertXToBbox(ToVec(kf.StatePre)));
+            history.Add(ConvertXToBbox(ToVec(kf.StatePost)));
             return history[^1];
         }
 
         public double[] GetState()
         {
             double[] detClassArray = [detClass];
-            double[] uDotArray = [kf.StatePre.Get<double>(4)];
-            double[] vDotArray = [kf.StatePre.Get<double>(5)];
-            double[] sDotArray = [kf.StatePre.Get<double>(6)];
+            double[] uDotArray = [kf.StatePost.Get<double>(4)];
+            double[] vDotArray = [kf.StatePost.Get<double>(5)];
+            double[] sDotArray = [kf.StatePost.Get<double>(6)];
 
             return new[]
                 {
-                    kf.StatePre.Get<double>(0),
-                    kf.StatePre.Get<double>(1),
-                    kf.StatePre.Get<double>(2), 
-                    kf.StatePre.Get<double>(3)
+                    // bbox x, y, s, r
+                    kf.StatePost.Get<double>(0),
+                    kf.StatePost.Get<double>(1),
+                    kf.StatePost.Get<double>(2), 
+                    kf.StatePost.Get<double>(3)
                 }
                 .Concatenate(detClassArray).Concatenate(uDotArray)
                 .Concatenate(vDotArray).Concatenate(sDotArray);
@@ -204,10 +203,8 @@ public class Sort(int maxAge = 1, int minHits = 3, double iouThreshold = 0.3)
             {
                 return [x1, y1, x2, y2];
             }
-            else
-            {
-                return [x1, y1, x2, y2, score.Value];
-            }
+
+            return [x1, y1, x2, y2, score.Value];
         }
     }
 
@@ -224,7 +221,7 @@ public class Sort(int maxAge = 1, int minHits = 3, double iouThreshold = 0.3)
         double[][] trks = new double[n][];
         List<int> toDel = [];
         List<double[]> ret = [];
-
+        
         for (int i = 0; i < n; i++)
         {
             double[] pos = trackers[i].Predict();
@@ -254,7 +251,7 @@ public class Sort(int maxAge = 1, int minHits = 3, double iouThreshold = 0.3)
 
         for (int i = 0; i < matched.Length; i++)
         {
-            trackers[matched[i]].Update(dets[i]);
+            trackers[matched[i]].Correct(dets[i]);
         }
 
         foreach (int i in unmatchedDets)
