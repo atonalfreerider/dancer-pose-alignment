@@ -43,10 +43,10 @@ static class Program
                         .CalculateBoxesAndPosesFromImage(frameMat.ToMemoryStream()).ToList();
 
                     float[][] tracked_dets = kalmanFilter.Update(posesAndBoxesAtFrame);
-                    List<KalmanFilterSort.KalmanBoxTracker> tracks = kalmanFilter.GetTrackers();
+                    List<KalmanBoxTracker> tracks = kalmanFilter.GetTrackers();
 
                     List<List<Vector3>> posesAtFrameByTrack = [];
-                    foreach (KalmanFilterSort.KalmanBoxTracker track in tracks)
+                    foreach (KalmanBoxTracker track in tracks)
                     {
                         if (track.Id > totalDetections)
                         {
@@ -57,7 +57,7 @@ static class Program
                     for (int i = 0; i < totalDetections; i++)
                     {
                         bool matched = false;
-                        foreach (KalmanFilterSort.KalmanBoxTracker track in tracks)
+                        foreach (KalmanBoxTracker track in tracks)
                         {
                             if (track.Id == i)
                             {
