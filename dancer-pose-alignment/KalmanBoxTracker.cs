@@ -108,7 +108,7 @@ public class KalmanBoxTracker
     {
         if (kf.StatePre.Get<float>(6) + kf.StatePre.Get<float>(2) <= 0)
         {
-            kf.StatePre.Set(6, 0.0); // X
+            kf.StatePre.Set(6, 0); // X
         }
 
         kf.Predict();

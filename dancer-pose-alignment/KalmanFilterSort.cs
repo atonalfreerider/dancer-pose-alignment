@@ -1,74 +1,72 @@
 ﻿using Compunet.YoloV8.Data;
+using LinearAssignment;
 
 namespace dancer_pose_alignment;
 
 public class KalmanFilterSort(int maxAge = 1, int minHits = 3, float iouThreshold = 0.3f)
 {
-    public readonly List<KalmanBoxTracker> Trackers = [];
-    int frameCount = 0;
+    readonly List<KalmanBoxTracker> trackers = [];
+    int frameCount;
 
-    public float[][] Update(List<IPoseBoundingBox> detections)
+    public List<KalmanBoxTracker> Update(List<IPoseBoundingBox> detections)
     {
         frameCount++;
-        int n = Trackers.Count;
-        int m = detections.Count;
-        float[][] trks = new float[n][];
-        List<int> toDel = [];
-        List<float[]> ret = [];
+        int n = trackers.Count;
+        float[][] trackerValues = new float[n][];
+        List<int> toDelete = [];
 
         for (int i = 0; i < n; i++)
         {
-            float[] pos = Trackers[i].Predict();
-            trks[i] = [pos[0], pos[1], pos[2], pos[3], 0, 0];
+            float[] pos = trackers[i].Predict();
+            trackerValues[i] = [pos[0], pos[1], pos[2], pos[3], 0, 0];
             if (float.IsNaN(pos[0]) || float.IsNaN(pos[1]))
             {
-                toDel.Add(i);
+                toDelete.Add(i);
             }
         }
 
-        foreach (int t in toDel)
+        foreach (int t in toDelete)
         {
-            Trackers.RemoveAt(t);
+            trackers.RemoveAt(t);
         }
 
-        (int[] matched, int[] unmatchedDets) = AssociateDetectionsToTrackers(
+        (int[] matchedDetections, int[] unmatchedDetections) = AssociateDetectionsToTrackers(
             detections,
-            trks,
+            trackerValues,
             iouThreshold);
 
-        for (int i = 0; i < matched.Length; i++)
+        for (int i = 0; i < matchedDetections.Length; i++)
         {
-            Trackers[matched[i]].Correct(detections[i]);
+            trackers[matchedDetections[i]].Correct(detections[i]);
         }
 
-        foreach (int i in unmatchedDets)
+        foreach (int i in unmatchedDetections)
         {
             KalmanBoxTracker trk = new(detections[i]);
-            Trackers.Add(trk);
+            trackers.Add(trk);
         }
 
-        int ii = Trackers.Count;
+        int ii = trackers.Count;
 
         for (int i = ii - 1; i >= 0; i--)
         {
-            float[] d = Trackers[i].GetState();
-            if (Trackers[i].TimeSinceUpdate < 1 && (Trackers[i].HitStreak >= minHits || frameCount <= minHits))
+            float[] trackerState = trackers[i].GetState();
+            if (trackers[i].TimeSinceUpdate < 1 &&
+                (trackers[i].HitStreak >= minHits ||
+                 frameCount <= minHits))
             {
-                d[4] = Trackers[i].Id + 1;
-                ret.Add(d);
+                trackerState[4] = trackers[i].Id + 1;
             }
 
             ii--;
 
-            if (Trackers[i].TimeSinceUpdate > maxAge)
+            if (trackers[i].TimeSinceUpdate > maxAge)
             {
-                Trackers.RemoveAt(i);
+                trackers.RemoveAt(i);
             }
         }
 
-        return ret.Count > 0
-            ? ret.ToArray()
-            : Array.Empty<float[]>();
+        return trackers;
     }
 
     static (int[] MatchedIndices, int[] UnmatchedDetections) AssociateDetectionsToTrackers(
@@ -90,7 +88,7 @@ public class KalmanFilterSort(int maxAge = 1, int minHits = 3, float iouThreshol
 
             if (a.GetLength(0) == 1 && a.GetLength(1) == 1)
             {
-                matchedIndices = new int[,] { { 0, 0 } }.Cast<int>().ToArray();
+                matchedIndices = new[,] { { 0, 0 } }.Cast<int>().ToArray();
             }
             else
             {
@@ -104,7 +102,7 @@ public class KalmanFilterSort(int maxAge = 1, int minHits = 3, float iouThreshol
                     }
                 }
 
-                LinearAssignment.Assignment assignment = LinearAssignment.Solver.Solve(negatedIoUMatrix);
+                Assignment assignment = Solver.Solve(negatedIoUMatrix);
                 List<int> matchedIndicesList = [];
                 for (int i = 0; i < assignment.RowAssignment.Length; i++)
                 {
