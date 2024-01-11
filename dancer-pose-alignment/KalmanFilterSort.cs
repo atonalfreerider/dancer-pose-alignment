@@ -5,44 +5,44 @@ using OpenCvSharp;
 
 namespace dancer_pose_alignment;
 
-public class KalmanFilterSort(int maxAge = 1, int minHits = 3, double iouThreshold = 0.3)
+public class KalmanFilterSort(int maxAge = 1, int minHits = 3, float iouThreshold = 0.3f)
 {
     readonly List<KalmanBoxTracker> trackers = [];
     int frameCount = 0;
     
-    static double[][] IouBatch(List<IPoseBoundingBox> bbTest, double[][] bbGt)
+    static float[][] IouBatch(List<IPoseBoundingBox> bbTest, float[][] bbGt)
     {
         int n = bbTest.Count;
         int m = bbGt.Length;
-        double[][] iouMatrix = new double[n][];
+        float[][] iouMatrix = new float[n][];
         for (int i = 0; i < n; i++)
         {
-            iouMatrix[i] = new double[m];
+            iouMatrix[i] = new float[m];
         }
 
         for (int i = 0; i < n; i++)
         {
             for (int j = 0; j < m; j++)
             {
-                double[] bbTestBox = 
+                float[] bbTestBox = 
                 [
                     bbTest[i].Bounds.Left,
                     bbTest[i].Bounds.Top, 
                     bbTest[i].Bounds.Right,
                     bbTest[i].Bounds.Bottom
                 ];
-                double[] bbGtBox = bbGt[j];
+                float[] bbGtBox = bbGt[j];
 
-                double xx1 = Math.Max(bbTestBox[0], bbGtBox[0]);
-                double yy1 = Math.Max(bbTestBox[1], bbGtBox[1]);
-                double xx2 = Math.Min(bbTestBox[2], bbGtBox[2]);
-                double yy2 = Math.Min(bbTestBox[3], bbGtBox[3]);
+                float xx1 = Math.Max(bbTestBox[0], bbGtBox[0]);
+                float yy1 = Math.Max(bbTestBox[1], bbGtBox[1]);
+                float xx2 = Math.Min(bbTestBox[2], bbGtBox[2]);
+                float yy2 = Math.Min(bbTestBox[3], bbGtBox[3]);
 
-                double w = Math.Max(0.0, xx2 - xx1);
-                double h = Math.Max(0.0, yy2 - yy1);
-                double wh = w * h;
+                float w = MathF.Max(0, xx2 - xx1);
+                float h = MathF.Max(0, yy2 - yy1);
+                float wh = w * h;
 
-                double o = wh / ((bbTestBox[2] - bbTestBox[0]) * (bbTestBox[3] - bbTestBox[1]) +
+                float o = wh / ((bbTestBox[2] - bbTestBox[0]) * (bbTestBox[3] - bbTestBox[1]) +
                     (bbGtBox[2] - bbGtBox[0]) * (bbGtBox[3] - bbGtBox[1]) - wh);
 
                 iouMatrix[i][j] = o;
@@ -65,8 +65,8 @@ public class KalmanFilterSort(int maxAge = 1, int minHits = 3, double iouThresho
         public int HitStreak = 0;
         public int Age = 0;
         
-        readonly List<double[]> history = [];
-        readonly List<Tuple<double, double>> centroidArr = [];
+        readonly List<float[]> history = [];
+        readonly List<Tuple<float, float>> centroidArr = [];
         readonly List<IPoseBoundingBox> bboxHistory = [];
         
         public List<Vector3> LastKeypoints
@@ -80,7 +80,8 @@ public class KalmanFilterSort(int maxAge = 1, int minHits = 3, double iouThresho
         public KalmanBoxTracker(IPoseBoundingBox bbox)
         {
             kf = new KalmanFilter(7, 4);
-            kf.TransitionMatrix = ToMat(new double[,] // F
+            
+            kf.TransitionMatrix = ToMat(new float[,] // F
             {
                 { 1, 0, 0, 0, 1, 0, 0 },
                 { 0, 1, 0, 0, 0, 1, 0 },
@@ -90,7 +91,8 @@ public class KalmanFilterSort(int maxAge = 1, int minHits = 3, double iouThresho
                 { 0, 0, 0, 0, 0, 1, 0 },
                 { 0, 0, 0, 0, 0, 0, 1 }
             });
-            kf.MeasurementMatrix = ToMat(new double[,] // H
+            
+            kf.MeasurementMatrix = ToMat(new float[,] // H
             {
                 { 1, 0, 0, 0, 0, 0, 0 },
                 { 0, 1, 0, 0, 0, 0, 0 },
@@ -98,15 +100,23 @@ public class KalmanFilterSort(int maxAge = 1, int minHits = 3, double iouThresho
                 { 0, 0, 0, 1, 0, 0, 0 }
             });
 
-            kf.MeasurementNoiseCov[2, kf.MeasurementNoiseCov.Rows, 2, kf.MeasurementNoiseCov.Cols] *= 10.0; // R
+            kf.MeasurementNoiseCov[
+                2, kf.MeasurementNoiseCov.Rows, 
+                2, kf.MeasurementNoiseCov.Cols] *= 10.0; // R
 
-            kf.ErrorCovPre[4, kf.ErrorCovPre.Rows, 4, kf.ErrorCovPre.Cols] *= 1000.0; // P
+            kf.ErrorCovPre[
+                4, kf.ErrorCovPre.Rows, 
+                4, kf.ErrorCovPre.Cols] *= 1000.0; // P
+            
             kf.ErrorCovPre *= 10.0; // P
+            
             kf.ProcessNoiseCov *= 0.5; // Q
-            kf.ProcessNoiseCov[4, kf.ProcessNoiseCov.Rows, 4, kf.ProcessNoiseCov.Cols] *= 0.5; // Q
+            kf.ProcessNoiseCov[
+                4, kf.ProcessNoiseCov.Rows, 
+                4, kf.ProcessNoiseCov.Cols] *= 0.5; // Q
 
             // initialize state
-            double[] conv = ConvertBboxToZ(bbox); // X
+            float[] conv = ConvertBboxToZ(bbox); // X
             kf.StatePre.Set(0, conv[0]);
             kf.StatePre.Set(1, conv[1]);
             kf.StatePre.Set(2, conv[2]);
@@ -122,9 +132,9 @@ public class KalmanFilterSort(int maxAge = 1, int minHits = 3, double iouThresho
             count++;
             detClass = bbox.Class.Id;
             
-            double cx = bbox.Bounds.X;
-            double cy = bbox.Bounds.Y;
-            centroidArr.Add(new Tuple<double, double>(cx, cy));
+            float cx = bbox.Bounds.X;
+            float cy = bbox.Bounds.Y;
+            centroidArr.Add(new Tuple<float, float>(cx, cy));
             bboxHistory.Add(bbox);
         }
 
@@ -136,15 +146,15 @@ public class KalmanFilterSort(int maxAge = 1, int minHits = 3, double iouThresho
             HitStreak++;
             kf.Correct(ToMat(ConvertBboxToZ(bbox)));
             detClass = bbox.Class.Id;
-            double cx = bbox.Bounds.X;
-            double cy = bbox.Bounds.Y;
-            centroidArr.Add(new Tuple<double, double>(cx, cy));
+            float cx = bbox.Bounds.X;
+            float cy = bbox.Bounds.Y;
+            centroidArr.Add(new Tuple<float, float>(cx, cy));
             bboxHistory.Add(bbox);
         }
 
-        public double[] Predict()
+        public float[] Predict()
         {
-            if (kf.StatePre.Get<double>(6) + kf.StatePre.Get<double>(2) <= 0)
+            if (kf.StatePre.Get<float>(6) + kf.StatePre.Get<float>(2) <= 0)
             {
                 kf.StatePre.Set(6, 0.0); // X
             }
@@ -163,41 +173,41 @@ public class KalmanFilterSort(int maxAge = 1, int minHits = 3, double iouThresho
             return history[^1];
         }
 
-        public double[] GetState()
+        public float[] GetState()
         {
-            double[] detClassArray = [detClass];
-            double[] uDotArray = [kf.StatePost.Get<double>(4)];
-            double[] vDotArray = [kf.StatePost.Get<double>(5)];
-            double[] sDotArray = [kf.StatePost.Get<double>(6)];
+            float[] detClassArray = [detClass];
+            float[] uDotArray = [kf.StatePost.Get<float>(4)];
+            float[] vDotArray = [kf.StatePost.Get<float>(5)];
+            float[] sDotArray = [kf.StatePost.Get<float>(6)];
 
             return new[]
                 {
                     // bbox x, y, s, r
-                    kf.StatePost.Get<double>(0),
-                    kf.StatePost.Get<double>(1),
-                    kf.StatePost.Get<double>(2), 
-                    kf.StatePost.Get<double>(3)
+                    kf.StatePost.Get<float>(0),
+                    kf.StatePost.Get<float>(1),
+                    kf.StatePost.Get<float>(2), 
+                    kf.StatePost.Get<float>(3)
                 }
                 .Concatenate(detClassArray).Concatenate(uDotArray)
                 .Concatenate(vDotArray).Concatenate(sDotArray);
         }
         
-        static double[] ConvertBboxToZ(IPoseBoundingBox bbox)
+        static float[] ConvertBboxToZ(IPoseBoundingBox bbox)
         {
-            double s = bbox.Bounds.Width * bbox.Bounds.Height;
-            double r = bbox.Bounds.Width / bbox.Bounds.Height;
+            float s = bbox.Bounds.Width * bbox.Bounds.Height;
+            float r = bbox.Bounds.Width / bbox.Bounds.Height;
 
-            return [bbox.Bounds.X, bbox.Bounds.Y, s, r];
+            return [bbox.Bounds.X, bbox.Bounds.Y, (float)s,(float) r];
         }
 
-        static double[] ConvertXToBbox(double[] x, double? score = null)
+        static float[] ConvertXToBbox(float[] x, float? score = null)
         {
-            double w = Math.Sqrt(x[2] * x[3]);
-            double h = x[2] / w;
-            double x1 = x[0] - w / 2.0;
-            double y1 = x[1] - h / 2.0;
-            double x2 = x[0] + w / 2.0;
-            double y2 = x[1] + h / 2.0;
+            float w = MathF.Sqrt(x[2] * x[3]);
+            float h = x[2] / w;
+            float x1 = x[0] - w / 2;
+            float y1 = x[1] - h / 2;
+            float x2 = x[0] + w / 2;
+            float y2 = x[1] + h / 2;
 
             if (score == null)
             {
@@ -213,20 +223,20 @@ public class KalmanFilterSort(int maxAge = 1, int minHits = 3, double iouThresho
         return trackers;
     }
 
-    public double[][] Update(List<IPoseBoundingBox> dets)
+    public float[][] Update(List<IPoseBoundingBox> dets)
     {
         frameCount++;
         int n = trackers.Count;
         int m = dets.Count;
-        double[][] trks = new double[n][];
+        float[][] trks = new float[n][];
         List<int> toDel = [];
-        List<double[]> ret = [];
+        List<float[]> ret = [];
         
         for (int i = 0; i < n; i++)
         {
-            double[] pos = trackers[i].Predict();
-            trks[i] = [pos[0], pos[1], pos[2], pos[3], 0.0, 0.0];
-            if (double.IsNaN(pos[0]) || double.IsNaN(pos[1]))
+            float[] pos = trackers[i].Predict();
+            trks[i] = [pos[0], pos[1], pos[2], pos[3], 0, 0];
+            if (float.IsNaN(pos[0]) || float.IsNaN(pos[1]))
             {
                 toDel.Add(i);
             }
@@ -264,7 +274,7 @@ public class KalmanFilterSort(int maxAge = 1, int minHits = 3, double iouThresho
 
         for (int i = ii - 1; i >= 0; i--)
         {
-            double[] d = trackers[i].GetState();
+            float[] d = trackers[i].GetState();
             if (trackers[i].TimeSinceUpdate < 1 && (trackers[i].HitStreak >= minHits || frameCount <= minHits))
             {
                 d[4] = trackers[i].Id + 1;
@@ -284,13 +294,13 @@ public class KalmanFilterSort(int maxAge = 1, int minHits = 3, double iouThresho
             return ret.ToArray();
         }
 
-        return Array.Empty<double[]>();
+        return Array.Empty<float[]>();
     }
 
     static void AssociateDetectionsToTrackers(
         List<IPoseBoundingBox> detections,
-        double[][] trackers,
-        double iouThreshold,
+        float[][] trackers,
+        float iouThreshold,
         out int[] matches,
         out int[] unmatchedDetections,
         out int[] unmatchedTrackers)
@@ -303,7 +313,7 @@ public class KalmanFilterSort(int maxAge = 1, int minHits = 3, double iouThresho
             return;
         }
 
-        double[][] iouMatrix = IouBatch(detections, trackers);
+        float[][] iouMatrix = IouBatch(detections, trackers);
 
         if (Math.Min(iouMatrix.GetLength(0), iouMatrix.GetLength(1)) > 0)
         {
@@ -413,11 +423,11 @@ public class KalmanFilterSort(int maxAge = 1, int minHits = 3, double iouThresho
         }
     }
 
-    static Mat ToMat(double[,] array)
+    static Mat ToMat(float[,] array)
     {
         int rows = array.GetLength(0);
         int cols = array.GetLength(1);
-        Mat mat = new(rows, cols, MatType.CV_64FC1);
+        Mat mat = new(rows, cols, MatType.CV_32FC1);
         for (int i = 0; i < rows; i++)
         {
             for (int j = 0; j < cols; j++)
@@ -429,10 +439,10 @@ public class KalmanFilterSort(int maxAge = 1, int minHits = 3, double iouThresho
         return mat;
     }
 
-    static Mat ToMat(double[] vector)
+    static Mat ToMat(float[] vector)
     {
         int rows = vector.Length;
-        Mat mat = new(rows, 1, MatType.CV_64FC1);
+        Mat mat = new(rows, 1, MatType.CV_32FC1);
         for (int i = 0; i < rows; i++)
         {
             mat.Set(i, 0, vector[i]);
@@ -441,18 +451,18 @@ public class KalmanFilterSort(int maxAge = 1, int minHits = 3, double iouThresho
         return mat;
     }
     
-    static double[] ToVec(Mat mat){
+    static float[] ToVec(Mat mat){
         int rows = mat.Rows;
-        double[] vector = new double[rows];
+        float[] vector = new float[rows];
         for (int i = 0; i < rows; i++)
         {
-            vector[i] = mat.At<double>(i, 0);
+            vector[i] = mat.At<float>(i, 0);
         }
 
         return vector;
     }
     
-    static double[,] ToMat(double[][] array)
+    static double[,] ToMat(float[][] array)
     {
         int rows = array.Length;
         int cols = array[0].Length;

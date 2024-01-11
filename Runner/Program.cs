@@ -15,7 +15,7 @@ static class Program
 
         const int sort_max_age = 5;
         const int sort_min_hits = 2;
-        const double sort_iou_thresh = 0.2;
+        const float sort_iou_thresh = 0.2f;
 
         foreach (string videoPath in Directory.EnumerateFiles(rootFolder, "*.mp4"))
         {
@@ -42,7 +42,7 @@ static class Program
                     List<IPoseBoundingBox> posesAndBoxesAtFrame = yolo
                         .CalculateBoxesAndPosesFromImage(frameMat.ToMemoryStream()).ToList();
 
-                    double[][] tracked_dets = kalmanFilter.Update(posesAndBoxesAtFrame);
+                    float[][] tracked_dets = kalmanFilter.Update(posesAndBoxesAtFrame);
                     List<KalmanFilterSort.KalmanBoxTracker> tracks = kalmanFilter.GetTrackers();
 
                     List<List<Vector3>> posesAtFrameByTrack = [];
