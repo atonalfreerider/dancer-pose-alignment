@@ -15,6 +15,7 @@ public class KalmanFilterSort(int maxAge = 1, int minHits = 3, float iouThreshol
         float[][] trackerValues = new float[n][];
         List<int> toDelete = [];
 
+        // populate current tracker values, and eliminate NaN values
         for (int i = 0; i < n; i++)
         {
             float[] pos = trackers[i].Predict();
@@ -74,35 +75,27 @@ public class KalmanFilterSort(int maxAge = 1, int minHits = 3, float iouThreshol
         float[][] trackers,
         double iouThreshold = 0.3)
     {
-        if (!IsJaggedArrayNonEmpty(trackers))
+        if (trackers.Length == 0)
         {
-            return (Array.Empty<int>(), Enumerable.Range(0, detections.Count).ToArray());
+            return (
+                Array.Empty<int>(), 
+                Enumerable.Range(0, detections.Count).ToArray());
         }
-
+        
         double[,] iouMatrix = CalculateIoUMatrix(detections, trackers);
-
-        if (Math.Min(iouMatrix.GetLength(0), iouMatrix.GetLength(1)) > 0)
+        int[] matchedIndices = Array.Empty<int>();
+        
+        if (IsJaggedArrayNonEmpty(trackers))
         {
-            int[,] a = CalculateMatchingMatrix(iouMatrix, iouThreshold);
-            int[] matchedIndices;
-
-            if (a.GetLength(0) == 1 && a.GetLength(1) == 1)
+            // there is an intersection, find matching matrix
+            int[,] matchingMatrix = CalculateMatchingMatrix(iouMatrix, iouThreshold);
+            if (IsMaximumSumOne(matchingMatrix))
             {
-                matchedIndices = new[,] { { 0, 0 } }.Cast<int>().ToArray();
+                matchedIndices = GetMatchedIndices(matchingMatrix);
             }
             else
             {
-                double[,] negatedIoUMatrix = new double[iouMatrix.GetLength(0), iouMatrix.GetLength(1)];
-
-                for (int i = 0; i < iouMatrix.GetLength(0); i++)
-                {
-                    for (int j = 0; j < iouMatrix.GetLength(1); j++)
-                    {
-                        negatedIoUMatrix[i, j] = -iouMatrix[i, j];
-                    }
-                }
-
-                Assignment assignment = Solver.Solve(negatedIoUMatrix);
+                Assignment assignment = Solver.Solve(Negated(iouMatrix));
                 List<int> matchedIndicesList = [];
                 for (int i = 0; i < assignment.RowAssignment.Length; i++)
                 {
@@ -117,12 +110,15 @@ public class KalmanFilterSort(int maxAge = 1, int minHits = 3, float iouThreshol
 
                 matchedIndices = matchedIndicesList.ToArray();
             }
-
-            int[] unmatchedDetections = FindUnmatchedDetections(detections.Count, matchedIndices);
-            return (matchedIndices, unmatchedDetections);
         }
+        else
+        {
+            matchedIndices = new[,] { { 0, 0 } }.Cast<int>().ToArray();
+        }
+        
+        int[] unmatchedDetections = FindUnmatchedDetections(detections.Count, matchedIndices);
 
-        return (Array.Empty<int>(), Enumerable.Range(0, detections.Count).ToArray());
+        return (matchedIndices, unmatchedDetections);
     }
 
     static int[] FindUnmatchedDetections(int numDetections, int[] matchedIndices)
@@ -141,6 +137,11 @@ public class KalmanFilterSort(int maxAge = 1, int minHits = 3, float iouThreshol
         return unmatchedDetections.ToArray();
     }
 
+    /// <summary>
+    /// Inverse over Union Matrix
+    ///
+    /// Used to find overlap between prediction and observation
+    /// </summary>
     static double[,] CalculateIoUMatrix(List<IPoseBoundingBox> detections, float[][] trackers)
     {
         int numDetections = detections.Count;
@@ -180,7 +181,7 @@ public class KalmanFilterSort(int maxAge = 1, int minHits = 3, float iouThreshol
         {
             for (int j = 0; j < numCols; j++)
             {
-                matchingMatrix[i, j] = (iouMatrix[i, j] > iouThreshold) ? 1 : 0;
+                matchingMatrix[i, j] = iouMatrix[i, j] > iouThreshold ? 1 : 0;
             }
         }
 
@@ -189,11 +190,11 @@ public class KalmanFilterSort(int maxAge = 1, int minHits = 3, float iouThreshol
 
     static bool IsJaggedArrayNonEmpty(float[][] jaggedArray)
     {
-        if (jaggedArray != null && jaggedArray.Length > 0)
+        if (jaggedArray.Length > 0)
         {
             foreach (float[] row in jaggedArray)
             {
-                if (row != null && row.Length > 0)
+                if (row.Length > 0)
                 {
                     return true; // Found at least one non-empty row
                 }
@@ -201,5 +202,85 @@ public class KalmanFilterSort(int maxAge = 1, int minHits = 3, float iouThreshol
         }
 
         return false; // Jagged array is empty or all rows are empty
+    }
+
+    static double[,] Negated(double[,] iouMatrix)
+    {
+        double[,] negatedIoUMatrix = new double[iouMatrix.GetLength(0), iouMatrix.GetLength(1)];
+
+        for (int i = 0; i < iouMatrix.GetLength(0); i++)
+        {
+            for (int j = 0; j < iouMatrix.GetLength(1); j++)
+            {
+                negatedIoUMatrix[i, j] = -iouMatrix[i, j];
+            }
+        }
+
+        return negatedIoUMatrix;
+    }
+    
+    static bool IsMaximumSumOne(int[,] matrix)
+    {
+        int rows = matrix.GetLength(0);
+        int cols = matrix.GetLength(1);
+
+        for (int i = 0; i < rows; i++)
+        {
+            if (GetRowSum(matrix, i) > 1) return false;
+        }
+
+        for (int j = 0; j < cols; j++)
+        {
+            if (GetColumnSum(matrix, j) > 1) return false;
+        }
+
+        return true;
+    }
+
+    static int[] GetMatchedIndices(int[,] matrix)
+    {
+        List<int> indices = [];
+        int rows = matrix.GetLength(0);
+        int cols = matrix.GetLength(1);
+
+        for (int i = 0; i < rows; i++)
+        {
+            for (int j = 0; j < cols; j++)
+            {
+                if (matrix[i, j] == 1)
+                {
+                    indices.Add(i); // Add row index
+                    indices.Add(j); // Add column index
+                }
+            }
+        }
+
+        return indices.ToArray();
+    }
+
+    static int GetRowSum(int[,] matrix, int row)
+    {
+        int sum = 0;
+        int cols = matrix.GetLength(1);
+
+        for (int j = 0; j < cols; j++)
+        {
+            sum += matrix[row, j];
+        }
+
+        return sum;
+    }
+
+    static int GetColumnSum(int[,] matrix, int col)
+    {
+        int sum = 0;
+        int rows = matrix.GetLength(0);
+
+        for (int i = 0; i < rows; i++)
+        {
+            sum += matrix[i, col];
+        }
+
+        return sum;
     }
 }

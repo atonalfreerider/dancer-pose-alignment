@@ -1,4 +1,4 @@
-﻿using System.Numerics;
+using System.Numerics;
 using Compunet.YoloV8.Data;
 using dancer_pose_alignment;
 using Newtonsoft.Json;
@@ -42,8 +42,7 @@ static class Program
                     List<IPoseBoundingBox> posesAndBoxesAtFrame = yolo
                         .CalculateBoxesAndPosesFromImage(frameMat.ToMemoryStream()).ToList();
 
-                    float[][] tracked_dets = kalmanFilter.Update(posesAndBoxesAtFrame);
-                    List<KalmanBoxTracker> tracks = kalmanFilter.Trackers;
+                    List<KalmanBoxTracker> tracks = kalmanFilter.Update(posesAndBoxesAtFrame);
 
                     List<List<Vector3>> posesAtFrameByTrack = [];
                     foreach (KalmanBoxTracker track in tracks)
