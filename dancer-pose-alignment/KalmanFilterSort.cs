@@ -9,10 +9,10 @@ public class KalmanFilterSort(int maxAge = 1, int minHits = 3, float iouThreshol
     readonly List<KalmanBoxTracker> trackers = [];
     int frameCount = 0;
 
-    static float[][] IouBatch(List<IPoseBoundingBox> bbTest, float[][] bbGt)
+    static float[][] IouBatch(List<IPoseBoundingBox> bboxTest, float[][] bboxGt)
     {
-        int n = bbTest.Count;
-        int m = bbGt.Length;
+        int n = bboxTest.Count;
+        int m = bboxGt.Length;
         float[][] iouMatrix = new float[n][];
         for (int i = 0; i < n; i++)
         {
@@ -25,12 +25,12 @@ public class KalmanFilterSort(int maxAge = 1, int minHits = 3, float iouThreshol
             {
                 float[] bbTestBox =
                 [
-                    bbTest[i].Bounds.Left,
-                    bbTest[i].Bounds.Top,
-                    bbTest[i].Bounds.Right,
-                    bbTest[i].Bounds.Bottom
+                    bboxTest[i].Bounds.Left,
+                    bboxTest[i].Bounds.Top,
+                    bboxTest[i].Bounds.Right,
+                    bboxTest[i].Bounds.Bottom
                 ];
-                float[] bbGtBox = bbGt[j];
+                float[] bbGtBox = bboxGt[j];
 
                 float xx1 = Math.Max(bbTestBox[0], bbGtBox[0]);
                 float yy1 = Math.Max(bbTestBox[1], bbGtBox[1]);
@@ -56,11 +56,11 @@ public class KalmanFilterSort(int maxAge = 1, int minHits = 3, float iouThreshol
         return trackers;
     }
 
-    public float[][] Update(List<IPoseBoundingBox> dets)
+    public float[][] Update(List<IPoseBoundingBox> detections)
     {
         frameCount++;
         int n = trackers.Count;
-        int m = dets.Count;
+        int m = detections.Count;
         float[][] trks = new float[n][];
         List<int> toDel = [];
         List<float[]> ret = [];
@@ -85,7 +85,7 @@ public class KalmanFilterSort(int maxAge = 1, int minHits = 3, float iouThreshol
         int[] unmatchedTrks;
 
         AssociateDetectionsToTrackers(
-            dets,
+            detections,
             trks,
             iouThreshold,
             out matched,
@@ -94,12 +94,12 @@ public class KalmanFilterSort(int maxAge = 1, int minHits = 3, float iouThreshol
 
         for (int i = 0; i < matched.Length; i++)
         {
-            trackers[matched[i]].Correct(dets[i]);
+            trackers[matched[i]].Correct(detections[i]);
         }
 
         foreach (int i in unmatchedDets)
         {
-            KalmanBoxTracker trk = new(dets[i]);
+            KalmanBoxTracker trk = new(detections[i]);
             trackers.Add(trk);
         }
 
@@ -148,7 +148,7 @@ public class KalmanFilterSort(int maxAge = 1, int minHits = 3, float iouThreshol
 
         float[][] iouMatrix = IouBatch(detections, trackers);
 
-        if (Math.Min(iouMatrix.GetLength(0), iouMatrix.GetLength(1)) > 0)
+        if (IsJaggedArrayNonEmpty(iouMatrix))
         {
             int[,] a = new int[iouMatrix.GetLength(0), iouMatrix.GetLength(1)];
 
@@ -270,5 +270,20 @@ public class KalmanFilterSort(int maxAge = 1, int minHits = 3, float iouThreshol
         }
 
         return mat;
+    }
+
+    static bool IsJaggedArrayNonEmpty(float[][] jaggedArray)
+    {
+        if (jaggedArray != null && jaggedArray.Length > 0)
+        {
+            foreach (float[] row in jaggedArray)
+            {
+                if (row != null && row.Length > 0)
+                {
+                    return true; // Found at least one non-empty row
+                }
+            }
+        }
+        return false; // Jagged array is empty or all rows are empty
     }
 }

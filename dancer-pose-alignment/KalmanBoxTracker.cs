@@ -151,9 +151,9 @@ public class KalmanBoxTracker
     static float[] ConvertBboxToZ(IPoseBoundingBox bbox)
     {
         float s = bbox.Bounds.Width * bbox.Bounds.Height;
-        float r = bbox.Bounds.Width / bbox.Bounds.Height;
+        float r = bbox.Bounds.Width / (float)bbox.Bounds.Height;
 
-        return [bbox.Bounds.X, bbox.Bounds.Y, (float)s, (float)r];
+        return [bbox.Bounds.X, bbox.Bounds.Y, s, r];
     }
 
     static float[] ConvertXToBbox(float[] x, float? score = null)
