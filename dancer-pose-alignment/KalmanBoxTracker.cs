@@ -10,22 +10,15 @@ public class KalmanBoxTracker
     readonly KalmanFilter kf;
 
     public readonly int Id;
-    int detClass;
-
-    public int TimeSinceUpdate = 0;
-    public int Hits = 0;
-    public int HitStreak = 0;
-    public int Age = 0;
 
     readonly List<float[]> history = [];
-    readonly List<Tuple<float, float>> centroidArr = [];
-    readonly List<IPoseBoundingBox> bboxHistory = [];
+    IPoseBoundingBox lastBbox;
 
     public List<Vector3> LastKeypoints
     {
         get
         {
-            return bboxHistory[^1].Keypoints.Select(kp => new Vector3(kp.Point.X, kp.Point.Y, kp.Confidence)).ToList();
+            return lastBbox.Keypoints.Select(kp => new Vector3(kp.Point.X, kp.Point.Y, kp.Confidence)).ToList();
         }
     }
 
@@ -82,26 +75,14 @@ public class KalmanBoxTracker
         // reset global state
         Id = count;
         count++;
-        detClass = bbox.Class.Id;
-
-        float cx = bbox.Bounds.X;
-        float cy = bbox.Bounds.Y;
-        centroidArr.Add(new Tuple<float, float>(cx, cy));
-        bboxHistory.Add(bbox);
+        lastBbox = bbox;
     }
 
     public void Correct(IPoseBoundingBox bbox)
     {
-        TimeSinceUpdate = 0;
         history.Clear();
-        Hits++;
-        HitStreak++;
         kf.Correct(ToMat(ConvertBboxToZ(bbox)));
-        detClass = bbox.Class.Id;
-        float cx = bbox.Bounds.X;
-        float cy = bbox.Bounds.Y;
-        centroidArr.Add(new Tuple<float, float>(cx, cy));
-        bboxHistory.Add(bbox);
+        lastBbox = bbox;
     }
 
     public float[] Predict()
@@ -112,39 +93,8 @@ public class KalmanBoxTracker
         }
 
         kf.Predict();
-        Age++;
-
-        if (TimeSinceUpdate > 0)
-        {
-            HitStreak = 0;
-        }
-
-        TimeSinceUpdate++;
-
         history.Add(ConvertXToBbox(ToVec(kf.StatePost)));
         return history[^1];
-    }
-
-    public float[] GetState()
-    {
-        float[] detClassArray = [detClass];
-        float[] uDotArray = [kf.StatePost.Get<float>(4)];
-        float[] vDotArray = [kf.StatePost.Get<float>(5)];
-        float[] sDotArray = [kf.StatePost.Get<float>(6)];
-
-        return new[]
-            {
-                // bbox x, y, s, r
-                kf.StatePost.Get<float>(0),
-                kf.StatePost.Get<float>(1),
-                kf.StatePost.Get<float>(2),
-                kf.StatePost.Get<float>(3)
-            }
-            .Concat(detClassArray)
-            .Concat(uDotArray)
-            .Concat(vDotArray)
-            .Concat(sDotArray)
-            .ToArray();
     }
 
     // REFERENCE

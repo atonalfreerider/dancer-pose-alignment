@@ -77,7 +77,7 @@ public class CameraPoseSolver(PoseType poseType)
     /// <summary>
     /// Called when poses are loaded from cache
     /// </summary>
-    public void SetAllPoses(List<List<List<Vector3>>> posesByFrame, string camName)
+    public void SetAllPoses(List<Dictionary<int, List<Vector3>>> posesByFrame, string camName)
     {
         cameras[camName].SetAllPosesForEveryFrame(posesByFrame);
 

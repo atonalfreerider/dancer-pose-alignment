@@ -21,12 +21,11 @@ static class Program
         {
             Console.WriteLine("affine " + videoPath);
             FrameSource frameSource = FrameSource.CreateFrameSource_Video(videoPath);
-            List<List<List<Vector3>>> posesByFrame = [];
+            List<Dictionary<int, List<Vector3>>> posesByFrame = [];
             List<Vector3> affineTransform = []; // translation x,y, rotation
 
             Affine affine = new();
             int frameCount = 0;
-            int totalDetections = -1;
             
             KalmanFilterSort kalmanFilter = new(sort_max_age, sort_min_hits, sort_iou_thresh);
             while (true)
@@ -44,33 +43,9 @@ static class Program
 
                     List<KalmanBoxTracker> tracks = kalmanFilter.Update(posesAndBoxesAtFrame);
 
-                    List<List<Vector3>> posesAtFrameByTrack = [];
-                    foreach (KalmanBoxTracker track in tracks)
-                    {
-                        if (track.Id > totalDetections)
-                        {
-                            totalDetections = track.Id;
-                        }
-                    }
-
-                    for (int i = 0; i < totalDetections; i++)
-                    {
-                        bool matched = false;
-                        foreach (KalmanBoxTracker track in tracks)
-                        {
-                            if (track.Id == i)
-                            {
-                                posesAtFrameByTrack.Add(track.LastKeypoints);
-                                matched = true;
-                                break;
-                            }
-                        }
-                        
-                        if(!matched)
-                        {
-                            posesAtFrameByTrack.Add([]);
-                        }
-                    }
+                    Dictionary<int, List<Vector3>> posesAtFrameByTrack = tracks.ToDictionary(
+                        x => x.Id, 
+                        x => x.LastKeypoints);
 
                     posesByFrame.Add(posesAtFrameByTrack);
 

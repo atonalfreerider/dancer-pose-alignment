@@ -67,16 +67,14 @@ public class CameraSetup(
     /// <summary>
     /// Called when poses are loaded from cache
     /// </summary>
-    public void SetAllPosesForEveryFrame(List<List<List<Vector3>>> posesByFrame)
+    public void SetAllPosesForEveryFrame(List<Dictionary<int, List<Vector3>>> posesByFrame)
     {
         for (int i = 0; i < totalFrameCount; i++)
         {
             int sampleFrame = (int)Math.Round(startingFrame + i * ((posesByFrame.Count - startingFrame) / (float)totalFrameCount));
-            Dictionary<int, List<Vector3>> nonEmptyPosesAtFrame = posesByFrame[sampleFrame]
-                .Where(x => x.Count != 0)
-                .ToDictionary(x => posesByFrame[sampleFrame].IndexOf(x), x => x);
-            allPosesAndConfidencesPerFrame[i] = nonEmptyPosesAtFrame;
-            recenteredRescaledAllPosesPerFrame[i] = nonEmptyPosesAtFrame
+
+            allPosesAndConfidencesPerFrame[i] = posesByFrame[sampleFrame];
+            recenteredRescaledAllPosesPerFrame[i] = posesByFrame[sampleFrame]
                 .ToDictionary(x => x.Key, x => x.Value.Select(vec =>
                     new Vector3(
                         (vec.X - size.X / 2) * PixelToMeter,
@@ -85,7 +83,7 @@ public class CameraSetup(
 
             if (i == 0)
             {
-                FrameZeroLeadFollowFinderAndCamHeight(nonEmptyPosesAtFrame);
+                FrameZeroLeadFollowFinderAndCamHeight(posesByFrame[sampleFrame]);
             }
         }
     }

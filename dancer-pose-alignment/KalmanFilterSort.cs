@@ -5,70 +5,42 @@ namespace dancer_pose_alignment;
 public class KalmanFilterSort(int maxAge = 1, int minHits = 3, float iouThreshold = 0.3f)
 {
     readonly List<KalmanBoxTracker> trackers = [];
-    int frameCount;
 
     public List<KalmanBoxTracker> Update(List<IPoseBoundingBox> detections)
     {
-        frameCount++;
         int n = trackers.Count;
         float[][] trackerValues = new float[n][];
-        List<int> toDelete = [];
-
+        
         // populate current tracker values, and eliminate NaN values
         for (int i = 0; i < n; i++)
         {
             float[] pos = trackers[i].Predict();
             trackerValues[i] = [pos[0], pos[1], pos[2], pos[3], 0, 0];
-            if (float.IsNaN(pos[0]) || float.IsNaN(pos[1]))
-            {
-                toDelete.Add(i);
-            }
-        }
-
-        foreach (int t in toDelete)
-        {
-            trackers.RemoveAt(t);
         }
 
         Dictionary<int, int> iouMatrix = CalculateIoUMatrix(
             detections,
             trackerValues,
             iouThreshold);
+        
+        List<KalmanBoxTracker> updatedTrackers = [];
 
         foreach ((int detInd, int trackInd) in iouMatrix)
         {
             if (trackInd > -1)
             {
                 trackers[trackInd].Correct(detections[detInd]);
+                updatedTrackers.Add(trackers[trackInd]);
             }
             else
             {
                 KalmanBoxTracker trk = new(detections[detInd]);
                 trackers.Add(trk);
+                updatedTrackers.Add(trk);
             }
         }
 
-        int ii = trackers.Count;
-
-        for (int i = ii - 1; i >= 0; i--)
-        {
-            float[] trackerState = trackers[i].GetState();
-            if (trackers[i].TimeSinceUpdate < 1 &&
-                (trackers[i].HitStreak >= minHits ||
-                 frameCount <= minHits))
-            {
-                trackerState[4] = trackers[i].Id + 1;
-            }
-
-            ii--;
-
-            if (trackers[i].TimeSinceUpdate > maxAge)
-            {
-                trackers.RemoveAt(i);
-            }
-        }
-
-        return trackers;
+        return updatedTrackers;
     }
 
     /// <summary>

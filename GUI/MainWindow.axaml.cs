@@ -223,7 +223,7 @@ public partial class MainWindow : Window
             // if pre-cached json, load it
             if (File.Exists(posePath))
             {
-                List<List<List<Vector3>>> posesByFrame = JsonConvert.DeserializeObject<List<List<List<Vector3>>>>(
+                List<Dictionary<int, List<Vector3>>> posesByFrame = JsonConvert.DeserializeObject<List<Dictionary<int, List<Vector3>>>>(
                     File.ReadAllText(posePath));
                 cameraPoseSolver.SetAllPoses(posesByFrame, videoFilePath);
             }
