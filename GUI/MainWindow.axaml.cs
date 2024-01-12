@@ -238,6 +238,7 @@ public partial class MainWindow : Window
             {
                 List<Vector3> affineTransform = JsonConvert.DeserializeObject<List<Vector3>>(
                     File.ReadAllText(affinePath));
+                cameraPoseSolver.SetAllAffine(affineTransform, videoFilePath);
             }
             else
             {
@@ -424,11 +425,6 @@ public partial class MainWindow : Window
 
         timeFromStart += 1d / 30d;
         
-        if (cameraPoseSolver.AreLeadAndFollowAssignedForFrame())
-        {
-            cameraPoseSolver.TrackCameraRotation();
-        }
-        
         SetPreviewsToFrame();
     }
 
@@ -452,7 +448,6 @@ public partial class MainWindow : Window
                 break;
             }
             
-            cameraPoseSolver.TrackCameraRotation();
             cameraPoseSolver.CalculateLeadFollow3DPoses();
             count++;
             if (count > 100)

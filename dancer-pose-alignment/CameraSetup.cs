@@ -53,6 +53,8 @@ public class CameraSetup(
     readonly List<Vector3>[] leadProjectionsPerFrame = new List<Vector3>[totalFrameCount];
     readonly List<Vector3>[] followProjectionsPerFrame = new List<Vector3>[totalFrameCount];
 
+    List<Vector3> affineTransforms; // all x,y motions and roll per frame, in pixels and radians
+
     /// <summary>
     /// Called when poses are calculated for every frame
     /// </summary>
@@ -90,6 +92,11 @@ public class CameraSetup(
                 FrameZeroLeadFollowFinderAndCamHeight(posesByFrame[sampleFrame]);
             }
         }
+    }
+
+    public void SetAllAffine(List<Vector3> affine)
+    {
+        affineTransforms = affine;
     }
 
     public void FrameZeroLeadFollowFinderAndCamHeight(Dictionary<int, List<Vector3>> allPoses)
@@ -710,80 +717,6 @@ public class CameraSetup(
         }
     }
 
-    public void TrackRotationFromLastFrame(int frameNumber)
-    {
-        if (recenteredRescaledAllPosesPerFrame[frameNumber] == null) return;
-
-        List<List<Vector3>> backgroundRecenteredFromLast = [];
-        foreach ((int key, List<Vector3> vector3s) in recenteredRescaledAllPosesPerFrame[frameNumber - 1])
-        {
-            if (key == leadIndicesPerFrame[frameNumber - 1] || key == followIndicesPerFrame[frameNumber - 1])
-            {
-                continue;
-            }
-
-            backgroundRecenteredFromLast.Add(vector3s);
-        }
-
-        List<List<Vector3>> backgroundRecenteredFromThis = [];
-        foreach ((int key, List<Vector3> vector3s) in recenteredRescaledAllPosesPerFrame[frameNumber])
-        {
-            if (key == leadIndicesPerFrame[frameNumber] || key == followIndicesPerFrame[frameNumber])
-            {
-                continue;
-            }
-
-            backgroundRecenteredFromThis.Add(vector3s);
-        }
-
-        Vector2 meanMotionVector = Vector2.Zero;
-        List<Vector3> allMotionVectors = [];
-        foreach (List<Vector3> lastPose in backgroundRecenteredFromLast)
-        {
-            for (int i = 0; i < JointExtension.PoseCount(PoseType.Coco); i++)
-            {
-                int closestJointIndex = -1;
-                float closestJointDistance = float.MaxValue;
-                Vector3 lastJoint = lastPose[i];
-                foreach (List<Vector3> currentPose in backgroundRecenteredFromThis)
-                {
-                    Vector3 thisJoint = currentPose[i];
-                    float distance = Vector2.Distance(
-                        new Vector2(thisJoint.X, thisJoint.Y),
-                        new Vector2(lastJoint.X, lastJoint.Y)); // lower is better
-
-                    float confidencePenalty = (1 - thisJoint.Z) * (1 - lastJoint.Z); // lower is better
-                    if (distance * confidencePenalty < closestJointDistance)
-                    {
-                        closestJointDistance = distance * confidencePenalty;
-                        closestJointIndex = backgroundRecenteredFromThis.IndexOf(currentPose);
-                    }
-                }
-
-                Vector3 closestJoint = backgroundRecenteredFromThis[closestJointIndex][i];
-                Vector3 motionVector = new(
-                    closestJoint.X - lastJoint.X,
-                    closestJoint.Y - lastJoint.Y,
-                    closestJointDistance);
-                allMotionVectors.Add(motionVector);
-            }
-        }
-
-        allMotionVectors = allMotionVectors.OrderByDescending(vec => vec.Z).Reverse().ToList();
-        // remove second half of list
-        allMotionVectors = allMotionVectors.Take(allMotionVectors.Count / 2).ToList();
-        meanMotionVector = new Vector2(
-            allMotionVectors.Select(vec => vec.X).Sum() / allMotionVectors.Count,
-            allMotionVectors.Select(vec => vec.Y).Sum() / allMotionVectors.Count);
-
-        float pitchAlpha = MathF.Atan2(meanMotionVector.Y, focalLength);
-        float yawAlpha = MathF.Atan2(meanMotionVector.X, focalLength);
-
-        rotationsPerFrame[frameNumber] = Quaternion.CreateFromAxisAngle(Vector3.UnitX, -pitchAlpha) *
-                                         Quaternion.CreateFromAxisAngle(Vector3.UnitY, -yawAlpha) *
-                                         rotationsPerFrame[frameNumber - 1];
-    }
-
     #endregion
 
     #region REFERENCE
@@ -824,6 +757,24 @@ public class CameraSetup(
 
     public void CopyRotationToNextFrame(int frameNumber)
     {
+        // interpolate the frame
+        int lastSampleFrame =
+            (int)Math.Round(startingFrame + (frameNumber-1) * ((affineTransforms.Count - startingFrame) / (float)totalFrameCount));
+        Vector3 lastAffine = affineTransforms[lastSampleFrame];
+        int sampleFrame =
+            (int)Math.Round(startingFrame + frameNumber * ((affineTransforms.Count - startingFrame) / (float)totalFrameCount));
+        for (int i = lastSampleFrame + 1; i <= sampleFrame; i++)
+        {
+            lastAffine += affineTransforms[i];
+        }
+        
+        float pitchAlpha = MathF.Atan2(lastAffine.Y, focalLength);
+        float yawAlpha = MathF.Atan2(lastAffine.X, focalLength);
+
+        rotationsPerFrame[frameNumber] = Quaternion.CreateFromAxisAngle(Vector3.UnitX, -pitchAlpha) *
+                                         Quaternion.CreateFromAxisAngle(Vector3.UnitY, -yawAlpha) *
+                                         rotationsPerFrame[frameNumber - 1];
+
         rotationsPerFrame[frameNumber] = rotationsPerFrame[frameNumber - 1];
     }
 

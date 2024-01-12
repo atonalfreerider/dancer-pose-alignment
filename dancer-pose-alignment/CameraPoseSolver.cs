@@ -91,6 +91,11 @@ public class CameraPoseSolver(PoseType poseType)
         }
     }
 
+    public void SetAllAffine(List<Vector3> affine, string camName)
+    {
+        cameras[camName].SetAllAffine(affine);
+    }
+
     public bool Advance()
     {
         if (frameNumber >= MaximumFrameCount - 1) return false;
@@ -398,14 +403,6 @@ public class CameraPoseSolver(PoseType poseType)
         foreach (CameraSetup camerasValue in cameras.Values)
         {
             camerasValue.SetRadiusFromCameraWall(cameraWall);
-        }
-    }
-
-    public void TrackCameraRotation()
-    {
-        foreach (CameraSetup cam in cameras.Values)
-        {
-            cam.TrackRotationFromLastFrame(frameNumber);
         }
     }
 
