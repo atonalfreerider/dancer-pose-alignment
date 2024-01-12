@@ -15,7 +15,7 @@ public class KalmanFilterSort(int maxAge = 1, int minHits = 3, float iouThreshol
         for (int i = 0; i < n; i++)
         {
             float[] pos = trackers[i].Predict();
-            trackerValues[i] = [pos[0], pos[1], pos[2], pos[3], 0, 0];
+            trackerValues[i] = [pos[0], pos[1], pos[2], pos[3]];
         }
 
         Dictionary<int, int> iouMatrix = CalculateIoUMatrix(

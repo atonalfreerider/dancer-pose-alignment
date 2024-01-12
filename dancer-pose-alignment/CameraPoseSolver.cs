@@ -67,10 +67,14 @@ public class CameraPoseSolver(PoseType poseType)
         }
         else
         {
-            cameras[camName].Match3DPoseToPoses(
-                frameNumber,
-                merged3DPoseLeadPerFrame[frameNumber - 1],
-                merged3DPoseFollowPerFrame[frameNumber - 1]);
+            bool copied = cameras[camName].TryCopyLeadFollowToNext(frameNumber);
+            if (!copied)
+            {
+                cameras[camName].Match3DPoseToPoses(
+                    frameNumber,
+                    merged3DPoseLeadPerFrame[frameNumber - 1],
+                    merged3DPoseFollowPerFrame[frameNumber - 1]);
+            }
         }
     }
 
@@ -95,10 +99,14 @@ public class CameraPoseSolver(PoseType poseType)
         foreach (CameraSetup cameraSetup in cameras.Values)
         {
             cameraSetup.CopyRotationToNextFrame(frameNumber);
-            cameraSetup.Match3DPoseToPoses(
-                frameNumber,
-                merged3DPoseLeadPerFrame[frameNumber - 1],
-                merged3DPoseFollowPerFrame[frameNumber - 1]);
+            bool copied = cameraSetup.TryCopyLeadFollowToNext(frameNumber);
+            if (!copied)
+            {
+                cameraSetup.Match3DPoseToPoses(
+                    frameNumber,
+                    merged3DPoseLeadPerFrame[frameNumber - 1],
+                    merged3DPoseFollowPerFrame[frameNumber - 1]);
+            }
         }
 
         return true;
