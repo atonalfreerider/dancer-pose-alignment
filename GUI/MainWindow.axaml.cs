@@ -12,6 +12,7 @@ using Avalonia.Input;
 using Avalonia.Interactivity;
 using Avalonia.Media;
 using Avalonia.Media.Imaging;
+using Compunet.YoloV8.Data;
 using dancer_pose_alignment;
 using Newtonsoft.Json;
 using OpenCvSharp;
@@ -223,9 +224,12 @@ public partial class MainWindow : Window
             // if pre-cached json, load it
             if (File.Exists(posePath))
             {
-                List<Dictionary<int, List<Vector3>>> posesByFrame = JsonConvert.DeserializeObject<List<Dictionary<int, List<Vector3>>>>(
+                List<List<PoseBoundingBox>> posesByFrame = JsonConvert.DeserializeObject<List<List<PoseBoundingBox>>>(
                     File.ReadAllText(posePath));
-                cameraPoseSolver.SetAllPoses(posesByFrame, videoFilePath);
+                List<List<IPoseBoundingBox>> posesByFrameCast = posesByFrame
+                    .Select(x => x
+                        .Select(y => (IPoseBoundingBox)y).ToList()).ToList();
+                cameraPoseSolver.SetAllPoses(posesByFrameCast, videoFilePath);
             }
             else
             {

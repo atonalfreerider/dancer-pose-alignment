@@ -1,5 +1,6 @@
 using System.Numerics;
 using System.Reflection;
+using Compunet.YoloV8.Data;
 using ComputeSharp;
 using Newtonsoft.Json;
 
@@ -51,37 +52,25 @@ public class CameraPoseSolver(PoseType poseType)
     /// </summary>
     public void SetPoseFromImage(MemoryStream imageStream, string camName)
     {
-        List<List<Vector3>> poses = yolo.CalculatePosesFromImage(imageStream);
-        Dictionary<int, List<Vector3>> posesByDancer = [];
-        foreach (List<Vector3> pose in poses)
-        {
-            posesByDancer.Add(poses.IndexOf(pose), pose);
-        }
+        List<IPoseBoundingBox> poses = yolo.CalculateBoxesAndPosesFromImage(imageStream);
         
-        cameras[camName].SetAllPosesAtFrame(posesByDancer, frameNumber);
+        cameras[camName].SetAllPosesAtFrame(poses, frameNumber);
 
         if (frameNumber == 0)
         {
-            cameras[camName].FrameZeroLeadFollowFinderAndCamHeight(posesByDancer);
+            cameras[camName].FrameZeroLeadFollowFinderAndCamHeight(poses);
             TryHomeCamera(camName);
         }
         else
         {
-            bool copied = cameras[camName].TryCopyLeadFollowToNext(frameNumber);
-            if (!copied)
-            {
-                cameras[camName].Match3DPoseToPoses(
-                    frameNumber,
-                    merged3DPoseLeadPerFrame[frameNumber - 1],
-                    merged3DPoseFollowPerFrame[frameNumber - 1]);
-            }
+            // TODO
         }
     }
 
     /// <summary>
     /// Called when poses are loaded from cache
     /// </summary>
-    public void SetAllPoses(List<Dictionary<int, List<Vector3>>> posesByFrame, string camName)
+    public void SetAllPoses(List<List<IPoseBoundingBox>> posesByFrame, string camName)
     {
         cameras[camName].SetAllPosesForEveryFrame(posesByFrame);
 
@@ -104,14 +93,7 @@ public class CameraPoseSolver(PoseType poseType)
         foreach (CameraSetup cameraSetup in cameras.Values)
         {
             cameraSetup.CopyRotationToNextFrame(frameNumber);
-            bool copied = cameraSetup.TryCopyLeadFollowToNext(frameNumber);
-            if (!copied)
-            {
-                cameraSetup.Match3DPoseToPoses(
-                    frameNumber,
-                    merged3DPoseLeadPerFrame[frameNumber - 1],
-                    merged3DPoseFollowPerFrame[frameNumber - 1]);
-            }
+            // TODO
         }
 
         return true;
@@ -410,7 +392,7 @@ public class CameraPoseSolver(PoseType poseType)
 
     #region DRAWING
 
-    public Dictionary<int, List<Vector3>> GetPosesAtFrameAtCamera(string camName)
+    public List<IPoseBoundingBox> GetPosesAtFrameAtCamera(string camName)
     {
         return cameras[camName].GetPosesPerDancerAtFrame(frameNumber);
     }

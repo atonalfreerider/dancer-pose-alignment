@@ -1,6 +1,7 @@
 using System.Numerics;
 using Avalonia;
 using Avalonia.Media;
+using Compunet.YoloV8.Data;
 using dancer_pose_alignment;
 
 namespace GUI;
@@ -8,7 +9,7 @@ namespace GUI;
 public static class PreviewDrawer
 {
     public static DrawingGroup DrawGeometry(
-        Dictionary<int, List<Vector3>> poses,
+        List<IPoseBoundingBox> poses,
         Size imgSize,
         int currentLeadIndex,
         int currentFollowIndex,
@@ -86,7 +87,7 @@ public static class PreviewDrawer
     }
 
     static DrawingGroup DrawPoses(
-        Dictionary<int, List<Vector3>> poses,
+        List<IPoseBoundingBox> poses,
         Size imgSize,
         int currentLeadIndex,
         int currentFollowIndex,
@@ -108,7 +109,7 @@ public static class PreviewDrawer
         drawingGroup.Children.Add(lineGeometryDrawingBottomCorner);
 
         int poseCount = 0;
-        foreach (List<Vector3> pose in poses.Values)
+        foreach (IPoseBoundingBox pose in poses)
         {
             int role = -1;
             if (currentLeadIndex > -1 && poseCount == currentLeadIndex)
@@ -120,27 +121,32 @@ public static class PreviewDrawer
                 role = 1;
             }
 
-            foreach (Vector3 joint in pose)
+            foreach (IKeypoint joint in pose.Keypoints)
             {
-                SolidColorBrush brush = new(ColorForConfidence(joint.Z, role));
+                SolidColorBrush brush = new(ColorForConfidence(joint.Confidence, role));
                 Pen pen = new(brush)
                 {
                     Thickness = 4
                 };
-                GeometryDrawing poseGeometry = DrawPoint(new Vector2(joint.X, joint.Y), pen);
+                GeometryDrawing poseGeometry = DrawPoint(new Vector2(joint.Point.X, joint.Point.Y), pen);
                 drawingGroup.Children.Add(poseGeometry);
             }
 
             drawingGroup = poseType switch
             {
-                PoseType.Coco => DrawCoco(drawingGroup, pose, role),
-                PoseType.Halpe => DrawHalpe(drawingGroup, pose, role)
+                PoseType.Coco => DrawCoco(drawingGroup, PoseToPose(pose), role),
+                PoseType.Halpe => DrawHalpe(drawingGroup, PoseToPose(pose), role)
             };
 
             poseCount++;
         }
 
         return drawingGroup;
+    }
+
+    static List<Vector3> PoseToPose(IPoseBoundingBox pose)
+    {
+        return pose.Keypoints.Select(x => new Vector3(x.Point.X, x.Point.Y, x.Confidence)).ToList();
     }
 
     static DrawingGroup DrawCoco(DrawingGroup drawingGroup, List<Vector3> pose, int role)
