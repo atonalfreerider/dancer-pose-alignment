@@ -1,15 +1,16 @@
 using System.Numerics;
 using Avalonia;
 using Avalonia.Media;
-using Compunet.YoloV8.Data;
+
 using dancer_pose_alignment;
+using Point = Avalonia.Point;
 
 namespace GUI;
 
 public static class PreviewDrawer
 {
     public static DrawingGroup DrawGeometry(
-        List<IPoseBoundingBox> poses,
+        List<PoseBoundingBox> poses,
         Size imgSize,
         int currentLeadIndex,
         int currentFollowIndex,
@@ -87,7 +88,7 @@ public static class PreviewDrawer
     }
 
     static DrawingGroup DrawPoses(
-        List<IPoseBoundingBox> poses,
+        List<PoseBoundingBox> poses,
         Size imgSize,
         int currentLeadIndex,
         int currentFollowIndex,
@@ -109,7 +110,7 @@ public static class PreviewDrawer
         drawingGroup.Children.Add(lineGeometryDrawingBottomCorner);
 
         int poseCount = 0;
-        foreach (IPoseBoundingBox pose in poses)
+        foreach (PoseBoundingBox pose in poses)
         {
             int role = -1;
             if (currentLeadIndex > -1 && poseCount == currentLeadIndex)
@@ -121,7 +122,7 @@ public static class PreviewDrawer
                 role = 1;
             }
 
-            foreach (IKeypoint joint in pose.Keypoints)
+            foreach (Keypoint joint in pose.Keypoints)
             {
                 SolidColorBrush brush = new(ColorForConfidence(joint.Confidence, role));
                 Pen pen = new(brush)
@@ -144,7 +145,7 @@ public static class PreviewDrawer
         return drawingGroup;
     }
 
-    static List<Vector3> PoseToPose(IPoseBoundingBox pose)
+    static List<Vector3> PoseToPose(PoseBoundingBox pose)
     {
         return pose.Keypoints.Select(x => new Vector3(x.Point.X, x.Point.Y, x.Confidence)).ToList();
     }

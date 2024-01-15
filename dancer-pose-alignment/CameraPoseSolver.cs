@@ -1,6 +1,6 @@
 using System.Numerics;
 using System.Reflection;
-using Compunet.YoloV8.Data;
+
 using ComputeSharp;
 using Newtonsoft.Json;
 
@@ -34,8 +34,7 @@ public class CameraPoseSolver(PoseType poseType)
         Vector3.UnitY,
         Vector3.UnitZ
     ];
-
-    readonly Yolo yolo = new("yolov8x-pose.onnx"); // this must be placed in the assembly directory
+    
 
     public void CreateCamera(
         string name,
@@ -48,29 +47,9 @@ public class CameraPoseSolver(PoseType poseType)
     }
 
     /// <summary>
-    /// Called when poses are calculated for every frame
-    /// </summary>
-    public void SetPoseFromImage(MemoryStream imageStream, string camName)
-    {
-        List<IPoseBoundingBox> poses = yolo.CalculateBoxesAndPosesFromImage(imageStream);
-        
-        cameras[camName].SetAllPosesAtFrame(poses, frameNumber);
-
-        if (frameNumber == 0)
-        {
-            cameras[camName].FrameZeroLeadFollowFinderAndCamHeight(poses);
-            TryHomeCamera(camName);
-        }
-        else
-        {
-            // TODO
-        }
-    }
-
-    /// <summary>
     /// Called when poses are loaded from cache
     /// </summary>
-    public void SetAllPoses(List<List<IPoseBoundingBox>> posesByFrame, string camName)
+    public void SetAllPoses(List<List<PoseBoundingBox>> posesByFrame, string camName)
     {
         cameras[camName].SetAllPosesForEveryFrame(posesByFrame);
 
@@ -392,7 +371,7 @@ public class CameraPoseSolver(PoseType poseType)
 
     #region DRAWING
 
-    public List<IPoseBoundingBox> GetPosesAtFrameAtCamera(string camName)
+    public List<PoseBoundingBox> GetPosesAtFrameAtCamera(string camName)
     {
         return cameras[camName].GetPosesPerDancerAtFrame(frameNumber);
     }

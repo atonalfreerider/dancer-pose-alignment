@@ -1,5 +1,5 @@
 ﻿using System.Numerics;
-using Compunet.YoloV8.Data;
+
 using OpenCvSharp;
 
 namespace dancer_pose_alignment;
@@ -12,7 +12,7 @@ public class KalmanBoxTracker
     public readonly int Id;
 
     readonly List<float[]> history = [];
-    IPoseBoundingBox lastBbox;
+    PoseBoundingBox lastBbox;
 
     public List<Vector3> LastKeypoints
     {
@@ -22,7 +22,7 @@ public class KalmanBoxTracker
         }
     }
 
-    public KalmanBoxTracker(IPoseBoundingBox bbox)
+    public KalmanBoxTracker(PoseBoundingBox bbox)
     {
         kf = new KalmanFilter(7, 4);
 
@@ -78,7 +78,7 @@ public class KalmanBoxTracker
         lastBbox = bbox;
     }
 
-    public void Correct(IPoseBoundingBox bbox)
+    public void Correct(PoseBoundingBox bbox)
     {
         history.Clear();
         kf.Correct(ToMat(ConvertBboxToZ(bbox)));
@@ -98,7 +98,7 @@ public class KalmanBoxTracker
     }
 
     // REFERENCE
-    static float[] ConvertBboxToZ(IPoseBoundingBox bbox)
+    static float[] ConvertBboxToZ(PoseBoundingBox bbox)
     {
         float s = bbox.Bounds.Width * bbox.Bounds.Height;
         float r = bbox.Bounds.Width / (float)bbox.Bounds.Height;

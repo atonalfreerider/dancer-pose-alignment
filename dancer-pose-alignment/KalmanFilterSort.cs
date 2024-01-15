@@ -1,4 +1,4 @@
-﻿using Compunet.YoloV8.Data;
+﻿
 
 namespace dancer_pose_alignment;
 
@@ -6,7 +6,7 @@ public class KalmanFilterSort(int maxAge = 1, int minHits = 3, float iouThreshol
 {
     readonly List<KalmanBoxTracker> trackers = [];
 
-    public List<KalmanBoxTracker> Update(List<IPoseBoundingBox> detections)
+    public List<KalmanBoxTracker> Update(List<PoseBoundingBox> detections)
     {
         int n = trackers.Count;
         float[][] trackerValues = new float[n][];
@@ -50,7 +50,7 @@ public class KalmanFilterSort(int maxAge = 1, int minHits = 3, float iouThreshol
     /// each tracker
     /// </summary>
     static Dictionary<int, int> CalculateIoUMatrix(
-        List<IPoseBoundingBox> detections, 
+        List<PoseBoundingBox> detections, 
         float[][] trackers,
         double iouThreshold)
     {

@@ -1,5 +1,5 @@
 ﻿using System.Numerics;
-using Compunet.YoloV8.Data;
+
 using dancer_pose_alignment;
 using Newtonsoft.Json;
 using OpenCvSharp;
@@ -9,7 +9,6 @@ static class Program
     static void Main(string[] args)
     {
         string rootFolder = args[0];
-        Yolo yolo = new("yolov8x-pose.onnx"); // this is in the assembly dir 
         Directory.CreateDirectory(rootFolder + "/pose");
         Directory.CreateDirectory(rootFolder + "/affine");
 
@@ -38,17 +37,9 @@ static class Program
                     frameSource.NextFrame(outputArray);
 
                     Mat frameMat = outputArray.GetMat();
-                    List<IPoseBoundingBox> posesAndBoxesAtFrame = yolo
-                        .CalculateBoxesAndPosesFromImage(frameMat.ToMemoryStream()).ToList();
+                    
 
-                    List<KalmanBoxTracker> tracks = kalmanFilter.Update(posesAndBoxesAtFrame);
-
-                    Dictionary<int, List<Vector3>> posesAtFrameByTrack = tracks.ToDictionary(
-                        x => x.Id, 
-                        x => x.LastKeypoints);
-
-                    posesByFrame.Add(posesAtFrameByTrack);
-
+                    
                     if (frameCount == 1)
                     {
                         affine.Init(frameMat, videoPath);
@@ -66,9 +57,7 @@ static class Program
                 }
             }
 
-            string posePath = rootFolder + "/pose/" + Path.GetFileNameWithoutExtension(videoPath);
             string affinePath = rootFolder + "/affine/" + Path.GetFileNameWithoutExtension(videoPath);
-            File.WriteAllText(posePath + ".mp4.json", JsonConvert.SerializeObject(posesByFrame));
             File.WriteAllText(affinePath + ".mp4.json", JsonConvert.SerializeObject(affineTransform));
         }
     }
