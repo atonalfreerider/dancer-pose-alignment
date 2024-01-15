@@ -50,26 +50,15 @@ public class CameraSetup(
     // indices referencing above pose lists
     readonly int[] leadIndicesPerFrame = new int[totalFrameCount];
     readonly int[] followIndicesPerFrame = new int[totalFrameCount];
+    
+    KalmanBoxTracker leadTracker;
+    KalmanBoxTracker followTracker;
 
     // these poses are projected onto the image plane and used to calculate the 3D pose from ray projection
     readonly List<Vector3>[] leadProjectionsPerFrame = new List<Vector3>[totalFrameCount];
     readonly List<Vector3>[] followProjectionsPerFrame = new List<Vector3>[totalFrameCount];
 
     List<Vector3> affineTransforms; // all x,y motions and roll per frame, in pixels and radians
-
-    /// <summary>
-    /// Called when poses are calculated for every frame
-    /// </summary>
-    public void SetAllPosesAtFrame(List<PoseBoundingBox> posesAtFrame, int frameNumber)
-    {
-        allPosesAndConfidencesPerFrame[frameNumber] = posesAtFrame;
-        recenteredRescaledAllPosesPerFrame[frameNumber] = posesAtFrame
-            .Select(poseBoundingBox => poseBoundingBox.Keypoints.Select(keypoint =>
-                new Vector3(
-                    (keypoint.Point.X - size.X / 2) * PixelToMeter,
-                    -(keypoint.Point.Y - size.Y / 2) * PixelToMeter, // flip
-                    keypoint.Confidence)).ToList()).ToList(); // keep the confidence;
-    }
 
     /// <summary>
     /// Called when poses are loaded from cache
@@ -101,7 +90,7 @@ public class CameraSetup(
         affineTransforms = affine;
     }
 
-    public void FrameZeroLeadFollowFinderAndCamHeight(List<PoseBoundingBox> allPoses)
+    void FrameZeroLeadFollowFinderAndCamHeight(List<PoseBoundingBox> allPoses)
     {
         // find lead and follow
         int tallestIndex = -1;
@@ -251,6 +240,12 @@ public class CameraSetup(
         {
             followIndicesPerFrame[frameNumber] = followIndex;
         }
+        
+        leadTracker = new KalmanBoxTracker();
+        leadTracker.Init(allPosesAndConfidencesPerFrame[frameNumber][leadIndex]);
+        
+        followTracker = new KalmanBoxTracker();
+        followTracker.Init(allPosesAndConfidencesPerFrame[frameNumber][followIndex]);
     }
 
     /// <summary>
@@ -307,9 +302,13 @@ public class CameraSetup(
         {
             case "Lead":
                 leadIndicesPerFrame[frameNumber] = closestIndex; // select
+                leadTracker = new KalmanBoxTracker();
+                leadTracker.Init(allPosesAndConfidencesPerFrame[frameNumber][closestIndex]);
                 break;
             case "Follow":
                 followIndicesPerFrame[frameNumber] = closestIndex; // select
+                followTracker = new KalmanBoxTracker();
+                followTracker.Init(allPosesAndConfidencesPerFrame[frameNumber][closestIndex]);
                 break;
             case "Move":
                 // TODO create
@@ -706,6 +705,69 @@ public class CameraSetup(
     }
 
     #endregion
+
+    public void Update(int frameNumber)
+    {
+        List<PoseBoundingBox> detections = allPosesAndConfidencesPerFrame[frameNumber];
+        PoseBoundingBox? leadTrackedPose = CalculateIoUMatrix(
+            detections,
+            leadTracker.Predict(),
+            .3f);
+
+        if (leadTrackedPose != null)
+        {
+            leadIndicesPerFrame[frameNumber] = detections.IndexOf(leadTrackedPose);
+            leadTracker.Correct(leadTrackedPose);
+        }
+        
+        PoseBoundingBox? followTrackedPose = CalculateIoUMatrix(
+            detections,
+            followTracker.Predict(),
+            .3f);
+        
+        if(followTrackedPose != null)
+        {
+            followIndicesPerFrame[frameNumber] = detections.IndexOf(followTrackedPose);
+            followTracker.Correct(followTrackedPose);
+        }
+    }
+    
+    /// <summary>
+    /// Inverse over Union Matrix
+    ///
+    /// Used to find overlap between prediction and observation. Each row represents the overlap of a detection with
+    /// each tracker
+    /// </summary>
+    static PoseBoundingBox? CalculateIoUMatrix(
+        List<PoseBoundingBox> detections,
+        float[] tracker,
+        double iouThreshold)
+    {
+        PoseBoundingBox? highestIouDetection = null;
+        double highestIou = iouThreshold;
+        foreach (PoseBoundingBox detection in detections)
+        {
+            // find smallest intersection box
+            double xx1 = Math.Max(detection.Bounds.Left, tracker[0]);
+            double yy1 = Math.Max(detection.Bounds.Top, tracker[1]);
+            double xx2 = Math.Min(detection.Bounds.Right, tracker[2]);
+            double yy2 = Math.Min(detection.Bounds.Bottom, tracker[3]);
+            double w = Math.Max(0.0, xx2 - xx1);
+            double h = Math.Max(0.0, yy2 - yy1);
+            double intersection = w * h;
+            double detArea = detection.Bounds.Width * detection.Bounds.Height;
+            double trkArea = (tracker[2] - tracker[0]) * (tracker[3] - tracker[1]);
+            double union = detArea + trkArea - intersection;
+            double iou = intersection / union;
+            if (iou > highestIou)
+            {
+                highestIou = iou;
+                highestIouDetection = detection;
+            }
+        }
+
+        return highestIouDetection;
+    }
 
     #region REFERENCE
 

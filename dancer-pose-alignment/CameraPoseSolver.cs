@@ -34,7 +34,6 @@ public class CameraPoseSolver(PoseType poseType)
         Vector3.UnitY,
         Vector3.UnitZ
     ];
-    
 
     public void CreateCamera(
         string name,
@@ -72,7 +71,7 @@ public class CameraPoseSolver(PoseType poseType)
         foreach (CameraSetup cameraSetup in cameras.Values)
         {
             cameraSetup.CopyRotationToNextFrame(frameNumber);
-            // TODO
+            cameraSetup.Update(frameNumber);
         }
 
         return true;

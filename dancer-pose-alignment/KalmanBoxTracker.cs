@@ -6,23 +6,9 @@ namespace dancer_pose_alignment;
 
 public class KalmanBoxTracker
 {
-    static int count = 0;
     readonly KalmanFilter kf;
 
-    public readonly int Id;
-
-    readonly List<float[]> history = [];
-    PoseBoundingBox lastBbox;
-
-    public List<Vector3> LastKeypoints
-    {
-        get
-        {
-            return lastBbox.Keypoints.Select(kp => new Vector3(kp.Point.X, kp.Point.Y, kp.Confidence)).ToList();
-        }
-    }
-
-    public KalmanBoxTracker(PoseBoundingBox bbox)
+    public KalmanBoxTracker()
     {
         kf = new KalmanFilter(7, 4);
 
@@ -59,7 +45,10 @@ public class KalmanBoxTracker
         kf.ProcessNoiseCov[
             4, kf.ProcessNoiseCov.Rows,
             4, kf.ProcessNoiseCov.Cols] *= 0.5; // Q
+    }
 
+    public void Init(PoseBoundingBox bbox)
+    {
         // initialize state
         float[] conv = ConvertBboxToZ(bbox); // X
         kf.StatePre.Set(0, conv[0]);
@@ -71,18 +60,11 @@ public class KalmanBoxTracker
         kf.StatePost.Set(1, conv[1]);
         kf.StatePost.Set(2, conv[2]);
         kf.StatePost.Set(3, conv[3]);
-
-        // reset global state
-        Id = count;
-        count++;
-        lastBbox = bbox;
     }
 
     public void Correct(PoseBoundingBox bbox)
     {
-        history.Clear();
         kf.Correct(ToMat(ConvertBboxToZ(bbox)));
-        lastBbox = bbox;
     }
 
     public float[] Predict()
@@ -91,17 +73,15 @@ public class KalmanBoxTracker
         {
             kf.StatePre.Set(6, 0); // X
         }
-
-        kf.Predict();
-        history.Add(ConvertXToBbox(ToVec(kf.StatePost)));
-        return history[^1];
+        
+        return ConvertXToBbox(ToVec(kf.Predict()));
     }
 
     // REFERENCE
     static float[] ConvertBboxToZ(PoseBoundingBox bbox)
     {
         float s = bbox.Bounds.Width * bbox.Bounds.Height;
-        float r = bbox.Bounds.Width / (float)bbox.Bounds.Height;
+        float r = bbox.Bounds.Width / bbox.Bounds.Height;
 
         return [bbox.Bounds.X, bbox.Bounds.Y, s, r];
     }
