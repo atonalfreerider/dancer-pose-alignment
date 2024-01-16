@@ -224,8 +224,8 @@ public partial class MainWindow : Window
                 startingFrame);
 
             string fileName = Path.GetFileNameWithoutExtension(videoFilePath);
-            
-            cameraPoseSolver.SetPoseFromImage(dbPath, videoFilePath, videoFilePathsAndOffsets.Keys.IndexOf(videoFilePath)); 
+            string filePrefix = fileName.Split("-")[0];
+            cameraPoseSolver.SetPoseFromImage(dbPath, videoFilePath, filePrefix); 
            
             string affinePath = Path.Combine(affineDirectory, fileName + ".mp4.json");
             // if pre-cached json, load it
@@ -296,8 +296,6 @@ public partial class MainWindow : Window
             }
 
             frameImages[videoFilePath].Source = frame;
-            
-            cameraPoseSolver.SetPoseFromImage(dbPath, videoFilePath, videoFiles.Keys.IndexOf(videoFilePath)); 
             
             if (cameraPoseSolver.AreLeadAndFollowAssignedForFrame())
             {
@@ -412,7 +410,7 @@ public partial class MainWindow : Window
 
     void SolverNextFrameButton_Click(object sender, RoutedEventArgs e)
     {
-        if (!cameraPoseSolver.Advance()) return;
+        if (!cameraPoseSolver.Advance(dbPath)) return;
 
         timeFromStart += 1d / 30d;
         
@@ -431,7 +429,7 @@ public partial class MainWindow : Window
     void RunUntilEnd_Click(object sender, RoutedEventArgs e)
     {
         int count = 0;
-        while (cameraPoseSolver.Advance())
+        while (cameraPoseSolver.Advance(dbPath))
         {
             timeFromStart += 1d / 30d;
             if (!cameraPoseSolver.AreLeadAndFollowAssignedForFrame())

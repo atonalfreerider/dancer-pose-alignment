@@ -49,7 +49,7 @@ public class CameraPoseSolver(PoseType poseType)
     /// <summary> 
     /// Called when poses are calculated for every frame 
     /// </summary> 
-    public void SetPoseFromImage(string dbPath, string camName, int tableNumber)
+    public void SetPoseFromImage(string dbPath, string camName, string filePrefix)
     {
         List<PoseBoundingBox> poses = [];
 
@@ -61,7 +61,7 @@ public class CameraPoseSolver(PoseType poseType)
             SELECT
                 keypoints, 
                 bounds" + "\n" +
-            $"FROM table_{tableNumber} " + "\n" +
+            $"FROM table_{filePrefix} " + "\n" +
             @"WHERE frame = @frameNumber";
 
             using (SQLiteCommand cmd = new(query, conn))
@@ -105,14 +105,16 @@ public class CameraPoseSolver(PoseType poseType)
         cameras[camName].SetAllAffine(affine);
     }
 
-    public bool Advance()
+    public bool Advance(string dbPath)
     {
         if (frameNumber >= MaximumFrameCount - 1) return false;
 
         frameNumber++;
-        foreach (CameraSetup cameraSetup in cameras.Values)
+        foreach ((string videoFilePath, CameraSetup cameraSetup) in cameras)
         {
+            string filePrefix = Path.GetFileNameWithoutExtension(videoFilePath).Split('-')[0];
             cameraSetup.CopyRotationToNextFrame(frameNumber);
+            SetPoseFromImage(dbPath, videoFilePath, filePrefix); 
             cameraSetup.Update(frameNumber);
         }
 

@@ -16,27 +16,24 @@ static class Program
     static void SaveYoloJsonToSqlite(string poseFolder)
     {
         List<string> poseJsons = Directory.EnumerateFiles(poseFolder, "*.json").ToList();
-        int numVideos = poseJsons.Count;
+        List<string> fileNames = poseJsons.Select(Path.GetFileNameWithoutExtension).ToList();
         const string sqlitePath = @"C:\Users\john\Desktop\larissa-kadu-recap.db";
         if (File.Exists(sqlitePath))
         {
             File.Delete(sqlitePath);
         }
         SqliteOutput sqliteOutput = new(sqlitePath);
-        sqliteOutput.CreateTables(numVideos);
-        int count = 0;
+        sqliteOutput.CreateTables(fileNames);
         foreach (string posePath in poseJsons)
         {
             Console.WriteLine($"writing {posePath} to db");
             List<List<PoseBoundingBox>> posesByFrame = JsonConvert.DeserializeObject<List<List<PoseBoundingBox>>>(
                 File.ReadAllText(posePath));
 
-            sqliteOutput.Serialize(count, posesByFrame);
-            
-            count++;
+            sqliteOutput.Serialize(Path.GetFileNameWithoutExtension(posePath), posesByFrame);
         }
         
-        Console.WriteLine($"wrote {numVideos} to {sqlitePath}");
+        Console.WriteLine($"wrote to {sqlitePath}");
     }
 
     static void Affine(string rootFolder)
