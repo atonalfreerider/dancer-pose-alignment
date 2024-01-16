@@ -1,3 +1,4 @@
+using System.Data.SQLite;
 using System.Numerics;
 using System.Reflection;
 
@@ -45,18 +46,59 @@ public class CameraPoseSolver(PoseType poseType)
         cameras.Add(name, camera);
     }
 
-    /// <summary>
-    /// Called when poses are loaded from cache
-    /// </summary>
-    public void SetAllPoses(List<List<PoseBoundingBox>> posesByFrame, string camName)
+    /// <summary> 
+    /// Called when poses are calculated for every frame 
+    /// </summary> 
+    public void SetPoseFromImage(string dbPath, string camName, int tableNumber)
     {
-        cameras[camName].SetAllPosesForEveryFrame(posesByFrame);
+        List<PoseBoundingBox> poses = [];
 
-        if (frameNumber == 0)
+        using (SQLiteConnection conn = new($"URI=file:{dbPath}"))
         {
-            TryHomeCamera(camName);
+            conn.Open();
+
+            string query = @"
+            SELECT
+                keypoints, 
+                bounds" + "\n" +
+            $"FROM table_{tableNumber} " + "\n" +
+            @"WHERE frame = @frameNumber";
+
+            using (SQLiteCommand cmd = new(query, conn))
+            {
+                cmd.Parameters.AddWithValue("@frameNumber", frameNumber);
+
+                using (SQLiteDataReader reader = cmd.ExecuteReader())
+                {
+                    while (reader.Read())
+                    {
+                        string keypoints = reader.GetString(0);
+                        string bounds = reader.GetString(1);
+
+                        // Assuming PoseBoundingBox has a constructor that takes these values
+                        PoseBoundingBox pose = new()
+                        {
+                            Keypoints = JsonConvert.DeserializeObject<List<Keypoint>>(keypoints),
+                            Bounds = JsonConvert.DeserializeObject<Rectangle>(bounds)
+                        };
+                        poses.Add(pose);
+                    }
+                }
+            }
         }
-    }
+         
+        cameras[camName].SetAllPosesAtFrame(poses, frameNumber); 
+ 
+        if (frameNumber == 0) 
+        { 
+            cameras[camName].FrameZeroLeadFollowFinderAndCamHeight(poses); 
+            TryHomeCamera(camName); 
+        } 
+        else 
+        { 
+            // TODO 
+        } 
+    } 
 
     public void SetAllAffine(List<Vector3> affine, string camName)
     {

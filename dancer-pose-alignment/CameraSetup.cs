@@ -60,29 +60,18 @@ public class CameraSetup(
 
     List<Vector3> affineTransforms; // all x,y motions and roll per frame, in pixels and radians
 
-    /// <summary>
-    /// Called when poses are loaded from cache
-    /// </summary>
-    public void SetAllPosesForEveryFrame(List<List<PoseBoundingBox>> posesByFrame)
-    {
-        for (int i = 0; i < totalFrameCount; i++)
-        {
-            int sampleFrame =
-                (int)Math.Round(startingFrame + i * ((posesByFrame.Count - startingFrame) / (float)totalFrameCount));
-
-            allPosesAndConfidencesPerFrame[i] = posesByFrame[sampleFrame];
-            recenteredRescaledAllPosesPerFrame[i] = posesByFrame[sampleFrame]
-                .Select(poseBoundingBox => poseBoundingBox.Keypoints.Select(keypoint =>
-                    new Vector3(
-                        (keypoint.Point.X - size.X / 2) * PixelToMeter,
-                        -(keypoint.Point.Y - size.Y / 2) * PixelToMeter, // flip
-                        keypoint.Confidence)).ToList()).ToList(); // keep the confidence;
-
-            if (i == 0)
-            {
-                FrameZeroLeadFollowFinderAndCamHeight(posesByFrame[sampleFrame]);
-            }
-        }
+    /// <summary> 
+    /// Called when poses are calculated for every frame 
+    /// </summary> 
+    public void SetAllPosesAtFrame(List<PoseBoundingBox> posesAtFrame, int frameNumber) 
+    { 
+        allPosesAndConfidencesPerFrame[frameNumber] = posesAtFrame; 
+        recenteredRescaledAllPosesPerFrame[frameNumber] = posesAtFrame 
+            .Select(poseBoundingBox => poseBoundingBox.Keypoints.Select(keypoint => 
+                new Vector3( 
+                    (keypoint.Point.X - size.X / 2) * PixelToMeter, 
+                    -(keypoint.Point.Y - size.Y / 2) * PixelToMeter, // flip 
+                    keypoint.Confidence)).ToList()).ToList(); // keep the confidence; 
     }
 
     public void SetAllAffine(List<Vector3> affine)
@@ -90,7 +79,7 @@ public class CameraSetup(
         affineTransforms = affine;
     }
 
-    void FrameZeroLeadFollowFinderAndCamHeight(List<PoseBoundingBox> allPoses)
+    public void FrameZeroLeadFollowFinderAndCamHeight(List<PoseBoundingBox> allPoses)
     {
         // find lead and follow
         int tallestIndex = -1;

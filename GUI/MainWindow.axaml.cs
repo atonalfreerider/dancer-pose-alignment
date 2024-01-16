@@ -14,6 +14,7 @@ using Avalonia.Media;
 using Avalonia.Media.Imaging;
 
 using dancer_pose_alignment;
+using DynamicData;
 using Newtonsoft.Json;
 using OpenCvSharp;
 using Size = Avalonia.Size;
@@ -37,6 +38,8 @@ public partial class MainWindow : Window
     double timeFromStart = 0;
     double highestPositiveOffsetSeconds = 0;
 
+    string dbPath;
+
     public MainWindow()
     {
         // clip alignment
@@ -54,6 +57,7 @@ public partial class MainWindow : Window
     void LoadVideosButton_Click(object sender, RoutedEventArgs e)
     {
         string videoDirectory = VideoDirectory();
+        dbPath = Path.Combine(videoDirectory, "larissa-kadu-recap.db");
 
         if (string.IsNullOrEmpty(videoDirectory) || !Directory.Exists(videoDirectory)) return;
 
@@ -136,7 +140,7 @@ public partial class MainWindow : Window
     void LoadVideos(Dictionary<string, double> videoFilePathsAndOffsets)
     {
         string videoDirectory = VideoDirectory();
-        string poseDirectory = Path.Combine(videoDirectory, "pose/");
+        string dbPath = Path.Combine(videoDirectory, "larissa-kadu-recap.db");
         string affineDirectory = Path.Combine(videoDirectory, "affine/");
         
         cameraPoseSolver = new CameraPoseSolver(PoseType.Coco);
@@ -220,19 +224,9 @@ public partial class MainWindow : Window
                 startingFrame);
 
             string fileName = Path.GetFileNameWithoutExtension(videoFilePath);
-            string posePath = Path.Combine(poseDirectory, fileName + ".mp4.json");
-            // if pre-cached json, load it
-            if (File.Exists(posePath))
-            {
-                List<List<PoseBoundingBox>> posesByFrame = JsonConvert.DeserializeObject<List<List<PoseBoundingBox>>>(
-                    File.ReadAllText(posePath));
-                cameraPoseSolver.SetAllPoses(posesByFrame, videoFilePath);
-            }
-            else
-            {
-                // do nothing
-            }
             
+            cameraPoseSolver.SetPoseFromImage(dbPath, videoFilePath, videoFilePathsAndOffsets.Keys.IndexOf(videoFilePath)); 
+           
             string affinePath = Path.Combine(affineDirectory, fileName + ".mp4.json");
             // if pre-cached json, load it
             if (File.Exists(affinePath))
@@ -302,12 +296,8 @@ public partial class MainWindow : Window
             }
 
             frameImages[videoFilePath].Source = frame;
-
-            // if pre-cached json, load it
-            if (!File.Exists(Path.Combine(videoFilePath, ".json")))
-            {
-                // do nothing
-            }
+            
+            cameraPoseSolver.SetPoseFromImage(dbPath, videoFilePath, videoFiles.Keys.IndexOf(videoFilePath)); 
             
             if (cameraPoseSolver.AreLeadAndFollowAssignedForFrame())
             {
