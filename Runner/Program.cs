@@ -18,6 +18,10 @@ static class Program
         List<string> poseJsons = Directory.EnumerateFiles(poseFolder, "*.json").ToList();
         int numVideos = poseJsons.Count;
         const string sqlitePath = @"C:\Users\john\Desktop\larissa-kadu-recap.db";
+        if (File.Exists(sqlitePath))
+        {
+            File.Delete(sqlitePath);
+        }
         SqliteOutput sqliteOutput = new(sqlitePath);
         sqliteOutput.CreateTables(numVideos);
         int count = 0;

@@ -15,11 +15,12 @@ public class SqliteOutput(string dbPath)
         using IDbCommand cmd = conn.CreateCommand();
         for (int i = 0; i < numTables; i++)
         {
-            cmd.CommandText = $"CREATE TABLE table_{i} (" + @"
-                          id INTEGER PRIMARY KEY ASC,
-                          frame INTEGER NOT NULL,
-                          keypoints TEXT NOT NULL,
-                          bounds TEXT NOT NULL)";
+            cmd.CommandText = $"CREATE TABLE table_{i} (\n" + @"
+                        id INTEGER PRIMARY KEY ASC,
+                        frame INTEGER NOT NULL,
+                        keypoints TEXT NOT NULL,
+                        bounds TEXT NOT NULL);" + 
+                              $"\nCREATE INDEX idx_frame_{i} ON table_{i}(frame);";
 
             cmd.ExecuteNonQuery();
         }

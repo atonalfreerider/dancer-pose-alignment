@@ -89,7 +89,7 @@ public class CameraPoseSolver(PoseType poseType)
          
         cameras[camName].SetAllPosesAtFrame(poses, frameNumber); 
  
-        if (frameNumber == 0) 
+        if (frameNumber == 0)
         { 
             cameras[camName].FrameZeroLeadFollowFinderAndCamHeight(poses); 
             TryHomeCamera(camName); 
