@@ -709,7 +709,7 @@ public class CameraSetup(
     public void Update(int frameNumber)
     {
         List<PoseBoundingBox> detections = allPosesAndConfidencesPerFrame[frameNumber];
-        PoseBoundingBox? leadTrackedPose = CalculateIoUMatrix(
+        PoseBoundingBox? leadTrackedPose = FindBestBoxFit(
             detections,
             leadTracker.Predict(),
             .3f);
@@ -720,7 +720,7 @@ public class CameraSetup(
             leadTracker.Correct(leadTrackedPose);
         }
         
-        PoseBoundingBox? followTrackedPose = CalculateIoUMatrix(
+        PoseBoundingBox? followTrackedPose = FindBestBoxFit(
             detections,
             followTracker.Predict(),
             .3f);
@@ -733,14 +733,11 @@ public class CameraSetup(
     }
     
     /// <summary>
-    /// Inverse over Union Matrix
-    ///
-    /// Used to find overlap between prediction and observation. Each row represents the overlap of a detection with
-    /// each tracker
+    /// Inverse over Union to find overlap between prediction and observation.
     /// </summary>
-    static PoseBoundingBox? CalculateIoUMatrix(
+    static PoseBoundingBox? FindBestBoxFit(
         List<PoseBoundingBox> detections,
-        float[] tracker,
+        Rectangle tracker,
         double iouThreshold)
     {
         PoseBoundingBox? highestIouDetection = null;
@@ -748,15 +745,15 @@ public class CameraSetup(
         foreach (PoseBoundingBox detection in detections)
         {
             // find smallest intersection box
-            double xx1 = Math.Max(detection.Bounds.Left, tracker[0]);
-            double yy1 = Math.Max(detection.Bounds.Top, tracker[1]);
-            double xx2 = Math.Min(detection.Bounds.Right, tracker[2]);
-            double yy2 = Math.Min(detection.Bounds.Bottom, tracker[3]);
+            double xx1 = Math.Max(detection.Bounds.Left, tracker.Left);
+            double yy1 = Math.Max(detection.Bounds.Top, tracker.Top);
+            double xx2 = Math.Min(detection.Bounds.Right, tracker.Right);
+            double yy2 = Math.Min(detection.Bounds.Bottom, tracker.Bottom);
             double w = Math.Max(0.0, xx2 - xx1);
             double h = Math.Max(0.0, yy2 - yy1);
             double intersection = w * h;
             double detArea = detection.Bounds.Width * detection.Bounds.Height;
-            double trkArea = (tracker[2] - tracker[0]) * (tracker[3] - tracker[1]);
+            double trkArea = tracker.Width * tracker.Height;
             double union = detArea + trkArea - intersection;
             double iou = intersection / union;
             if (iou > highestIou)
