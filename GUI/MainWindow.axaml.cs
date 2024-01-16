@@ -226,10 +226,7 @@ public partial class MainWindow : Window
             {
                 List<List<PoseBoundingBox>> posesByFrame = JsonConvert.DeserializeObject<List<List<PoseBoundingBox>>>(
                     File.ReadAllText(posePath));
-                List<List<PoseBoundingBox>> posesByFrameCast = posesByFrame
-                    .Select(x => x
-                        .Select(y => (PoseBoundingBox)y).ToList()).ToList();
-                cameraPoseSolver.SetAllPoses(posesByFrameCast, videoFilePath);
+                cameraPoseSolver.SetAllPoses(posesByFrame, videoFilePath);
             }
             else
             {
