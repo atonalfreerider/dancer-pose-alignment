@@ -1,5 +1,6 @@
 using System.Numerics;
 using System.Reflection;
+
 using ComputeSharp;
 using Newtonsoft.Json;
 
@@ -34,65 +35,49 @@ public class CameraPoseSolver(PoseType poseType)
         Vector3.UnitZ
     ];
 
-    readonly Yolo yolo = new("yolov8x-pose.onnx"); // this must be placed in the assembly directory
-
     public void CreateCamera(
         string name,
         Vector2 imageSize,
         int frameCount,
-        int startingFrame)
+        int startingFrame,
+        int maxFrame)
     {
-        CameraSetup camera = new(name, imageSize, frameCount, poseType, startingFrame);
+        CameraSetup camera = new(name, imageSize, frameCount, poseType, startingFrame, maxFrame);
         cameras.Add(name, camera);
     }
 
-    /// <summary>
-    /// Called when poses are calculated for every frame
-    /// </summary>
-    public void SetPoseFromImage(MemoryStream imageStream, string camName)
+    /// <summary> 
+    /// Called when poses are calculated for every frame 
+    /// </summary> 
+    public void SetPoseFromImage(string dbPath, string camName)
     {
-        List<List<Vector3>> poses = yolo.CalculatePosesFromImage(imageStream);
-        cameras[camName].SetAllPosesAtFrame(poses, frameNumber);
-
+        cameras[camName].SetAllPosesAtFrame(frameNumber, dbPath); 
+ 
         if (frameNumber == 0)
-        {
-            cameras[camName].FrameZeroLeadFollowFinderAndCamHeight(poses);
-            TryHomeCamera(camName);
-        }
-        else
-        {
-            cameras[camName].Match3DPoseToPoses(
-                frameNumber,
-                merged3DPoseLeadPerFrame[frameNumber - 1],
-                merged3DPoseFollowPerFrame[frameNumber - 1]);
-        }
+        { 
+            TryHomeCamera(camName); 
+        } 
+        else 
+        { 
+            // TODO 
+        } 
+    } 
+
+    public void SetAllAffine(List<Vector3> affine, string camName)
+    {
+        cameras[camName].SetAllAffine(affine);
     }
 
-    /// <summary>
-    /// Called when poses are loaded from cache
-    /// </summary>
-    public void SetAllPoses(List<List<List<Vector3>>> posesByFrame, string camName)
-    {
-        cameras[camName].SetAllPosesForEveryFrame(posesByFrame);
-
-        if (frameNumber == 0)
-        {
-            TryHomeCamera(camName);
-        }
-    }
-
-    public bool Advance()
+    public bool Advance(string dbPath)
     {
         if (frameNumber >= MaximumFrameCount - 1) return false;
 
         frameNumber++;
-        foreach (CameraSetup cameraSetup in cameras.Values)
+        foreach ((string videoFilePath, CameraSetup cameraSetup) in cameras)
         {
             cameraSetup.CopyRotationToNextFrame(frameNumber);
-            cameraSetup.Match3DPoseToPoses(
-                frameNumber,
-                merged3DPoseLeadPerFrame[frameNumber - 1],
-                merged3DPoseFollowPerFrame[frameNumber - 1]);
+            SetPoseFromImage(dbPath, videoFilePath); 
+            cameraSetup.Update(frameNumber);
         }
 
         return true;
@@ -173,7 +158,7 @@ public class CameraPoseSolver(PoseType poseType)
         using ReadOnlyBuffer<float> jointConfidenceBuffer = GraphicsDevice.GetDefault()
             .AllocateReadOnlyBuffer(jointConfidencePerCameraPerJoint.ToArray());
 
-        MidpointFinder midpointFinder = new MidpointFinder(
+        MidpointFinder midpointFinder = new(
             minMidpointBuffer,
             rayOriginBuffer,
             rayDirectionBuffer,
@@ -387,19 +372,11 @@ public class CameraPoseSolver(PoseType poseType)
         }
     }
 
-    public void TrackCameraRotation()
-    {
-        foreach (CameraSetup cam in cameras.Values)
-        {
-            cam.TrackRotationFromLastFrame(frameNumber);
-        }
-    }
-
     #endregion
 
     #region DRAWING
 
-    public List<List<Vector3>> GetPosesAtFrameAtCamera(string camName)
+    public List<PoseBoundingBox> GetPosesAtFrameAtCamera(string camName)
     {
         return cameras[camName].GetPosesPerDancerAtFrame(frameNumber);
     }
@@ -467,7 +444,7 @@ public class CameraPoseSolver(PoseType poseType)
         List<Vector3> allPoints = [];
         foreach (Tuple<float, float> tuple in ordered)
         {
-            Vector3 point = new Vector3(tuple.Item2 * MathF.Sin(tuple.Item1), 0, tuple.Item2 * MathF.Cos(tuple.Item1));
+            Vector3 point = new(tuple.Item2 * MathF.Sin(tuple.Item1), 0, tuple.Item2 * MathF.Cos(tuple.Item1));
             allPoints.Add(point);
         }
 

@@ -22,7 +22,7 @@ static class Program
     static void AppMain(Application app, string[] args)
     {
         // A cancellation token source that will be used to stop the main loop
-        CancellationTokenSource cts = new CancellationTokenSource();
+        CancellationTokenSource cts = new();
 
         // Do you startup code here
         mainWindow = new MainWindow();

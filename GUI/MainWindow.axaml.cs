@@ -1,4 +1,5 @@
-﻿using System.Numerics;
+﻿using System.Data.SQLite;
+using System.Numerics;
 using Aurio;
 using Aurio.FFmpeg;
 using Aurio.FFT;
@@ -12,7 +13,9 @@ using Avalonia.Input;
 using Avalonia.Interactivity;
 using Avalonia.Media;
 using Avalonia.Media.Imaging;
+
 using dancer_pose_alignment;
+using DynamicData;
 using Newtonsoft.Json;
 using OpenCvSharp;
 using Size = Avalonia.Size;
@@ -36,6 +39,8 @@ public partial class MainWindow : Window
     double timeFromStart = 0;
     double highestPositiveOffsetSeconds = 0;
 
+    string dbPath;
+
     public MainWindow()
     {
         // clip alignment
@@ -52,14 +57,10 @@ public partial class MainWindow : Window
 
     void LoadVideosButton_Click(object sender, RoutedEventArgs e)
     {
-        string? videoDirectory = VideoInputPath.Text;
-        if (string.IsNullOrEmpty(videoDirectory)) return;
-        if (!videoDirectory.EndsWith('/') && !videoDirectory.EndsWith('\\'))
-        {
-            videoDirectory += '/';
-        }
+        string videoDirectory = VideoDirectory();
+        dbPath = Path.Combine(videoDirectory, "larissa-kadu-recap.db");
 
-        if (!Directory.Exists(videoDirectory)) return;
+        if (string.IsNullOrEmpty(videoDirectory) || !Directory.Exists(videoDirectory)) return;
 
         if (File.Exists(Path.Combine(videoDirectory, "camera-time-offsets.json")))
         {
@@ -73,11 +74,11 @@ public partial class MainWindow : Window
         List<AudioTrack> audioTracks = [];
         foreach (string videoPath in Directory.EnumerateFiles(videoDirectory, "*.mp4"))
         {
-            AudioTrack audioTrack = new AudioTrack(new FileInfo(videoPath));
+            AudioTrack audioTrack = new(new FileInfo(videoPath));
             audioTracks.Add(audioTrack);
         }
 
-        HaitsmaKalkerFingerprintingModel model = new HaitsmaKalkerFingerprintingModel();
+        HaitsmaKalkerFingerprintingModel model = new();
         model.FingerprintingFinished += delegate
         {
             model.FindAllMatches(
@@ -139,6 +140,10 @@ public partial class MainWindow : Window
 
     void LoadVideos(Dictionary<string, double> videoFilePathsAndOffsets)
     {
+        string videoDirectory = VideoDirectory();
+        string dbPath = Path.Combine(videoDirectory, "larissa-kadu-recap.db");
+        string affineDirectory = Path.Combine(videoDirectory, "affine/");
+        
         cameraPoseSolver = new CameraPoseSolver(PoseType.Coco);
 
         videoFiles.Clear();
@@ -153,7 +158,7 @@ public partial class MainWindow : Window
         foreach ((string videoFilePath, double myOffset) in videoFilePathsAndOffsets)
         {
             // initialize video capture
-            VideoCapture videoCapture = new VideoCapture(videoFilePath);
+            VideoCapture videoCapture = new(videoFilePath);
             videoFiles.Add(videoFilePath, videoCapture);
             indexToVideoFilePath.Add(camCount, videoFilePath);
 
@@ -178,6 +183,7 @@ public partial class MainWindow : Window
 
             Mat frameMat = outputArray.GetMat();
 
+            // render image
             Bitmap frame;
             try
             {
@@ -190,10 +196,10 @@ public partial class MainWindow : Window
                 continue;
             }
 
-            Size size = new Size(frameMat.Width, frameMat.Height);
+            Size size = new(frameMat.Width, frameMat.Height);
 
             // add frame image to canvas
-            Image frameImage = new Image
+            Image frameImage = new()
             {
                 Width = size.Width,
                 Height = size.Height,
@@ -201,7 +207,7 @@ public partial class MainWindow : Window
             };
             frameImages.Add(videoFilePath, frameImage);
 
-            Canvas canvas = new Canvas
+            Canvas canvas = new()
             {
                 Width = size.Width,
                 Height = size.Height
@@ -216,22 +222,27 @@ public partial class MainWindow : Window
                 videoFilePath,
                 new Vector2((float)size.Width, (float)size.Height),
                 framesAt30Fps,
-                startingFrame);
-
+                startingFrame,
+                frameCount);
+            
+            string fileName = Path.GetFileNameWithoutExtension(videoFilePath);
+            cameraPoseSolver.SetPoseFromImage(dbPath, videoFilePath); 
+           
+            string affinePath = Path.Combine(affineDirectory, fileName + ".mp4.json");
             // if pre-cached json, load it
-            if (File.Exists(videoFilePath + ".json"))
+            if (File.Exists(affinePath))
             {
-                List<List<List<Vector3>>> posesByFrame = JsonConvert.DeserializeObject<List<List<List<Vector3>>>>(
-                    File.ReadAllText(videoFilePath + ".json"));
-                cameraPoseSolver.SetAllPoses(posesByFrame, videoFilePath);
+                List<Vector3> affineTransform = JsonConvert.DeserializeObject<List<Vector3>>(
+                    File.ReadAllText(affinePath));
+                cameraPoseSolver.SetAllAffine(affineTransform, videoFilePath);
             }
             else
             {
-                cameraPoseSolver.SetPoseFromImage(frameMat.ToMemoryStream(), videoFilePath);
+                // do nothing
             }
 
-            DrawingImage drawingImage = new DrawingImage();
-            Image poseDrawingImage = new Image
+            DrawingImage drawingImage = new();
+            Image poseDrawingImage = new()
             {
                 Width = size.Width,
                 Height = size.Height,
@@ -272,6 +283,7 @@ public partial class MainWindow : Window
 
             Mat frameMat = outputArray.GetMat();
 
+            // render frame
             Bitmap frame;
             try
             {
@@ -285,12 +297,6 @@ public partial class MainWindow : Window
             }
 
             frameImages[videoFilePath].Source = frame;
-
-            // if pre-cached json, load it
-            if (!File.Exists(Path.Combine(videoFilePath, ".json")))
-            {
-                cameraPoseSolver.SetPoseFromImage(frameMat.ToMemoryStream(), videoFilePath);
-            }
             
             if (cameraPoseSolver.AreLeadAndFollowAssignedForFrame())
             {
@@ -387,7 +393,7 @@ public partial class MainWindow : Window
 
         List<Vector2> cameraPositions2D = cameraPoseSolver.ReverseProjectCameraPositionsAtCameraAndManualPair(camName);
 
-        DrawingImage drawingImage = new DrawingImage();
+        DrawingImage drawingImage = new();
         DrawingGroup drawingGroup = PreviewDrawer.DrawGeometry(
             cameraPoseSolver.GetPosesAtFrameAtCamera(camName),
             new Size(graphicsImages[camName].Width, graphicsImages[camName].Height),
@@ -405,14 +411,9 @@ public partial class MainWindow : Window
 
     void SolverNextFrameButton_Click(object sender, RoutedEventArgs e)
     {
-        if (!cameraPoseSolver.Advance()) return;
+        if (!cameraPoseSolver.Advance(dbPath)) return;
 
         timeFromStart += 1d / 30d;
-        
-        if (cameraPoseSolver.AreLeadAndFollowAssignedForFrame())
-        {
-            cameraPoseSolver.TrackCameraRotation();
-        }
         
         SetPreviewsToFrame();
     }
@@ -428,8 +429,7 @@ public partial class MainWindow : Window
 
     void RunUntilEnd_Click(object sender, RoutedEventArgs e)
     {
-        int count = 0;
-        while (cameraPoseSolver.Advance())
+        while (cameraPoseSolver.Advance(dbPath))
         {
             timeFromStart += 1d / 30d;
             if (!cameraPoseSolver.AreLeadAndFollowAssignedForFrame())
@@ -437,13 +437,7 @@ public partial class MainWindow : Window
                 break;
             }
             
-            cameraPoseSolver.TrackCameraRotation();
             cameraPoseSolver.CalculateLeadFollow3DPoses();
-            count++;
-            if (count > 100)
-            {
-                break;
-            }
         }
         SetPreviewsToFrame();
     }
@@ -451,5 +445,17 @@ public partial class MainWindow : Window
     void Save3D_Click(object sender, RoutedEventArgs e)
     {
         cameraPoseSolver.SaveData(VideoInputPath.Text);
+    }
+
+    string VideoDirectory()
+    {
+        string? videoDirectory = VideoInputPath.Text;
+        if (string.IsNullOrEmpty(videoDirectory)) return "";
+        if (!videoDirectory.EndsWith('/') && !videoDirectory.EndsWith('\\'))
+        {
+            videoDirectory += '/';
+        }
+
+        return videoDirectory;
     }
 }
