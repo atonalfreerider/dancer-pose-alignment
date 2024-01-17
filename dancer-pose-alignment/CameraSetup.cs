@@ -904,7 +904,7 @@ public class CameraSetup(
         Vector3 lastAffine = affineTransforms[lastSampleFrame];
         int sampleFrame = SampleFrame(frameNumber);
             
-        for (int i = lastSampleFrame + 1; i <= sampleFrame; i++)
+        for (int i = lastSampleFrame + 1; i < sampleFrame; i++)
         {
             lastAffine += affineTransforms[i];
         }
@@ -912,8 +912,9 @@ public class CameraSetup(
         float pitchAlpha = MathF.Atan2(lastAffine.Y * PixelToMeter, focalLength);
         float yawAlpha = MathF.Atan2(lastAffine.X * PixelToMeter, focalLength);
 
-        rotationsPerFrame[frameNumber] = Quaternion.CreateFromAxisAngle(Vector3.UnitX, -pitchAlpha) *
-                                         Quaternion.CreateFromAxisAngle(Vector3.UnitY, -yawAlpha) *
+        rotationsPerFrame[frameNumber] = Quaternion.CreateFromAxisAngle(Right(frameNumber - 1), -pitchAlpha) *
+                                         Quaternion.CreateFromAxisAngle(Up(frameNumber - 1), -yawAlpha) *
+                                         //Quaternion.CreateFromAxisAngle(Forward(frameNumber - 1), lastAffine.Z) * // roll
                                          rotationsPerFrame[frameNumber - 1];
     }
 
