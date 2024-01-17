@@ -7,7 +7,7 @@ namespace dancer_pose_alignment;
 public class CameraSetup(
     string name,
     Vector2 size,
-    int totalFrameCount,
+    int totalFrameCountAt30Fps,
     PoseType poseType,
     int startingFrame,
     int maxFrame)
@@ -20,7 +20,7 @@ public class CameraSetup(
 
     // cartesian position is constant (for now), rotation is tracked per frame
     public Vector3 Position => new(radius * MathF.Sin(alpha), height, radius * MathF.Cos(alpha));
-    readonly Quaternion[] rotationsPerFrame = new Quaternion[totalFrameCount];
+    readonly Quaternion[] rotationsPerFrame = new Quaternion[totalFrameCountAt30Fps];
 
     // constants
     const float TorsoHeight = .4f; // used to determine height of camera from ground
@@ -43,23 +43,23 @@ public class CameraSetup(
 
     // all poses in reference to image (x, -y, confidence) and camera center (x, y, confidence)
     readonly List<PoseBoundingBox>[] allPosesAndConfidencesPerFrame =
-        new List<PoseBoundingBox>[totalFrameCount];
+        new List<PoseBoundingBox>[totalFrameCountAt30Fps];
 
     readonly List<List<Vector3>>[] recenteredRescaledAllPosesPerFrame =
-        new List<List<Vector3>>[totalFrameCount];
+        new List<List<Vector3>>[totalFrameCountAt30Fps];
 
     Dictionary<int, Dictionary<int, List<Point>>> movedPoses = new();
 
     // indices referencing above pose lists
-    readonly int[] leadIndicesPerFrame = new int[totalFrameCount];
-    readonly int[] followIndicesPerFrame = new int[totalFrameCount];
+    readonly int[] leadIndicesPerFrame = new int[totalFrameCountAt30Fps];
+    readonly int[] followIndicesPerFrame = new int[totalFrameCountAt30Fps];
 
     KalmanBoxTracker? leadTracker;
     KalmanBoxTracker? followTracker;
 
     // these poses are projected onto the image plane and used to calculate the 3D pose from ray projection
-    readonly List<Vector3>[] leadProjectionsPerFrame = new List<Vector3>[totalFrameCount];
-    readonly List<Vector3>[] followProjectionsPerFrame = new List<Vector3>[totalFrameCount];
+    readonly List<Vector3>[] leadProjectionsPerFrame = new List<Vector3>[totalFrameCountAt30Fps];
+    readonly List<Vector3>[] followProjectionsPerFrame = new List<Vector3>[totalFrameCountAt30Fps];
 
     List<Vector3> affineTransforms; // all x,y motions and roll per frame, in pixels and radians
 
@@ -69,7 +69,7 @@ public class CameraSetup(
     public void SetAllPosesAtFrame(int frameNumber, string dbPath)
     {
         string filePrefix = Path.GetFileNameWithoutExtension(name).Split("-")[0];
-        int sampleFrame = SampleFrame(frameNumber, maxFrame);
+        int sampleFrame = SampleFrame(frameNumber);
         List<PoseBoundingBox> posesAtFrame = PosesAtFrameFromDb(dbPath, filePrefix, sampleFrame);
 
         allPosesAndConfidencesPerFrame[frameNumber] = posesAtFrame;
@@ -766,6 +766,8 @@ public class CameraSetup(
 
     #endregion
 
+    #region KALMAN
+    
     public void Update(int frameNumber)
     {
         if (leadTracker == null || followTracker == null) return;
@@ -856,6 +858,8 @@ public class CameraSetup(
 
         return detectionIndex;
     }
+    
+    #endregion
 
     #region REFERENCE
 
@@ -896,9 +900,9 @@ public class CameraSetup(
     public void CopyRotationToNextFrame(int frameNumber)
     {
         // interpolate the frame
-        int lastSampleFrame = SampleFrame(frameNumber - 1, affineTransforms.Count);
+        int lastSampleFrame = SampleFrame(frameNumber - 1);
         Vector3 lastAffine = affineTransforms[lastSampleFrame];
-        int sampleFrame = SampleFrame(frameNumber, affineTransforms.Count);
+        int sampleFrame = SampleFrame(frameNumber);
             
         for (int i = lastSampleFrame + 1; i <= sampleFrame; i++)
         {
@@ -965,10 +969,9 @@ public class CameraSetup(
         return Transform.RayPlaneIntersection(new Plane(Vector3.UnitY, 0), rayFromImgPoint);
     }
 
-    int SampleFrame(int frameNumber, int arrayCount)
+    int SampleFrame(int frameNumber)
     {
-        return (int)Math.Round(startingFrame +
-                        frameNumber * ((arrayCount - startingFrame) / (float)totalFrameCount));
+        return (int)Math.Round(startingFrame + frameNumber * (maxFrame / (float)totalFrameCountAt30Fps));
     }
 
     #endregion
