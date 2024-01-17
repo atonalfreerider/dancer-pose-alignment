@@ -1,4 +1,5 @@
-﻿using System.Numerics;
+﻿using System.Data.SQLite;
+using System.Numerics;
 using Aurio;
 using Aurio.FFmpeg;
 using Aurio.FFT;
@@ -221,11 +222,11 @@ public partial class MainWindow : Window
                 videoFilePath,
                 new Vector2((float)size.Width, (float)size.Height),
                 framesAt30Fps,
-                startingFrame);
-
+                startingFrame,
+                frameCount);
+            
             string fileName = Path.GetFileNameWithoutExtension(videoFilePath);
-            string filePrefix = fileName.Split("-")[0];
-            cameraPoseSolver.SetPoseFromImage(dbPath, videoFilePath, filePrefix); 
+            cameraPoseSolver.SetPoseFromImage(dbPath, videoFilePath); 
            
             string affinePath = Path.Combine(affineDirectory, fileName + ".mp4.json");
             // if pre-cached json, load it

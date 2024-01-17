@@ -1,4 +1,6 @@
+using System.Data.SQLite;
 using System.Numerics;
+using Newtonsoft.Json;
 
 namespace dancer_pose_alignment;
 
@@ -7,7 +9,8 @@ public class CameraSetup(
     Vector2 size,
     int totalFrameCount,
     PoseType poseType,
-    int startingFrame)
+    int startingFrame,
+    int maxFrame)
 {
     // camera cylindrical position and intrinsic
     float radius = 3.5f;
@@ -44,13 +47,13 @@ public class CameraSetup(
 
     readonly List<List<Vector3>>[] recenteredRescaledAllPosesPerFrame =
         new List<List<Vector3>>[totalFrameCount];
-    
+
     Dictionary<int, Dictionary<int, List<Point>>> movedPoses = new();
 
     // indices referencing above pose lists
     readonly int[] leadIndicesPerFrame = new int[totalFrameCount];
     readonly int[] followIndicesPerFrame = new int[totalFrameCount];
-    
+
     KalmanBoxTracker leadTracker;
     KalmanBoxTracker followTracker;
 
@@ -63,15 +66,58 @@ public class CameraSetup(
     /// <summary> 
     /// Called when poses are calculated for every frame 
     /// </summary> 
-    public void SetAllPosesAtFrame(List<PoseBoundingBox> posesAtFrame, int frameNumber) 
-    { 
-        allPosesAndConfidencesPerFrame[frameNumber] = posesAtFrame; 
-        recenteredRescaledAllPosesPerFrame[frameNumber] = posesAtFrame 
-            .Select(poseBoundingBox => poseBoundingBox.Keypoints.Select(keypoint => 
-                new Vector3( 
-                    (keypoint.Point.X - size.X / 2) * PixelToMeter, 
+    public void SetAllPosesAtFrame(int frameNumber, string dbPath)
+    {
+        List<PoseBoundingBox> posesAtFrame = [];
+        string filePrefix = Path.GetFileNameWithoutExtension(name).Split("-")[0];
+
+        int sampleFrame = SampleFrame(frameNumber, maxFrame);
+        using (SQLiteConnection conn = new($"URI=file:{dbPath}"))
+        {
+            conn.Open();
+
+            string query = @"
+            SELECT
+                keypoints, 
+                bounds" + "\n" +
+                           $"FROM table_{filePrefix} " + "\n" +
+                           @"WHERE frame = @frameNumber";
+
+            using (SQLiteCommand cmd = new(query, conn))
+            {
+                cmd.Parameters.AddWithValue("@frameNumber", sampleFrame);
+
+                using (SQLiteDataReader reader = cmd.ExecuteReader())
+                {
+                    while (reader.Read())
+                    {
+                        string keypoints = reader.GetString(0);
+                        string bounds = reader.GetString(1);
+
+                        // Assuming PoseBoundingBox has a constructor that takes these values
+                        PoseBoundingBox pose = new()
+                        {
+                            Keypoints = JsonConvert.DeserializeObject<List<Keypoint>>(keypoints),
+                            Bounds = JsonConvert.DeserializeObject<Rectangle>(bounds)
+                        };
+                        posesAtFrame.Add(pose);
+                    }
+                }
+            }
+        }
+
+        allPosesAndConfidencesPerFrame[frameNumber] = posesAtFrame;
+        recenteredRescaledAllPosesPerFrame[frameNumber] = posesAtFrame
+            .Select(poseBoundingBox => poseBoundingBox.Keypoints.Select(keypoint =>
+                new Vector3(
+                    (keypoint.Point.X - size.X / 2) * PixelToMeter,
                     -(keypoint.Point.Y - size.Y / 2) * PixelToMeter, // flip 
                     keypoint.Confidence)).ToList()).ToList(); // keep the confidence; 
+
+        if (frameNumber == 0)
+        {
+            FrameZeroLeadFollowFinderAndCamHeight(posesAtFrame);
+        }
     }
 
     public void SetAllAffine(List<Vector3> affine)
@@ -229,10 +275,10 @@ public class CameraSetup(
         {
             followIndicesPerFrame[frameNumber] = followIndex;
         }
-        
+
         leadTracker = new KalmanBoxTracker();
         leadTracker.Init(allPosesAndConfidencesPerFrame[frameNumber][leadIndex]);
-        
+
         followTracker = new KalmanBoxTracker();
         followTracker.Init(allPosesAndConfidencesPerFrame[frameNumber][followIndex]);
     }
@@ -480,12 +526,16 @@ public class CameraSetup(
 
         // 1 - ORBIT 
         Vector2 leadLeftAnkle = new(
-            allPosesAndConfidencesPerFrame[0][leadIndicesPerFrame[0]].Keypoints[JointExtension.LAnkleIndex(poseType)].Point.X,
-            allPosesAndConfidencesPerFrame[0][leadIndicesPerFrame[0]].Keypoints[JointExtension.LAnkleIndex(poseType)].Point.Y);
+            allPosesAndConfidencesPerFrame[0][leadIndicesPerFrame[0]].Keypoints[JointExtension.LAnkleIndex(poseType)]
+                .Point.X,
+            allPosesAndConfidencesPerFrame[0][leadIndicesPerFrame[0]].Keypoints[JointExtension.LAnkleIndex(poseType)]
+                .Point.Y);
 
         Vector2 leadRightAnkle = new(
-            allPosesAndConfidencesPerFrame[0][leadIndicesPerFrame[0]].Keypoints[JointExtension.RAnkleIndex(poseType)].Point.X,
-            allPosesAndConfidencesPerFrame[0][leadIndicesPerFrame[0]].Keypoints[JointExtension.RAnkleIndex(poseType)].Point.Y);
+            allPosesAndConfidencesPerFrame[0][leadIndicesPerFrame[0]].Keypoints[JointExtension.RAnkleIndex(poseType)]
+                .Point.X,
+            allPosesAndConfidencesPerFrame[0][leadIndicesPerFrame[0]].Keypoints[JointExtension.RAnkleIndex(poseType)]
+                .Point.Y);
 
         (bool isFacingLead, float leadPoseAnkleSlope) = FacingAndStanceSlope(leadRightAnkle, leadLeftAnkle);
 
@@ -547,8 +597,10 @@ public class CameraSetup(
     void HipLock()
     {
         Vector2 leadRightAnkle = new(
-            allPosesAndConfidencesPerFrame[0][leadIndicesPerFrame[0]].Keypoints[JointExtension.RAnkleIndex(poseType)].Point.X,
-            allPosesAndConfidencesPerFrame[0][leadIndicesPerFrame[0]].Keypoints[JointExtension.RAnkleIndex(poseType)].Point.Y);
+            allPosesAndConfidencesPerFrame[0][leadIndicesPerFrame[0]].Keypoints[JointExtension.RAnkleIndex(poseType)]
+                .Point.X,
+            allPosesAndConfidencesPerFrame[0][leadIndicesPerFrame[0]].Keypoints[JointExtension.RAnkleIndex(poseType)]
+                .Point.Y);
 
         const float hipHeight = .8f;
         float leadHipY = allPosesAndConfidencesPerFrame[0]
@@ -708,19 +760,19 @@ public class CameraSetup(
             leadIndicesPerFrame[frameNumber] = detections.IndexOf(leadTrackedPose);
             leadTracker.Correct(leadTrackedPose);
         }
-        
+
         PoseBoundingBox? followTrackedPose = FindBestBoxFit(
             detections,
             followTracker.Predict(),
             .3f);
-        
-        if(followTrackedPose != null)
+
+        if (followTrackedPose != null)
         {
             followIndicesPerFrame[frameNumber] = detections.IndexOf(followTrackedPose);
             followTracker.Correct(followTrackedPose);
         }
     }
-    
+
     /// <summary>
     /// Inverse over Union to find overlap between prediction and observation.
     /// </summary>
@@ -794,16 +846,15 @@ public class CameraSetup(
     public void CopyRotationToNextFrame(int frameNumber)
     {
         // interpolate the frame
-        int lastSampleFrame =
-            (int)Math.Round(startingFrame + (frameNumber-1) * ((affineTransforms.Count - startingFrame) / (float)totalFrameCount));
-        Vector3 lastAffine = affineTransforms[lastSampleFrame];
-        int sampleFrame =
-            (int)Math.Round(startingFrame + frameNumber * ((affineTransforms.Count - startingFrame) / (float)totalFrameCount));
+        int lastSampleFrame = SampleFrame(frameNumber - 1, affineTransforms.Count);
+        Vector3 lastAffine = affineTransforms[lastSampleFrame];;
+        int sampleFrame = SampleFrame(frameNumber, affineTransforms.Count);
+            
         for (int i = lastSampleFrame + 1; i <= sampleFrame; i++)
         {
             lastAffine += affineTransforms[i];
         }
-        
+
         float pitchAlpha = MathF.Atan2(lastAffine.Y, focalLength);
         float yawAlpha = MathF.Atan2(lastAffine.X, focalLength);
 
@@ -864,6 +915,12 @@ public class CameraSetup(
         Ray rayFromImgPoint = new(Position, Vector3.Normalize(projectedPoint - Position));
 
         return Transform.RayPlaneIntersection(new Plane(Vector3.UnitY, 0), rayFromImgPoint);
+    }
+
+    int SampleFrame(int frameNumber, int arrayCount)
+    {
+        return (int)Math.Round(startingFrame +
+                        frameNumber * ((arrayCount - startingFrame) / (float)totalFrameCount));
     }
 
     #endregion

@@ -40,58 +40,22 @@ public class CameraPoseSolver(PoseType poseType)
         string name,
         Vector2 imageSize,
         int frameCount,
-        int startingFrame)
+        int startingFrame,
+        int maxFrame)
     {
-        CameraSetup camera = new(name, imageSize, frameCount, poseType, startingFrame);
+        CameraSetup camera = new(name, imageSize, frameCount, poseType, startingFrame, maxFrame);
         cameras.Add(name, camera);
     }
 
     /// <summary> 
     /// Called when poses are calculated for every frame 
     /// </summary> 
-    public void SetPoseFromImage(string dbPath, string camName, string filePrefix)
+    public void SetPoseFromImage(string dbPath, string camName)
     {
-        List<PoseBoundingBox> poses = [];
-
-        using (SQLiteConnection conn = new($"URI=file:{dbPath}"))
-        {
-            conn.Open();
-
-            string query = @"
-            SELECT
-                keypoints, 
-                bounds" + "\n" +
-            $"FROM table_{filePrefix} " + "\n" +
-            @"WHERE frame = @frameNumber";
-
-            using (SQLiteCommand cmd = new(query, conn))
-            {
-                cmd.Parameters.AddWithValue("@frameNumber", frameNumber);
-
-                using (SQLiteDataReader reader = cmd.ExecuteReader())
-                {
-                    while (reader.Read())
-                    {
-                        string keypoints = reader.GetString(0);
-                        string bounds = reader.GetString(1);
-
-                        // Assuming PoseBoundingBox has a constructor that takes these values
-                        PoseBoundingBox pose = new()
-                        {
-                            Keypoints = JsonConvert.DeserializeObject<List<Keypoint>>(keypoints),
-                            Bounds = JsonConvert.DeserializeObject<Rectangle>(bounds)
-                        };
-                        poses.Add(pose);
-                    }
-                }
-            }
-        }
-         
-        cameras[camName].SetAllPosesAtFrame(poses, frameNumber); 
+        cameras[camName].SetAllPosesAtFrame(frameNumber, dbPath); 
  
         if (frameNumber == 0)
         { 
-            cameras[camName].FrameZeroLeadFollowFinderAndCamHeight(poses); 
             TryHomeCamera(camName); 
         } 
         else 
@@ -112,9 +76,8 @@ public class CameraPoseSolver(PoseType poseType)
         frameNumber++;
         foreach ((string videoFilePath, CameraSetup cameraSetup) in cameras)
         {
-            string filePrefix = Path.GetFileNameWithoutExtension(videoFilePath).Split('-')[0];
             cameraSetup.CopyRotationToNextFrame(frameNumber);
-            SetPoseFromImage(dbPath, videoFilePath, filePrefix); 
+            SetPoseFromImage(dbPath, videoFilePath); 
             cameraSetup.Update(frameNumber);
         }
 
