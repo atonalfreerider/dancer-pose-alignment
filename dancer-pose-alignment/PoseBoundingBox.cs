@@ -15,16 +15,10 @@ public class Keypoint
     public float Confidence;
 }
 
-public class Point
+public class Point(float x, float y)
 {
-    public Point(float x, float y)
-    {
-        X = x;
-        Y = y;
-    }
-    
-    public float X;
-    public float Y;
+    public float X = x;
+    public float Y = y;
     public bool IsEmpty;
 }
 

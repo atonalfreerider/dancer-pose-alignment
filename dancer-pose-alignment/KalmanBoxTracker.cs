@@ -1,6 +1,4 @@
-﻿using System.Numerics;
-
-using OpenCvSharp;
+﻿using OpenCvSharp;
 
 namespace dancer_pose_alignment;
 
@@ -71,7 +69,8 @@ public class KalmanBoxTracker
     public Rectangle Predict()
     {
         Mat prediction = kf.Predict();
-        return ConvertXToBbox(ToVec(prediction));
+        float[] vec = ToVec(prediction);
+        return ConvertXToBbox(new BoxRatio(vec[0], vec[1], vec[2], vec[3]));
     }
 
     // REFERENCE
@@ -91,14 +90,14 @@ public class KalmanBoxTracker
         public readonly float Ratio = ratio;
     }
 
-    static Rectangle ConvertXToBbox(float[] x)
+    static Rectangle ConvertXToBbox(BoxRatio boxRatio)
     {
-        float w = MathF.Sqrt(x[2] * x[3]);
-        float h = x[2] / w;
-        float x1 = x[0] - w / 2;
-        float y1 = x[1] - h / 2;
-        float x2 = x[0] + w / 2;
-        float y2 = x[1] + h / 2;
+        float w = MathF.Sqrt(boxRatio.Area * boxRatio.Ratio); // w * h * (w / h) = w * w
+        float h = boxRatio.Area / w; // w * h / w = h
+        float x1 = boxRatio.X;
+        float y1 = boxRatio.Y;
+        float x2 = boxRatio.X + w;
+        float y2 = boxRatio.Y + h;
 
         Rectangle rectangle = new()
         {
@@ -108,8 +107,8 @@ public class KalmanBoxTracker
             Bottom = y2,
             Width = w,
             Height = h,
-            X = x[0],
-            Y = x[1]
+            X = boxRatio.X,
+            Y = boxRatio.Y
         };
         return rectangle;
     }
