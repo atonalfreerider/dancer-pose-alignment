@@ -1,6 +1,5 @@
 using System.Numerics;
 using System.Reflection;
-
 using ComputeSharp;
 using Newtonsoft.Json;
 
@@ -15,12 +14,6 @@ public class CameraPoseSolver(PoseType poseType)
     readonly Dictionary<string, CameraSetup> cameras = [];
     int frameNumber = 0;
     public int MaximumFrameCount = int.MaxValue;
-
-    // body limb constants so that 3D pose is constrained
-    const float LeadLegLimbLength = .4f;
-    const float FollowLegLimbLength = .4f;
-    const float LeadShoulderHipArmLength = .3f;
-    const float FollowShoulderHipArmLength = .28f;
 
     // drawing variables
     Dictionary<string, Vector3> cameraPositions => cameras.ToDictionary(
@@ -51,17 +44,17 @@ public class CameraPoseSolver(PoseType poseType)
     /// </summary> 
     public void SetPoseFromImage(string dbPath, string camName)
     {
-        cameras[camName].SetAllPosesAtFrame(frameNumber, dbPath); 
- 
+        cameras[camName].SetAllPosesAtFrame(frameNumber, dbPath);
+
         if (frameNumber == 0)
-        { 
-            TryHomeCamera(camName); 
-        } 
-        else 
-        { 
+        {
+            TryHomeCamera(camName);
+        }
+        else
+        {
             // TODO 
-        } 
-    } 
+        }
+    }
 
     public void SetAllAffine(List<Vector3> affine, string camName)
     {
@@ -76,7 +69,7 @@ public class CameraPoseSolver(PoseType poseType)
         foreach ((string videoFilePath, CameraSetup cameraSetup) in cameras)
         {
             cameraSetup.CopyRotationToNextFrame(frameNumber);
-            SetPoseFromImage(dbPath, videoFilePath); 
+            SetPoseFromImage(dbPath, videoFilePath);
             cameraSetup.Update(frameNumber);
         }
 
@@ -178,12 +171,26 @@ public class CameraPoseSolver(PoseType poseType)
             .Select(result => new Vector3(result.X, result.Y, result.Z))
             .ToList();
 
+        return scatterPose;
+    }
+
+    /// <summary>
+    /// To be used as the final anchored to the floor, consistent limb length model
+    /// </summary>
+    /// <returns></returns>
+    List<Vector3> AnchorFinalPose(List<Vector3> scatterPose, bool isLead)
+    {
+        // body limb constants so that 3D pose is constrained
+        const float LeadLegLimbLength = .4f;
+        const float FollowLegLimbLength = .4f;
+        const float LeadShoulderHipArmLength = .3f;
+        const float FollowShoulderHipArmLength = .28f;
+        
         List<Vector3> final3DPose = [];
         for (int i = 0; i < JointExtension.PoseCount(poseType); i++)
         {
             final3DPose.Add(Vector3.Zero);
         }
-
 
         // ANCHOR LEGS
         Vector3 rAnklePos = isLead && frameNumber == 0

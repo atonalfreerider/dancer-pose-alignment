@@ -1,5 +1,4 @@
-﻿using System.Data.SQLite;
-using System.Numerics;
+﻿using System.Numerics;
 using Aurio;
 using Aurio.FFmpeg;
 using Aurio.FFT;
@@ -7,15 +6,12 @@ using Aurio.Matching;
 using Aurio.Project;
 using Aurio.Resampler;
 using Aurio.TaskMonitor;
-using Avalonia;
 using Avalonia.Controls;
 using Avalonia.Input;
 using Avalonia.Interactivity;
 using Avalonia.Media;
 using Avalonia.Media.Imaging;
-
 using dancer_pose_alignment;
-using DynamicData;
 using Newtonsoft.Json;
 using OpenCvSharp;
 using Size = Avalonia.Size;
