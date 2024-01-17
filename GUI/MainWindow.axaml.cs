@@ -251,15 +251,24 @@ public partial class MainWindow : Window
 
             camCount++;
         }
-        
+
+        Loop();
+    }
+
+    void Loop()
+    {
         cameraPoseSolver.HomeAllCameras();
         cameraPoseSolver.SetCamR();
         cameraPoseSolver.HomeAllCameras();
+
+        cameraPoseSolver.CalculateLeadFollow3DPoses();
+        cameraPoseSolver.IterationLoop(); 
         RecalculateAndRedraw();
     }
 
     void SetPreviewsToFrame()
     {
+        FrameIndicator.Text = cameraPoseSolver.CurrentFrame.ToString();
         foreach ((string videoFilePath, VideoCapture videoCapture) in videoFiles)
         {
             videoCapture.Set(
@@ -308,10 +317,7 @@ public partial class MainWindow : Window
             SetDancer(new Vector2((float)x, (float)y), selectedCamera);
         }
         
-        cameraPoseSolver.HomeAllCameras();
-        //cameraPoseSolver.SetCamR();
-        
-        RecalculateAndRedraw();
+        Loop();
     }
 
     void RecalculateAndRedraw()
@@ -393,8 +399,9 @@ public partial class MainWindow : Window
     void SolverNextFrameButton_Click(object sender, RoutedEventArgs e)
     {
         if (!cameraPoseSolver.Advance()) return;
-
         timeFromStart += 1d / 30d;
+        cameraPoseSolver.CalculateLeadFollow3DPoses();
+        cameraPoseSolver.IterationLoop(); 
         
         SetPreviewsToFrame();
     }
@@ -404,6 +411,7 @@ public partial class MainWindow : Window
         if (!cameraPoseSolver.Rewind()) return;
 
         timeFromStart -= 1d / 30d;
+        cameraPoseSolver.CalculateLeadFollow3DPoses();
 
         SetPreviewsToFrame();
     }
@@ -414,6 +422,8 @@ public partial class MainWindow : Window
         {
             timeFromStart += 1d / 30d;
             cameraPoseSolver.CalculateLeadFollow3DPoses();
+            cameraPoseSolver.IterationLoop(); 
+
             if (!cameraPoseSolver.AreLeadAndFollowAssignedForFrame())
             {
                 break;

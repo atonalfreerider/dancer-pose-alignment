@@ -31,6 +31,7 @@
                     <StackPanel Orientation="Horizontal" HorizontalAlignment="Center">
                         <!-- IMAGE DISPLAY -->
                         <Button Name="BackButton" Content="Back" Height="30" Margin="5" Click="SolverPreviousFrameButton_Click" />
+                        <TextBox Name="FrameIndicator" Text="0"/>
                         <Button Name="NextFrameButton" Content="Next" Height="30" Margin="5"
                                 Click="SolverNextFrameButton_Click" />
                         <Button Name="RunUntilNext" Content="Run Until Next Discontinuity" Height="30" Margin="5"
