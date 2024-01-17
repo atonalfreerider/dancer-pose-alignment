@@ -1,28 +1,12 @@
-﻿using System.Numerics;
-using Compunet.YoloV8.Data;
-using OpenCvSharp;
+﻿using OpenCvSharp;
 
 namespace dancer_pose_alignment;
 
 public class KalmanBoxTracker
 {
-    static int count = 0;
     readonly KalmanFilter kf;
 
-    public readonly int Id;
-
-    readonly List<float[]> history = [];
-    IPoseBoundingBox lastBbox;
-
-    public List<Vector3> LastKeypoints
-    {
-        get
-        {
-            return lastBbox.Keypoints.Select(kp => new Vector3(kp.Point.X, kp.Point.Y, kp.Confidence)).ToList();
-        }
-    }
-
-    public KalmanBoxTracker(IPoseBoundingBox bbox)
+    public KalmanBoxTracker()
     {
         kf = new KalmanFilter(7, 4);
 
@@ -59,68 +43,74 @@ public class KalmanBoxTracker
         kf.ProcessNoiseCov[
             4, kf.ProcessNoiseCov.Rows,
             4, kf.ProcessNoiseCov.Cols] *= 0.5; // Q
+    }
 
+    public void Init(PoseBoundingBox bbox)
+    {
         // initialize state
-        float[] conv = ConvertBboxToZ(bbox); // X
-        kf.StatePre.Set(0, conv[0]);
-        kf.StatePre.Set(1, conv[1]);
-        kf.StatePre.Set(2, conv[2]);
-        kf.StatePre.Set(3, conv[3]);
+        BoxRatio conv = ConvertBboxToZ(bbox); // X
+        kf.StatePre.Set(0, conv.X);
+        kf.StatePre.Set(1, conv.Y);
+        kf.StatePre.Set(2, conv.Area);
+        kf.StatePre.Set(3, conv.Ratio);
 
-        kf.StatePost.Set(0, conv[0]);
-        kf.StatePost.Set(1, conv[1]);
-        kf.StatePost.Set(2, conv[2]);
-        kf.StatePost.Set(3, conv[3]);
-
-        // reset global state
-        Id = count;
-        count++;
-        lastBbox = bbox;
+        kf.StatePost.Set(0, conv.X);
+        kf.StatePost.Set(1, conv.Y);
+        kf.StatePost.Set(2, conv.Area);
+        kf.StatePost.Set(3, conv.Ratio);
     }
 
-    public void Correct(IPoseBoundingBox bbox)
+    public void Correct(PoseBoundingBox bbox)
     {
-        history.Clear();
-        kf.Correct(ToMat(ConvertBboxToZ(bbox)));
-        lastBbox = bbox;
+        BoxRatio conv = ConvertBboxToZ(bbox);
+        kf.Correct(ToMat(conv));
     }
 
-    public float[] Predict()
+    public Rectangle Predict()
     {
-        if (kf.StatePre.Get<float>(6) + kf.StatePre.Get<float>(2) <= 0)
-        {
-            kf.StatePre.Set(6, 0); // X
-        }
-
-        kf.Predict();
-        history.Add(ConvertXToBbox(ToVec(kf.StatePost)));
-        return history[^1];
+        Mat prediction = kf.Predict();
+        float[] vec = ToVec(prediction);
+        return ConvertXToBbox(new BoxRatio(vec[0], vec[1], vec[2], vec[3]));
     }
 
     // REFERENCE
-    static float[] ConvertBboxToZ(IPoseBoundingBox bbox)
+    static BoxRatio ConvertBboxToZ(PoseBoundingBox bbox)
     {
-        float s = bbox.Bounds.Width * bbox.Bounds.Height;
-        float r = bbox.Bounds.Width / (float)bbox.Bounds.Height;
+        float area = bbox.Bounds.Width * bbox.Bounds.Height;
+        float ratio = bbox.Bounds.Width / bbox.Bounds.Height;
 
-        return [bbox.Bounds.X, bbox.Bounds.Y, s, r];
+        return new BoxRatio(bbox.Bounds.X, bbox.Bounds.Y, area, ratio);
     }
 
-    static float[] ConvertXToBbox(float[] x, float? score = null)
+    struct BoxRatio(float x, float y, float area, float ratio)
     {
-        float w = MathF.Sqrt(x[2] * x[3]);
-        float h = x[2] / w;
-        float x1 = x[0] - w / 2;
-        float y1 = x[1] - h / 2;
-        float x2 = x[0] + w / 2;
-        float y2 = x[1] + h / 2;
+        public readonly float X = x;
+        public readonly float Y = y;
+        public readonly float Area = area;
+        public readonly float Ratio = ratio;
+    }
 
-        if (score == null)
+    static Rectangle ConvertXToBbox(BoxRatio boxRatio)
+    {
+        float w = MathF.Sqrt(boxRatio.Area * boxRatio.Ratio); // w * h * (w / h) = w * w
+        float h = boxRatio.Area / w; // w * h / w = h
+        float x1 = boxRatio.X;
+        float y1 = boxRatio.Y;
+        float x2 = boxRatio.X + w;
+        float y2 = boxRatio.Y + h;
+
+        Rectangle rectangle = new()
         {
-            return [x1, y1, x2, y2];
-        }
-
-        return [x1, y1, x2, y2, score.Value];
+            Left = x1,
+            Top = y1,
+            Right = x2,
+            Bottom = y2,
+            Width = w,
+            Height = h,
+            X = boxRatio.X,
+            Y = boxRatio.Y
+        };
+        return rectangle;
     }
 
     static Mat ToMat(float[,] array)
@@ -139,14 +129,13 @@ public class KalmanBoxTracker
         return mat;
     }
 
-    static Mat ToMat(float[] vector)
+    static Mat ToMat(BoxRatio vector)
     {
-        int rows = vector.Length;
-        Mat mat = new(rows, 1, MatType.CV_32FC1);
-        for (int i = 0; i < rows; i++)
-        {
-            mat.Set(i, 0, vector[i]);
-        }
+        Mat mat = new(4, 1, MatType.CV_32FC1);
+        mat.Set(0, 0, vector.X);
+        mat.Set(1, 0, vector.Y);
+        mat.Set(2, 0, vector.Area);
+        mat.Set(3, 0, vector.Ratio);
 
         return mat;
     }

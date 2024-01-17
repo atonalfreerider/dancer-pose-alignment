@@ -1,4 +1,5 @@
-﻿using System.Numerics;
+﻿using System.Data.SQLite;
+using System.Numerics;
 using Aurio;
 using Aurio.FFmpeg;
 using Aurio.FFT;
@@ -12,7 +13,9 @@ using Avalonia.Input;
 using Avalonia.Interactivity;
 using Avalonia.Media;
 using Avalonia.Media.Imaging;
+
 using dancer_pose_alignment;
+using DynamicData;
 using Newtonsoft.Json;
 using OpenCvSharp;
 using Size = Avalonia.Size;
@@ -36,6 +39,8 @@ public partial class MainWindow : Window
     double timeFromStart = 0;
     double highestPositiveOffsetSeconds = 0;
 
+    string dbPath;
+
     public MainWindow()
     {
         // clip alignment
@@ -53,6 +58,7 @@ public partial class MainWindow : Window
     void LoadVideosButton_Click(object sender, RoutedEventArgs e)
     {
         string videoDirectory = VideoDirectory();
+        dbPath = Path.Combine(videoDirectory, "larissa-kadu-recap.db");
 
         if (string.IsNullOrEmpty(videoDirectory) || !Directory.Exists(videoDirectory)) return;
 
@@ -135,7 +141,7 @@ public partial class MainWindow : Window
     void LoadVideos(Dictionary<string, double> videoFilePathsAndOffsets)
     {
         string videoDirectory = VideoDirectory();
-        string poseDirectory = Path.Combine(videoDirectory, "pose/");
+        string dbPath = Path.Combine(videoDirectory, "larissa-kadu-recap.db");
         string affineDirectory = Path.Combine(videoDirectory, "affine/");
         
         cameraPoseSolver = new CameraPoseSolver(PoseType.Coco);
@@ -216,22 +222,12 @@ public partial class MainWindow : Window
                 videoFilePath,
                 new Vector2((float)size.Width, (float)size.Height),
                 framesAt30Fps,
-                startingFrame);
-
-            string fileName = Path.GetFileNameWithoutExtension(videoFilePath);
-            string posePath = Path.Combine(poseDirectory, fileName + ".mp4.json");
-            // if pre-cached json, load it
-            if (File.Exists(posePath))
-            {
-                List<Dictionary<int, List<Vector3>>> posesByFrame = JsonConvert.DeserializeObject<List<Dictionary<int, List<Vector3>>>>(
-                    File.ReadAllText(posePath));
-                cameraPoseSolver.SetAllPoses(posesByFrame, videoFilePath);
-            }
-            else
-            {
-                cameraPoseSolver.SetPoseFromImage(frameMat.ToMemoryStream(), videoFilePath);
-            }
+                startingFrame,
+                frameCount);
             
+            string fileName = Path.GetFileNameWithoutExtension(videoFilePath);
+            cameraPoseSolver.SetPoseFromImage(dbPath, videoFilePath); 
+           
             string affinePath = Path.Combine(affineDirectory, fileName + ".mp4.json");
             // if pre-cached json, load it
             if (File.Exists(affinePath))
@@ -301,12 +297,6 @@ public partial class MainWindow : Window
             }
 
             frameImages[videoFilePath].Source = frame;
-
-            // if pre-cached json, load it
-            if (!File.Exists(Path.Combine(videoFilePath, ".json")))
-            {
-                cameraPoseSolver.SetPoseFromImage(frameMat.ToMemoryStream(), videoFilePath);
-            }
             
             if (cameraPoseSolver.AreLeadAndFollowAssignedForFrame())
             {
@@ -421,7 +411,7 @@ public partial class MainWindow : Window
 
     void SolverNextFrameButton_Click(object sender, RoutedEventArgs e)
     {
-        if (!cameraPoseSolver.Advance()) return;
+        if (!cameraPoseSolver.Advance(dbPath)) return;
 
         timeFromStart += 1d / 30d;
         
@@ -439,8 +429,7 @@ public partial class MainWindow : Window
 
     void RunUntilEnd_Click(object sender, RoutedEventArgs e)
     {
-        int count = 0;
-        while (cameraPoseSolver.Advance())
+        while (cameraPoseSolver.Advance(dbPath))
         {
             timeFromStart += 1d / 30d;
             if (!cameraPoseSolver.AreLeadAndFollowAssignedForFrame())
@@ -449,11 +438,6 @@ public partial class MainWindow : Window
             }
             
             cameraPoseSolver.CalculateLeadFollow3DPoses();
-            count++;
-            if (count > 100)
-            {
-                break;
-            }
         }
         SetPreviewsToFrame();
     }
