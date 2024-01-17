@@ -16,12 +16,14 @@ public class SqliteOutput(string dbPath)
         foreach (string fileName in fileNames)
         {
             string filePrefix = fileName.Split("-")[0];
-            cmd.CommandText = $"CREATE TABLE table_{filePrefix} (\n" + @"
-                        id INTEGER PRIMARY KEY ASC,
-                        frame INTEGER NOT NULL,
-                        keypoints TEXT NOT NULL,
-                        bounds TEXT NOT NULL);" + 
-                              $"\nCREATE INDEX idx_frame_{filePrefix} ON table_{filePrefix}(frame);";
+            cmd.CommandText = $"""
+                               CREATE TABLE table_{filePrefix} (
+                                 id INTEGER PRIMARY KEY ASC,
+                                 frame INTEGER NOT NULL,
+                                 keypoints TEXT NOT NULL,
+                                 bounds TEXT NOT NULL);
+                               CREATE INDEX idx_frame_{filePrefix} ON table_{filePrefix}(frame);
+                               """;
 
             cmd.ExecuteNonQuery();
         }
@@ -41,15 +43,16 @@ public class SqliteOutput(string dbPath)
             foreach (PoseBoundingBox poseBoundingBox in poseBoundingBoxes)
             {
                 cmd.CommandText =
-                    $"INSERT INTO table_{filePrefix}(" + @" 
-                          frame,
-                          keypoints,
-                          bounds
-                      ) VALUES ( 
-                          @Frame,
-                          @Keypoints,
-                          @Bounds)";
-
+                    $"""
+                     INSERT INTO table_{filePrefix}(
+                         frame,
+                         keypoints,
+                         bounds
+                     ) VALUES (
+                         @Frame,
+                         @Keypoints,
+                         @Bounds)
+                     """;
 
                 cmd.AddParameter(DbType.Int32, "@Frame", frameNumber);
                 cmd.AddParameter(DbType.String, "@Keypoints", JsonConvert.SerializeObject(poseBoundingBox.Keypoints));

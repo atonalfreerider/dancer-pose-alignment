@@ -68,43 +68,9 @@ public class CameraSetup(
     /// </summary> 
     public void SetAllPosesAtFrame(int frameNumber, string dbPath)
     {
-        List<PoseBoundingBox> posesAtFrame = [];
         string filePrefix = Path.GetFileNameWithoutExtension(name).Split("-")[0];
-
         int sampleFrame = SampleFrame(frameNumber, maxFrame);
-        using (SQLiteConnection conn = new($"URI=file:{dbPath}"))
-        {
-            conn.Open();
-
-            string query = @"
-            SELECT
-                keypoints, 
-                bounds" + "\n" +
-                           $"FROM table_{filePrefix} " + "\n" +
-                           @"WHERE frame = @frameNumber";
-
-            using (SQLiteCommand cmd = new(query, conn))
-            {
-                cmd.Parameters.AddWithValue("@frameNumber", sampleFrame);
-
-                using (SQLiteDataReader reader = cmd.ExecuteReader())
-                {
-                    while (reader.Read())
-                    {
-                        string keypoints = reader.GetString(0);
-                        string bounds = reader.GetString(1);
-
-                        // Assuming PoseBoundingBox has a constructor that takes these values
-                        PoseBoundingBox pose = new()
-                        {
-                            Keypoints = JsonConvert.DeserializeObject<List<Keypoint>>(keypoints),
-                            Bounds = JsonConvert.DeserializeObject<Rectangle>(bounds)
-                        };
-                        posesAtFrame.Add(pose);
-                    }
-                }
-            }
-        }
+        List<PoseBoundingBox> posesAtFrame = PosesAtFrameFromDb(dbPath, filePrefix, sampleFrame);
 
         allPosesAndConfidencesPerFrame[frameNumber] = posesAtFrame;
         recenteredRescaledAllPosesPerFrame[frameNumber] = posesAtFrame
@@ -120,12 +86,47 @@ public class CameraSetup(
         }
     }
 
+    static List<PoseBoundingBox> PosesAtFrameFromDb(string dbPath, string filePrefix, int sampleFrame)
+    {
+        List<PoseBoundingBox> posesAtFrame = [];
+        using SQLiteConnection conn = new($"URI=file:{dbPath}");
+        conn.Open();
+
+        string query = $"""
+                        SELECT
+                             keypoints,
+                             bounds
+                        FROM table_{filePrefix}
+                        WHERE frame = @frameNumber
+                        """;
+
+        using SQLiteCommand cmd = new(query, conn);
+        cmd.Parameters.AddWithValue("@frameNumber", sampleFrame);
+
+        using SQLiteDataReader reader = cmd.ExecuteReader();
+        while (reader.Read())
+        {
+            string keypoints = reader.GetString(0);
+            string bounds = reader.GetString(1);
+
+            // Assuming PoseBoundingBox has a constructor that takes these values
+            PoseBoundingBox pose = new()
+            {
+                Keypoints = JsonConvert.DeserializeObject<List<Keypoint>>(keypoints),
+                Bounds = JsonConvert.DeserializeObject<Rectangle>(bounds)
+            };
+            posesAtFrame.Add(pose);
+        }
+
+        return posesAtFrame;
+    }
+
     public void SetAllAffine(List<Vector3> affine)
     {
         affineTransforms = affine;
     }
 
-    public void FrameZeroLeadFollowFinderAndCamHeight(List<PoseBoundingBox> allPoses)
+    void FrameZeroLeadFollowFinderAndCamHeight(List<PoseBoundingBox> allPoses)
     {
         // find lead and follow
         int tallestIndex = -1;
