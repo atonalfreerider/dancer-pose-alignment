@@ -91,13 +91,13 @@ public class CameraPoseSolver(PoseType poseType)
             cameraSetup.Project(frameNumber);
         }
 
-        if (merged3DPoseLeadPerFrame.Count <= frameNumber)
+        while (merged3DPoseLeadPerFrame.Count <= frameNumber)
         {
             // add a new frame
             merged3DPoseLeadPerFrame.Add([]);
         }
 
-        if (merged3DPoseFollowPerFrame.Count <= frameNumber)
+        while (merged3DPoseFollowPerFrame.Count <= frameNumber)
         {
             merged3DPoseFollowPerFrame.Add([]);
         }

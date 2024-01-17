@@ -428,12 +428,11 @@ public partial class MainWindow : Window
         while (cameraPoseSolver.Advance(dbPath))
         {
             timeFromStart += 1d / 30d;
+            cameraPoseSolver.CalculateLeadFollow3DPoses();
             if (!cameraPoseSolver.AreLeadAndFollowAssignedForFrame())
             {
                 break;
             }
-            
-            cameraPoseSolver.CalculateLeadFollow3DPoses();
         }
         SetPreviewsToFrame();
     }
