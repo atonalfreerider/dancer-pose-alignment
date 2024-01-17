@@ -429,7 +429,6 @@ public partial class MainWindow : Window
 
     void RunUntilEnd_Click(object sender, RoutedEventArgs e)
     {
-        int count = 0;
         while (cameraPoseSolver.Advance(dbPath))
         {
             timeFromStart += 1d / 30d;
@@ -439,11 +438,6 @@ public partial class MainWindow : Window
             }
             
             cameraPoseSolver.CalculateLeadFollow3DPoses();
-            count++;
-            if (count > 100)
-            {
-                break;
-            }
         }
         SetPreviewsToFrame();
     }

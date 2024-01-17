@@ -78,7 +78,7 @@ static class Program
             }
 
             string affinePath = rootFolder + "/affine/" + Path.GetFileNameWithoutExtension(videoPath);
-            File.WriteAllText(affinePath + ".mp4.json", JsonConvert.SerializeObject(affineTransform));
+            File.WriteAllText(affinePath + ".mp4.json", JsonConvert.SerializeObject(affineTransform, Formatting.Indented));
         }
     }
 }

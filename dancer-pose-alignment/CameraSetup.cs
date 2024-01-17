@@ -54,8 +54,8 @@ public class CameraSetup(
     readonly int[] leadIndicesPerFrame = new int[totalFrameCount];
     readonly int[] followIndicesPerFrame = new int[totalFrameCount];
 
-    KalmanBoxTracker leadTracker;
-    KalmanBoxTracker followTracker;
+    KalmanBoxTracker? leadTracker;
+    KalmanBoxTracker? followTracker;
 
     // these poses are projected onto the image plane and used to calculate the 3D pose from ray projection
     readonly List<Vector3>[] leadProjectionsPerFrame = new List<Vector3>[totalFrameCount];
@@ -337,14 +337,32 @@ public class CameraSetup(
         switch (selectedButton)
         {
             case "Lead":
-                leadIndicesPerFrame[frameNumber] = closestIndex; // select
-                leadTracker = new KalmanBoxTracker();
-                leadTracker.Init(allPosesAndConfidencesPerFrame[frameNumber][closestIndex]);
+                if (closestIndex == leadIndicesPerFrame[frameNumber])
+                {
+                    leadIndicesPerFrame[frameNumber] = -1;
+                    leadTracker = null;
+                }
+                else
+                {
+                    leadIndicesPerFrame[frameNumber] = closestIndex; // select
+                    leadTracker = new KalmanBoxTracker();
+                    leadTracker.Init(allPosesAndConfidencesPerFrame[frameNumber][closestIndex]);
+                }
+
                 break;
             case "Follow":
-                followIndicesPerFrame[frameNumber] = closestIndex; // select
-                followTracker = new KalmanBoxTracker();
-                followTracker.Init(allPosesAndConfidencesPerFrame[frameNumber][closestIndex]);
+                if (closestIndex == followIndicesPerFrame[frameNumber])
+                {
+                    followIndicesPerFrame[frameNumber] = -1;
+                    followTracker = null;
+                }
+                else
+                {
+                    followIndicesPerFrame[frameNumber] = closestIndex; // select
+                    followTracker = new KalmanBoxTracker();
+                    followTracker.Init(allPosesAndConfidencesPerFrame[frameNumber][closestIndex]);
+                }
+
                 break;
             case "Move":
                 // TODO create
@@ -750,40 +768,59 @@ public class CameraSetup(
 
     public void Update(int frameNumber)
     {
+        if (leadTracker == null || followTracker == null) return;
+        
+        const float IouThreshold = .6f;
         List<PoseBoundingBox> detections = allPosesAndConfidencesPerFrame[frameNumber];
-        PoseBoundingBox? leadTrackedPose = FindBestBoxFit(
+        int leadIndex = FindBestBoxFit(
             detections,
             leadTracker.Predict(),
-            .3f);
+            IouThreshold);
 
-        if (leadTrackedPose != null)
+        leadIndicesPerFrame[frameNumber] = leadIndex;
+        if (leadIndex > -1)
         {
-            leadIndicesPerFrame[frameNumber] = detections.IndexOf(leadTrackedPose);
-            leadTracker.Correct(leadTrackedPose);
+            leadTracker.Correct(detections[leadIndex]);
+        }
+        else
+        {
+            leadTracker = null;
         }
 
-        PoseBoundingBox? followTrackedPose = FindBestBoxFit(
+        int followIndex = FindBestBoxFit(
             detections,
             followTracker.Predict(),
-            .3f);
+            IouThreshold);
 
-        if (followTrackedPose != null)
+        if (followIndex == leadIndex)
         {
-            followIndicesPerFrame[frameNumber] = detections.IndexOf(followTrackedPose);
-            followTracker.Correct(followTrackedPose);
+            followIndex = -1;
+        }
+        
+        followIndicesPerFrame[frameNumber] = followIndex;
+        
+        if (followIndex > -1)
+        {
+            followTracker.Correct(detections[followIndex]);
+        }
+        else
+        {
+            followTracker = null;
         }
     }
 
     /// <summary>
     /// Inverse over Union to find overlap between prediction and observation.
     /// </summary>
-    static PoseBoundingBox? FindBestBoxFit(
+    static int FindBestBoxFit(
         List<PoseBoundingBox> detections,
         Rectangle tracker,
         double iouThreshold)
     {
-        PoseBoundingBox? highestIouDetection = null;
+        int detectionIndex = -1;
         double highestIou = iouThreshold;
+        double errorCheckIou = 0;
+        int count = 0;
         foreach (PoseBoundingBox detection in detections)
         {
             // find smallest intersection box
@@ -801,11 +838,23 @@ public class CameraSetup(
             if (iou > highestIou)
             {
                 highestIou = iou;
-                highestIouDetection = detection;
+                detectionIndex = count;
             }
+
+            if (iou > errorCheckIou)
+            {
+                errorCheckIou = iou;
+            }
+
+            count++;
         }
 
-        return highestIouDetection;
+        if (detectionIndex == -1)
+        {
+            Console.WriteLine($"Detection threshold failed. Highest detection: {errorCheckIou}");
+        }
+
+        return detectionIndex;
     }
 
     #region REFERENCE
@@ -848,7 +897,7 @@ public class CameraSetup(
     {
         // interpolate the frame
         int lastSampleFrame = SampleFrame(frameNumber - 1, affineTransforms.Count);
-        Vector3 lastAffine = affineTransforms[lastSampleFrame];;
+        Vector3 lastAffine = affineTransforms[lastSampleFrame];
         int sampleFrame = SampleFrame(frameNumber, affineTransforms.Count);
             
         for (int i = lastSampleFrame + 1; i <= sampleFrame; i++)
@@ -856,14 +905,12 @@ public class CameraSetup(
             lastAffine += affineTransforms[i];
         }
 
-        float pitchAlpha = MathF.Atan2(lastAffine.Y, focalLength);
-        float yawAlpha = MathF.Atan2(lastAffine.X, focalLength);
+        float pitchAlpha = MathF.Atan2(lastAffine.Y * PixelToMeter, focalLength);
+        float yawAlpha = MathF.Atan2(lastAffine.X * PixelToMeter, focalLength);
 
         rotationsPerFrame[frameNumber] = Quaternion.CreateFromAxisAngle(Vector3.UnitX, -pitchAlpha) *
                                          Quaternion.CreateFromAxisAngle(Vector3.UnitY, -yawAlpha) *
                                          rotationsPerFrame[frameNumber - 1];
-
-        rotationsPerFrame[frameNumber] = rotationsPerFrame[frameNumber - 1];
     }
 
     float PoseError(PoseBoundingBox pose, IEnumerable<Vector3> pose3D, int frameNumber)
