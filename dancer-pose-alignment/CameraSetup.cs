@@ -777,9 +777,10 @@ public class CameraSetup(
     {
         bool yawed = IterateYaw(0.01f, frameNumber, leadPose3D, followPose3D);
         bool pitched = IteratePitch(0.01f, frameNumber, leadPose3D, followPose3D);
+        bool zoomed = IterateZoom(0.01f, frameNumber, leadPose3D, followPose3D);
         bool rolled = IterateRoll(0.01f, frameNumber, leadPose3D, followPose3D);
 
-        return yawed || pitched || rolled;
+        return yawed || pitched || zoomed || rolled;
     }
 
     bool IterateYaw(float yawStepSize, int frameNumber, List<Vector3> leadPose3D, List<Vector3> followPose3D)
@@ -848,6 +849,37 @@ public class CameraSetup(
 
         // reset 
         rotationsPerFrame[frameNumber] = originalRotation;
+        return false;
+    }
+    
+    bool IterateZoom(float zoomStepSize, int frameNumber, List<Vector3> leadPose3D, List<Vector3> followPose3D)
+    {
+        float currentError = CurrentError(frameNumber, leadPose3D, followPose3D);
+
+        // zoom camera in and out 
+        float originalFocalLength = focalLength;
+        float zoomInFocalLength = originalFocalLength + zoomStepSize;
+        float zoomOutFocalLength = originalFocalLength - zoomStepSize;
+        focalLength = zoomInFocalLength;
+        float zoomInError = CurrentError(frameNumber, leadPose3D, followPose3D);
+
+        focalLength = zoomOutFocalLength;
+        float zoomOutError = CurrentError(frameNumber, leadPose3D, followPose3D);
+
+        if (zoomInError < zoomOutError && zoomInError < currentError)
+        {
+            focalLength = zoomInFocalLength;
+            return true;
+        }
+
+        if (zoomOutError < zoomInError && zoomOutError < currentError)
+        {
+            focalLength = zoomOutFocalLength;
+            return true;
+        }
+
+        // reset 
+        focalLength = originalFocalLength;
         return false;
     }
 
