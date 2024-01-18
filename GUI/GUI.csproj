@@ -1,4 +1,4 @@
-﻿<Project Sdk="Microsoft.NET.Sdk">
+<Project Sdk="Microsoft.NET.Sdk">
 
     <PropertyGroup>
         <OutputType>Exe</OutputType>
@@ -9,25 +9,25 @@
     </PropertyGroup>
     
   <ItemGroup>
+    <PackageReference Include="Aurio" Version="4.1.0" />
+    <PackageReference Include="Aurio.FFmpeg" Version="4.1.0" />
+    <PackageReference Include="Aurio.PFFFT" Version="4.1.0" />
+    <PackageReference Include="Aurio.Soxr" Version="4.1.0" />
     <PackageReference Include="Avalonia" Version="11.0.5" />
     <PackageReference Include="Avalonia.Desktop" Version="11.0.5" />
     <PackageReference Include="Avalonia.ReactiveUI" Version="11.0.5" />
     <PackageReference Include="Avalonia.Themes.Simple" Version="11.0.5" />
-    <PackageReference Include="OpenCvSharp4" Version="4.8.0.20230708" />
-    <PackageReference Include="OpenCvSharp4.runtime.win" Version="4.8.0.20230708" />
+    <PackageReference Include="OpenCvSharp4.Windows" Version="4.9.0.20240103" />
   </ItemGroup>
   
     <ItemGroup>
     <Compile Update="App.axaml.cs">
       <DependentUpon>App.axaml</DependentUpon>
-    </Compile>    
-    <Compile Update="MainWindow.PoseRefiner.axaml.cs">
-      <DependentUpon>MainWindow.axaml</DependentUpon>
     </Compile>
     <Compile Update="MainWindow.CameraSolver.axaml.cs">
       <DependentUpon>MainWindow.axaml</DependentUpon>
     </Compile>
-    <Compile Update="MainWindow.RoomLayout.axaml.cs">
+    <Compile Update="MainWindow.axaml.cs">
       <DependentUpon>MainWindow.axaml</DependentUpon>
     </Compile>
   </ItemGroup>

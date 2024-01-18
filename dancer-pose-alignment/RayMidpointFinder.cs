@@ -123,3 +123,26 @@ public readonly partial struct MidpointFinder(
         minMidpointBuffer[i] = currentPoint;
     }
 }
+
+public static class MidpointFinderExtension
+{
+    public static Vector3 MinimumMidpoint(Vector3 P1, Vector3 D1, Vector3 P2, Vector3 D2)
+    {
+        Vector3 w0 = P1 - P2;
+        float a = Vector3.Dot(D1, D1);
+        float b = Vector3.Dot(D1, D2);
+        float c = Vector3.Dot(D2, D2);
+        float d = Vector3.Dot(D1, w0);
+        float e = Vector3.Dot(D2, w0);
+
+        float denom = a * c - b * b;
+
+        float t = (b * e - c * d) / denom;
+        float s = (a * e - b * d) / denom;
+
+        Vector3 pointOnRay1 = P1 + t * D1;
+        Vector3 pointOnRay2 = P2 + s * D2;
+
+        return 0.5f * (pointOnRay1 + pointOnRay2);
+    }
+}

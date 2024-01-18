@@ -10,102 +10,34 @@
         <!-- Controls / Settings Tab -->
         <TabItem>
             <TabItem.Header>
-                <TextBlock VerticalAlignment="Center">Pose Refinement</TextBlock>
-            </TabItem.Header>
-
-            <!-- START Controls Stack Panel -->
-            <StackPanel Orientation="Vertical">
-                <StackPanel Orientation="Horizontal" HorizontalAlignment="Center">
-                    <TextBox Name="AlphaPoseJsonPath" Watermark="Path to AlphaPose jsons..." Width="300" Margin="5" />
-                    <TextBox Name="VideoInputPath" Watermark="Path to videos..." Width="300" Margin="5" />
-                    <Button Name="LoadVideosButton" Content="Load Videos" Margin="5" Click="LoadVideosButton_Click" />
-                </StackPanel>
-                <ComboBox Name="VideoFilesDropdown" Width="300" Margin="5" />
-                <StackPanel Orientation="Horizontal" HorizontalAlignment="Center">
-                    <StackPanel Name="DynamicRadioButtonsPanel" Orientation="Horizontal" HorizontalAlignment="Center">
-                        <RadioButton GroupName="Role" Content="Lead" Margin="5" IsChecked="True" IsDefault="True" />
-                        <RadioButton GroupName="Role" Content="Follow" Margin="5" />
-                    </StackPanel>
-                    <CheckBox Name="IsMirroredCheckbox" Content="Is Mirrored" Margin="5" />
-                </StackPanel>
-                <StackPanel Orientation="Horizontal" HorizontalAlignment="Center">
-                    <!-- IMAGE DISPLAY -->
-                    <Button Name="ClearDancersButton" Content="Clear Dancers" Height="30" Margin="5"
-                            Click="ClearDancers_Click" />
-                    <Button Name="BackButton" Content="Back" Height="30" Margin="5" Click="BackButton_Click" />
-                    <Button Name="NextFrameButton" Content="Next" Height="30" Margin="5" Click="NextFrameButton_Click" />
-                    <TextBox Name="RefinerFrameNumberText" Height="30" Width="100" Margin="5" Watermark="Progress..." />
-                    <Button Name="RunUntilNext" Content="Run Until Next Discontinuity" Height="30" Margin="5"
-                            Click="RunUntilNext_Click" />
-                    <Button Name="SaveButton" Content="Save" Height="30" Margin="5" Click="SaveButton_Click" />
-                </StackPanel>
-                <Canvas Name="VideoCanvas">
-                    <Image Name="PreviewImage" Stretch="None" Canvas.Left="0" Canvas.Top="0" Canvas.Bottom="0"
-                           Canvas.Right="0" />
-                    <Image Name="PoseImage" Stretch="None" Canvas.Left="0" Canvas.Top="0" Canvas.Bottom="0"
-                           Canvas.Right="0" PointerPressed="PointerPressedHandler" />
-                </Canvas>
-            </StackPanel>
-        </TabItem>
-        <TabItem>
-            <TabItem.Header>
-                <TextBlock VerticalAlignment="Center">Camera Positions</TextBlock>
-            </TabItem.Header>
-            <StackPanel>
-                <StackPanel Name="RadioButtonsPanel" Orientation="Horizontal" HorizontalAlignment="Center" />
-                <StackPanel Orientation="Horizontal" HorizontalAlignment="Center">
-                    <TextBox Name="HeightInputText" Text="1.5" />
-                </StackPanel>
-                <Canvas Name="LayoutCanvas" Background="White" PointerPressed="LayoutCanvas_MouseDown" Width="1000"
-                        Height="800">
-                    <Rectangle Width="1000" Height="800" Stroke="Black" />
-                    <Ellipse Fill="Red" Width="50" Height="50" Canvas.Left="525" Canvas.Top="375" />
-                    <Ellipse Fill="Magenta" Width="50" Height="50" Canvas.Left="475" Canvas.Top="375" />
-                </Canvas>
-                <Button Name="SaveLayoutButton" Content="Save" Click="SaveLayoutButton_Click" />
-            </StackPanel>
-        </TabItem>
-        <TabItem>
-            <TabItem.Header>
                 <TextBlock VerticalAlignment="Center">Camera Solver</TextBlock>
             </TabItem.Header>
+
             <DockPanel>
                 <StackPanel Orientation="Vertical" DockPanel.Dock="Top">
                     <StackPanel Orientation="Horizontal" HorizontalAlignment="Center">
-                    <TextBox x:Name="DirectoryPathTextBox" Width="300" Margin="5" Watermark="Path to 2D jsons and camera jsons dir..." />
-                    <Button Content="Load" Margin="5" Click="LoadJsonForPerspectiveButton_Click" />
-                </StackPanel>
-                    <StackPanel Orientation="Horizontal" HorizontalAlignment="Center">
-                        <!-- Buttons for perspective manipulation -->
-                        <Button Content="Yaw Left" Margin="5" Click="YawLeftButton_Click" />
-                        <Button Content="Roll Left" Margin="5" Click="RollLeftButton_Click" />
-                        <Button Content="Pitch Up" Margin="5" Click="PitchUpButton_Click" />
-                        <Button Content="Zoom In" Margin="5" Click="ZoomInButton_Click" />
-                        <Button Content="Zoom Out" Margin="5" Click="ZoomOutButton_Click" />
-                        <Button Content="Pitch Down" Margin="5" Click="PitchDownButton_Click" />
-                        <Button Content="Roll Right" Margin="5" Click="RollRightButton_Click" />
-                        <Button Content="Yaw Right" Margin="5" Click="YawRightButton_Click" />
+                        <TextBox Name="VideoInputPath" Text="C:\Users\john\Desktop\Larissa-Kadu-Recap"
+                                 Width="300" Margin="5" />
+                        <Button Name="LoadVideosButton" Content="Load Videos" Margin="5" Click="LoadVideosButton_Click" />
                     </StackPanel>
                     <StackPanel Orientation="Horizontal" HorizontalAlignment="Center">
-                        <!-- Buttons for translation manipulation -->
-                        <Button Content="Left" Margin="5" Click="TranslateLeftButton_Click" />
-                        <Button Content="Up" Margin="5" Click="TranslateUpButton_Click" />
-                        <Button Content="Down" Margin="5" Click="TranslateDownButton_Click" />
-                        <Button Content="Right" Margin="5" Click="TranslateRightButton_Click" />
-                        <Button Content="Forward" Margin="5" Click="TranslateForwardButton_Click" />
-                        <Button Content="Backward" Margin="5" Click="TranslateBackwardButton_Click" />
+                        <StackPanel Name="DynamicRadioButtonsPanel" Orientation="Horizontal"
+                                    HorizontalAlignment="Center">
+                            <RadioButton Name="Lead" GroupName="Role" Content="Lead" Margin="5" IsChecked="True" IsDefault="True" />
+                            <RadioButton Name="Follow" GroupName="Role" Content="Follow" Margin="5" />
+                            <RadioButton Name="Move" GroupName="Role" Content="Move" Margin="5" />
+                        </StackPanel>
                     </StackPanel>
                     <StackPanel Orientation="Horizontal" HorizontalAlignment="Center">
-                        <Button Content="Previous" Margin="5" Click="SolverPreviousFrameButton_Click" />
-                        <TextBox Name="SolverFrameNumberText" Height="30" Width="100" Margin="5"
-                                 Watermark="Progress..." />
-                        <TextBox Name="SolverErrorText" Height="30" Width="100" Margin="5" Watermark="Current Error..." />
-                        <Button Content="Next" Margin="5" Click="SolverNextFrameButton_Click" />
-                        <Button Content="Run Until End" Margin="5" Click="RunUntilEnd_Click"/>
+                        <!-- IMAGE DISPLAY -->
+                        <Button Name="BackButton" Content="Back" Height="30" Margin="5" Click="SolverPreviousFrameButton_Click" />
+                        <Button Name="NextFrameButton" Content="Next" Height="30" Margin="5"
+                                Click="SolverNextFrameButton_Click" />
+                        <Button Name="RunUntilNext" Content="Run Until Next Discontinuity" Height="30" Margin="5"
+                                Click="RunUntilEnd_Click" />
                         <Button Content="Save" Margin="5" Click="Save3D_Click" />
                     </StackPanel>
                 </StackPanel>
-
                 <ScrollViewer HorizontalScrollBarVisibility="Auto" VerticalScrollBarVisibility="Auto">
                     <ItemsControl x:Name="CanvasContainer">
                         <ItemsControl.ItemsPanel>
@@ -116,7 +48,6 @@
                     </ItemsControl>
                 </ScrollViewer>
             </DockPanel>
-
         </TabItem>
 
         <!-- END Controls / Settings Tab -->

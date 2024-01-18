@@ -1,4 +1,3 @@
-using System.ComponentModel;
 using System.Numerics;
 using System.Reflection;
 using ComputeSharp;
@@ -6,298 +5,73 @@ using Newtonsoft.Json;
 
 namespace dancer_pose_alignment;
 
-public class CameraPoseSolver
+public class CameraPoseSolver(PoseType poseType)
 {
+    // these are the 3D pose values that will be output
     readonly List<List<Vector3>> merged3DPoseLeadPerFrame = [];
     readonly List<List<Vector3>> merged3DPoseFollowPerFrame = [];
 
-    readonly int poseCount = 26; // Halpe
-    readonly List<CameraSetup> cameras = [];
+    readonly Dictionary<string, CameraSetup> cameras = [];
     int frameNumber = 0;
-    int totalFrameCount = int.MaxValue;
+    public int MaximumFrameCount = int.MaxValue;
 
-    public void LoadPoses(string directoryPath)
+    // drawing variables
+    Dictionary<string, Vector3> cameraPositions => cameras.ToDictionary(
+        pair => pair.Key,
+        pair => pair.Value.Position);
+
+    readonly List<Vector3> originCross =
+    [
+        Vector3.Zero,
+        Vector3.UnitX,
+        Vector3.UnitY,
+        Vector3.UnitZ
+    ];
+
+    public void CreateCamera(
+        string name,
+        Vector2 imageSize,
+        int frameCount,
+        int startingFrame,
+        int maxFrame,
+        string dbPath)
     {
-        List<Vector3> cameraPositions = [];
-        List<Vector2> cameraSizes = [];
-
-        Dictionary<int, List<List<Vector3>>> allLeadPosesByCamera = [];
-        Dictionary<int, List<List<Vector3>>> allFollowPosesByCamera = [];
-        Dictionary<int, List<List<Vector3>>> allMirrorLeadPosesByCamera = [];
-        Dictionary<int, List<List<Vector3>>> allMirrorFollowPosesByCamera = [];
-
-        Dictionary<int, List<List<Vector3>>> allOtherCameraPositionsByFrameByCamera = [];
-        Dictionary<int, List<List<Vector3>>> mirrorAllOtherCameraPositionsByFrameByCamera = [];
-
-
-        foreach (string file in Directory.GetFiles(directoryPath, "*.json"))
-        {
-            string fileName = Path.GetFileNameWithoutExtension(file);
-            if (fileName.StartsWith("lead") ||
-                fileName.StartsWith("follow") ||
-                fileName.StartsWith("mirror-lead") ||
-                fileName.StartsWith("mirror-follow"))
-            {
-                string jsonContent = File.ReadAllText(file);
-                List<List<Vector3>> dancerPosesByFrames =
-                    JsonConvert.DeserializeObject<List<List<Vector3>>>(jsonContent);
-                totalFrameCount = Math.Min(dancerPosesByFrames.Count, totalFrameCount);
-
-                int associatedCamera = int.Parse(fileName[^1].ToString());
-                if (fileName.StartsWith("lead"))
-                {
-                    allLeadPosesByCamera.Add(associatedCamera, dancerPosesByFrames);
-                }
-                else if (fileName.StartsWith("follow"))
-                {
-                    allFollowPosesByCamera.Add(associatedCamera, dancerPosesByFrames);
-                }
-                else if (fileName.StartsWith("mirror-lead"))
-                {
-                    allMirrorLeadPosesByCamera.Add(associatedCamera, dancerPosesByFrames);
-                }
-                else if (fileName.StartsWith("mirror-follow"))
-                {
-                    allMirrorFollowPosesByCamera.Add(associatedCamera, dancerPosesByFrames);
-                }
-            }
-            else
-            {
-                if (fileName.StartsWith("camera-positions"))
-                {
-                    string jsonContent = File.ReadAllText(file);
-                    cameraPositions = JsonConvert.DeserializeObject<List<Vector3>>(jsonContent);
-
-                    // rescale and offset the camera Z and X, so that the origin is in the middle of the 10m x 8m dance floor. Also 1000 pixels = 10M
-                    for (int i = 0; i < cameraPositions.Count; i++)
-                    {
-                        cameraPositions[i] = cameraPositions[i] with
-                        {
-                            X = cameraPositions[i].X / 100 - 5,
-                            Z = -(cameraPositions[i].Z / 100 - 4) // orient forward
-                        };
-                    }
-                }
-                else if (fileName.StartsWith("cameraSizes"))
-                {
-                    string jsonContent = File.ReadAllText(file);
-                    cameraSizes = JsonConvert.DeserializeObject<List<Vector2>>(jsonContent);
-                }
-                else
-                {
-                    int associatedCamera = int.Parse(fileName[^1].ToString());
-                    List<List<Vector3>> otherCameraPositionsByFrame =
-                        JsonConvert.DeserializeObject<List<List<Vector3>>>(File.ReadAllText(file));
-                    if (fileName.StartsWith("mirror"))
-                    {
-                        mirrorAllOtherCameraPositionsByFrameByCamera.Add(associatedCamera, otherCameraPositionsByFrame);
-                    }
-                    else
-                    {
-                        allOtherCameraPositionsByFrameByCamera.Add(associatedCamera, otherCameraPositionsByFrame);
-                    }
-                }
-            }
-        }
-
-        // seed
-        for (int i = 0; i < totalFrameCount; i++)
-        {
-            merged3DPoseLeadPerFrame.Add([]);
-            merged3DPoseFollowPerFrame.Add([]);
-        }
-
-        CreateAndPlaceCameras(cameraSizes, cameraPositions);
-        AddPosesToCamera(
-            allLeadPosesByCamera,
-            allFollowPosesByCamera,
-            allMirrorLeadPosesByCamera,
-            allMirrorFollowPosesByCamera,
-            allOtherCameraPositionsByFrameByCamera,
-            mirrorAllOtherCameraPositionsByFrameByCamera);
+        CameraSetup camera = new(name, imageSize, frameCount, poseType, startingFrame, maxFrame, dbPath);
+        cameras.Add(name, camera);
     }
 
-    public List<List<List<Vector3>>> AllPosesAtFramePerCamera()
+    /// <summary> 
+    /// Called when poses are calculated for every frame 
+    /// </summary> 
+    public void SetPoseFromImage(string camName)
     {
-        return cameras.Select(camera => camera.PosesPerDancerAtFrame(frameNumber).ToList()).ToList();
-    }
+        cameras[camName].SetAllPosesAtFrame(frameNumber);
 
-    public List<List<Vector3>> AllVisibleCamerasAtFramePerCamera()
-    {
-        return cameras.Select(camera => camera.OtherCamerasPositionAndConfidenceAtFrame(frameNumber).ToList()).ToList();
-    }
-
-    public List<List<Vector3>> AllMirrorVisibleCamerasAtFramePerCamera()
-    {
-        return cameras.Select(camera => camera.OtherMirrorCamerasPositionAndConfidenceAtFrame(frameNumber).ToList())
-            .ToList();
-    }
-
-    public List<List<Vector2>> ReverseProjectionOfLeadPosePerCamera()
-    {
-        return cameras.Select(camera => merged3DPoseLeadPerFrame[frameNumber]
-                .Select(x => camera.ReverseProjectPoint(x, frameNumber)).ToList())
-            .ToList();
-    }
-
-    public List<List<Vector2>> ReverseProjectionOfFollowPosePerCamera()
-    {
-        return cameras.Select(camera => merged3DPoseFollowPerFrame[frameNumber]
-                .Select(x => camera.ReverseProjectPoint(x, frameNumber)).ToList())
-            .ToList();
-    }
-
-    public List<List<Vector2>> ReverseProjectOriginCrossPerCamera()
-    {
-        List<List<Vector2>> originCross = [];
-        foreach (CameraSetup camera in cameras)
-        {
-            originCross.Add([
-                camera.ReverseProjectPoint(Vector3.Zero, frameNumber),
-                camera.ReverseProjectPoint(Vector3.UnitX, frameNumber),
-                camera.ReverseProjectPoint(Vector3.UnitY, frameNumber),
-                camera.ReverseProjectPoint(Vector3.UnitZ, frameNumber)
-            ]);
-        }
-
-        return originCross;
-    }
-
-    public List<Vector2> ReverseProjectionsOfOtherCamerasPerCamera(int cameraIndex)
-    {
-        return cameras.Select((camera, index) => index == cameraIndex
-            ? Vector2.Zero
-            : cameras[cameraIndex].ReverseProjectPoint(camera.PositionsPerFrame[frameNumber], frameNumber)).ToList();
-    }
-
-    void CreateAndPlaceCameras(
-        IReadOnlyList<Vector2> imageSizes,
-        IReadOnlyList<Vector3> seedCameraPositions)
-    {
-        const int testingFrameNumber = 0;
-        for (int i = 0; i < imageSizes.Count; i++)
-        {
-            CameraSetup camera = new()
-            {
-                Size = imageSizes[i]
-            };
-
-            if (seedCameraPositions.Count != 0)
-            {
-                camera.PositionsPerFrame.Add(seedCameraPositions[i]);
-            }
-            else
-            {
-                float angle = -(float)i / imageSizes.Count * 2 * MathF.PI; // ccw
-                const float radius = 3f;
-                const float startingHeight = 1.5f;
-                camera.PositionsPerFrame.Add(new Vector3(
-                    MathF.Sin(angle) * radius,
-                    startingHeight,
-                    MathF.Cos(angle) * radius));
-            }
-
-            Quaternion centerLook = Transform.LookAt(
-                new Vector3(0, 1.5f, 0),
-                Quaternion.Identity,
-                camera.PositionsPerFrame[testingFrameNumber]);
-            camera.RotationsPerFrame.Add(centerLook);
-
-            cameras.Add(camera);
-        }
-    }
-
-    void AddPosesToCamera(
-        IReadOnlyDictionary<int, List<List<Vector3>>> allLeadPosesByCamera,
-        IReadOnlyDictionary<int, List<List<Vector3>>> allFollowPosesByCamera,
-        IReadOnlyDictionary<int, List<List<Vector3>>> allMirrorLeadPosesByCamera,
-        IReadOnlyDictionary<int, List<List<Vector3>>> allMirrorFollowPosesByCamera,
-        IReadOnlyDictionary<int, List<List<Vector3>>> allOtherCameraPositionsByFrameByCamera,
-        IReadOnlyDictionary<int, List<List<Vector3>>> mirrorAllOtherCameraPositionsByFrameByCamera)
-    {
-        int count = 0;
-        foreach (CameraSetup camera in cameras)
-        {
-            camera.AddPosesAndRecenterAndScaleToCamera(
-                allLeadPosesByCamera[count],
-                allFollowPosesByCamera[count],
-                allMirrorLeadPosesByCamera[count],
-                allMirrorFollowPosesByCamera[count],
-                allOtherCameraPositionsByFrameByCamera[count],
-                mirrorAllOtherCameraPositionsByFrameByCamera[count]);
-            count++;
-        }
-    }
-
-    #region SET CAM ORIENTATION
-
-    public void HomeAllCameras()
-    {
-        foreach (CameraSetup camera in cameras)
-        {
-            camera.Home();
-        }
-    }
-
-    public void YawCamera(int camIndex, float angle)
-    {
-        cameras[camIndex].RotationsPerFrame[frameNumber] *= Quaternion.CreateFromAxisAngle(Vector3.UnitY, angle);
-    }
-
-    public void PitchCamera(int camIndex, float angle)
-    {
-        cameras[camIndex].RotationsPerFrame[frameNumber] *= Quaternion.CreateFromAxisAngle(Vector3.UnitX, angle);
-    }
-
-    public void RollCamera(int camIndex, float angle)
-    {
-        cameras[camIndex].RotationsPerFrame[frameNumber] *= Quaternion.CreateFromAxisAngle(Vector3.UnitZ, angle);
-    }
-
-    public void ZoomCamera(int camIndex, float zoom)
-    {
-        cameras[camIndex].FocalLength += zoom;
-    }
-
-    public void MoveCameraForward(int camIndex, float move)
-    {
-        cameras[camIndex].PositionsPerFrame[frameNumber] += cameras[camIndex].Forward(frameNumber) * move;
         if (frameNumber == 0)
         {
-            cameras[camIndex].Home();
+            TryHomeCamera(camName);
         }
-    }
-
-    public void MoveCameraRight(int camIndex, float move)
-    {
-        cameras[camIndex].PositionsPerFrame[frameNumber] += cameras[camIndex].Right(frameNumber) * move;
-        if (frameNumber == 0)
+        else
         {
-            cameras[camIndex].Home();
+            // TODO 
         }
     }
 
-    public void MoveCameraUp(int camIndex, float move)
+    public void SetAllAffine(List<Vector3> affine, string camName)
     {
-        cameras[camIndex].PositionsPerFrame[frameNumber] += cameras[camIndex].Up(frameNumber) * move;
-        if (frameNumber == 0)
-        {
-            cameras[camIndex].Home();
-        }
+        cameras[camName].SetAllAffine(affine);
     }
-
-    #endregion
-
-    #region ITERATORS
 
     public bool Advance()
     {
-        if (frameNumber >= totalFrameCount) return false;
+        if (frameNumber >= MaximumFrameCount - 1) return false;
 
         frameNumber++;
-        foreach (CameraSetup cameraSetup in cameras)
+        foreach ((string videoFilePath, CameraSetup cameraSetup) in cameras)
         {
-            cameraSetup.CopyPositionsToNextFrame(frameNumber);
+            cameraSetup.CopyRotationToNextFrame(frameNumber);
+            SetPoseFromImage(videoFilePath);
+            cameraSetup.Update(frameNumber);
         }
 
         return true;
@@ -311,241 +85,381 @@ public class CameraPoseSolver
         return true;
     }
 
-    public void IterationLoop()
+    public void CalculateLeadFollow3DPoses()
     {
-        if(merged3DPoseFollowPerFrame.Count <= frameNumber) return;
-        float totalError = Calculate3DPosesAndTotalError();
-
-        int iterationCount = 0;
-        while (iterationCount < 10000)
-        {
-            CameraSetup highestErrorCam = null;
-            float highestError = 0;
-            foreach (CameraSetup cameraSetup in cameras)
-            {
-                float error = cameraSetup.Error(
-                    merged3DPoseLeadPerFrame[frameNumber],
-                    merged3DPoseFollowPerFrame[frameNumber],
-                    frameNumber);
-                
-                if (error > highestError)
-                {
-                    highestError = error;
-                    highestErrorCam = cameraSetup;
-                }
-            }
-
-            if (highestErrorCam == null)
-            {
-                Console.WriteLine("couldn't find highest error camera");
-                break;
-            }
-
-            // TODO translate XYZ +/- .1m and determine which path has lowest error after homing
-            bool moved = highestErrorCam.IterateOrientation(this, frameNumber);
-            if (!moved)
-            {
-                break;
-            }
-
-            totalError = Calculate3DPosesAndTotalError();
-            Console.WriteLine($"{iterationCount}:{totalError}");
-            iterationCount++;
-        }
-
-        totalError = Calculate3DPosesAndTotalError();
-        Console.WriteLine(totalError);
-    }
-
-    public void SaveData(string folder)
-    {
-        string jsonMerged3DPose = JsonConvert.SerializeObject(merged3DPoseLeadPerFrame, Formatting.Indented);
-        File.WriteAllText(Path.Combine(folder, "merged3DPoseLead.json"), jsonMerged3DPose);
-
-        string jsonMerged3DPoseFollow = JsonConvert.SerializeObject(merged3DPoseFollowPerFrame, Formatting.Indented);
-        File.WriteAllText(Path.Combine(folder, "merged3DPoseFollow.json"), jsonMerged3DPoseFollow);
-
-        Console.WriteLine($"wrote 3d poses to {folder}");
-
-    }
-
-    #endregion
-
-    public float Calculate3DPosesAndTotalError()
-    {
-        foreach (CameraSetup cameraSetup in cameras)
+        foreach (CameraSetup cameraSetup in cameras.Values)
         {
             cameraSetup.Project(frameNumber);
         }
 
+        while (merged3DPoseLeadPerFrame.Count <= frameNumber)
+        {
+            // add a new frame
+            merged3DPoseLeadPerFrame.Add([]);
+        }
+
+        while (merged3DPoseFollowPerFrame.Count <= frameNumber)
+        {
+            merged3DPoseFollowPerFrame.Add([]);
+        }
+
         merged3DPoseLeadPerFrame[frameNumber].Clear();
         merged3DPoseFollowPerFrame[frameNumber].Clear();
-        List<float3> leadRayOriginPerCameraPerJoint = []; // in batches of camera count
-        List<float3> leadRayDirectionPerCameraPerJoint = []; // in batches of camera count
-        List<float> leadJointConfidencePerCameraPerJoint = []; // in batches of camera count
-        List<float3> followRayOriginPerCameraPerJoint = []; // in batches of camera count
-        List<float3> followRayDirectionPerCameraPerJoint = []; // in batches of camera count
-        List<float> followJointConfidencePerCameraPerJoint = []; // in batches of camera count
 
-        int arrayLength = poseCount * cameras.Count;
+        List<Vector3> merged3DPoseLead = Calculate3DPose(true);
+        List<Vector3> merged3DPoseFollow = Calculate3DPose(false);
 
-        for (int i = 0; i < poseCount; i++)
+        merged3DPoseLeadPerFrame[frameNumber] = merged3DPoseLead;
+        merged3DPoseFollowPerFrame[frameNumber] = merged3DPoseFollow;
+    }
+
+    List<Vector3> Calculate3DPose(bool isLead)
+    {
+        List<float3> rayOriginPerCameraPerJoint = []; // in batches of camera count
+        List<float3> rayDirectionPerCameraPerJoint = []; // in batches of camera count
+        List<float> jointConfidencePerCameraPerJoint = []; // in batches of camera count
+
+        int arrayLength = JointExtension.PoseCount(poseType) * cameras.Count;
+
+        for (int i = 0; i < JointExtension.PoseCount(poseType); i++)
         {
-            foreach (CameraSetup cameraSetup in cameras)
+            foreach (CameraSetup cameraSetup in cameras.Values)
             {
-                if (cameraSetup.HasPoseAtFrame(frameNumber, true))
+                if (cameraSetup.HasPoseAtFrame(frameNumber, isLead))
                 {
-                    Ray ray = cameraSetup.PoseRay(frameNumber, i, true);
-                    leadRayOriginPerCameraPerJoint.Add(ray.Origin);
-                    leadRayDirectionPerCameraPerJoint.Add(ray.Direction);
-                    leadJointConfidencePerCameraPerJoint.Add(cameraSetup.JointConfidence(frameNumber, i, true));
+                    Ray ray = cameraSetup.PoseRay(frameNumber, i, isLead);
+                    rayOriginPerCameraPerJoint.Add(ray.Origin);
+                    rayDirectionPerCameraPerJoint.Add(ray.Direction);
+                    jointConfidencePerCameraPerJoint.Add(cameraSetup.JointConfidence(frameNumber, i, isLead));
                 }
                 else
                 {
-                    leadRayOriginPerCameraPerJoint.Add(float3.Zero);
-                    leadRayDirectionPerCameraPerJoint.Add(float3.UnitZ);
-                    leadJointConfidencePerCameraPerJoint.Add(0);
-                }
-
-                if (cameraSetup.HasPoseAtFrame(frameNumber, false))
-                {
-                    Ray ray = cameraSetup.PoseRay(frameNumber, i, false);
-                    followRayOriginPerCameraPerJoint.Add(ray.Origin);
-                    followRayDirectionPerCameraPerJoint.Add(ray.Direction);
-                    followJointConfidencePerCameraPerJoint.Add(cameraSetup.JointConfidence(frameNumber, i, false));
-                }
-                else
-                {
-                    followRayOriginPerCameraPerJoint.Add(float3.Zero);
-                    followRayDirectionPerCameraPerJoint.Add(float3.UnitZ);
-                    followJointConfidencePerCameraPerJoint.Add(0);
+                    rayOriginPerCameraPerJoint.Add(float3.Zero);
+                    rayDirectionPerCameraPerJoint.Add(float3.UnitZ);
+                    jointConfidencePerCameraPerJoint.Add(0);
                 }
             }
         }
 
-        float3[] leadJointMidpoints = new float3[poseCount];
+        float3[] jointMidpoints = new float3[JointExtension.PoseCount(poseType)];
 
-        using ReadWriteBuffer<float3> leadMinMidpointBuffer =
-            GraphicsDevice.GetDefault().AllocateReadWriteBuffer(leadJointMidpoints);
-        using ReadOnlyBuffer<float3> leadRayOriginBuffer =
-            GraphicsDevice.GetDefault().AllocateReadOnlyBuffer(leadRayOriginPerCameraPerJoint.ToArray());
-        using ReadOnlyBuffer<float3> leadRayDirectionBuffer = GraphicsDevice.GetDefault()
-            .AllocateReadOnlyBuffer(leadRayDirectionPerCameraPerJoint.ToArray());
-        using ReadOnlyBuffer<float> leadJointConfidenceBuffer = GraphicsDevice.GetDefault()
-            .AllocateReadOnlyBuffer(leadJointConfidencePerCameraPerJoint.ToArray());
+        using ReadWriteBuffer<float3> minMidpointBuffer =
+            GraphicsDevice.GetDefault().AllocateReadWriteBuffer(jointMidpoints);
+        using ReadOnlyBuffer<float3> rayOriginBuffer =
+            GraphicsDevice.GetDefault().AllocateReadOnlyBuffer(rayOriginPerCameraPerJoint.ToArray());
+        using ReadOnlyBuffer<float3> rayDirectionBuffer = GraphicsDevice.GetDefault()
+            .AllocateReadOnlyBuffer(rayDirectionPerCameraPerJoint.ToArray());
+        using ReadOnlyBuffer<float> jointConfidenceBuffer = GraphicsDevice.GetDefault()
+            .AllocateReadOnlyBuffer(jointConfidencePerCameraPerJoint.ToArray());
 
-        MidpointFinder leadMidpointFinder = new MidpointFinder(
-            leadMinMidpointBuffer,
-            leadRayOriginBuffer,
-            leadRayDirectionBuffer,
-            leadJointConfidenceBuffer,
+        MidpointFinder midpointFinder = new(
+            minMidpointBuffer,
+            rayOriginBuffer,
+            rayDirectionBuffer,
+            jointConfidenceBuffer,
             cameras.Count);
 
         try
         {
-            GraphicsDevice.GetDefault().For(arrayLength, leadMidpointFinder);
+            GraphicsDevice.GetDefault().For(arrayLength, midpointFinder);
         }
         catch (TargetInvocationException e)
         {
             Console.WriteLine(e);
         }
 
-        float3[] leadResults = leadMinMidpointBuffer.ToArray();
-        foreach (float3 result in leadResults)
-        {
-            merged3DPoseLeadPerFrame[frameNumber].Add(new Vector3(result.X, result.Y, result.Z));
-        }
+        List<Vector3> scatterPose = minMidpointBuffer.ToArray()
+            .Select(result => new Vector3(result.X, result.Y, result.Z))
+            .ToList();
 
-        float3[] followJointMidpoints = new float3[poseCount];
-
-        using ReadWriteBuffer<float3> followMinMidpointBuffer =
-            GraphicsDevice.GetDefault().AllocateReadWriteBuffer(followJointMidpoints);
-        using ReadOnlyBuffer<float3> followRayOriginBuffer = GraphicsDevice.GetDefault()
-            .AllocateReadOnlyBuffer(followRayOriginPerCameraPerJoint.ToArray());
-        using ReadOnlyBuffer<float3> followRayDirectionBuffer = GraphicsDevice.GetDefault()
-            .AllocateReadOnlyBuffer(followRayDirectionPerCameraPerJoint.ToArray());
-        using ReadOnlyBuffer<float> followJointConfidenceBuffer = GraphicsDevice.GetDefault()
-            .AllocateReadOnlyBuffer(followJointConfidencePerCameraPerJoint.ToArray());
-
-        MidpointFinder followMidpointFinder = new MidpointFinder(
-            followMinMidpointBuffer,
-            followRayOriginBuffer,
-            followRayDirectionBuffer,
-            followJointConfidenceBuffer,
-            cameras.Count);
-
-        try
-        {
-            GraphicsDevice.GetDefault().For(arrayLength, followMidpointFinder);
-        }
-        catch (TargetInvocationException e)
-        {
-            Console.WriteLine(e);
-        }
-
-        float3[] followResults = followMinMidpointBuffer.ToArray();
-        foreach (float3 result in followResults)
-        {
-            merged3DPoseFollowPerFrame[frameNumber].Add(new Vector3(result.X, result.Y, result.Z));
-        }
-
-        float totalError = 0;
-        foreach (CameraSetup cameraSetup in cameras)
-        {
-            totalError += cameraSetup.Error(merged3DPoseLeadPerFrame[frameNumber],
-                merged3DPoseFollowPerFrame[frameNumber], frameNumber);
-        }
-
-        return totalError;
+        return scatterPose;
     }
 
-    static int FrameWithHighestConfidence(
-        IReadOnlyList<List<List<Vector3>>> leadByCamera,
-        IReadOnlyList<List<List<Vector3>>> followByCamera)
+    /// <summary>
+    /// To be used as the final anchored to the floor, consistent limb length model
+    /// </summary>
+    /// <returns></returns>
+    List<Vector3> AnchorFinalPose(List<Vector3> scatterPose, bool isLead)
     {
-        int frameWithHighestConfidence = 0;
-        float highestConfidence = 0f;
-
-        int highestValidIndex = leadByCamera.Select(t => t.Count).Min();
-
-        for (int i = 0; i < leadByCamera.Count; i++)
+        // body limb constants so that 3D pose is constrained
+        const float LeadLegLimbLength = .4f;
+        const float FollowLegLimbLength = .4f;
+        const float LeadShoulderHipArmLength = .3f;
+        const float FollowShoulderHipArmLength = .28f;
+        
+        List<Vector3> final3DPose = [];
+        for (int i = 0; i < JointExtension.PoseCount(poseType); i++)
         {
-            for (int j = 0; j < highestValidIndex; j++)
+            final3DPose.Add(Vector3.Zero);
+        }
+
+        // ANCHOR LEGS
+        Vector3 rAnklePos = isLead && frameNumber == 0
+            ? Vector3.Zero // root to origin
+            : scatterPose[JointExtension.RAnkleIndex(poseType)];
+        Vector3 lAnklePos = isLead && frameNumber == 0
+            ? new Vector3(-LeadShoulderHipArmLength, 0, 0) // root to stance
+            : scatterPose[JointExtension.LAnkleIndex(poseType)];
+
+        Vector3 rKneePos = scatterPose[JointExtension.RKneeIndex(poseType)];
+        Vector3 lKneePos = scatterPose[JointExtension.LKneeIndex(poseType)];
+
+        Vector3 rHipPos = scatterPose[JointExtension.RHipIndex(poseType)];
+        Vector3 lHipPos = scatterPose[JointExtension.LHipIndex(poseType)];
+
+        if (rAnklePos.Y < lAnklePos.Y)
+        {
+            // right ankle is lower to the ground
+            final3DPose[JointExtension.RAnkleIndex(poseType)] = rAnklePos with { Y = 0 };
+            rKneePos = rAnklePos + Vector3.Normalize(rKneePos - rAnklePos) *
+                (isLead ? LeadLegLimbLength : FollowLegLimbLength);
+            final3DPose[JointExtension.RKneeIndex(poseType)] = rKneePos;
+            rHipPos = rKneePos + Vector3.Normalize(rHipPos - rKneePos) *
+                (isLead ? LeadLegLimbLength : FollowLegLimbLength);
+            final3DPose[JointExtension.RHipIndex(poseType)] = rHipPos;
+
+            if (frameNumber == 0)
             {
-                float confidence = Confidence(leadByCamera[i][j], followByCamera[i][j]);
-                if (confidence > highestConfidence)
-                {
-                    highestConfidence = confidence;
-                    frameWithHighestConfidence = j;
-                }
+                final3DPose[JointExtension.LAnkleIndex(poseType)] = lAnklePos with { Y = 0 };
+                lKneePos = lAnklePos + Vector3.Normalize(lKneePos - lAnklePos) *
+                    (isLead ? LeadLegLimbLength : FollowLegLimbLength);
+                final3DPose[JointExtension.LKneeIndex(poseType)] = lKneePos;
+                lHipPos = lKneePos + Vector3.Normalize(lHipPos - lKneePos) *
+                    (isLead ? LeadLegLimbLength : FollowLegLimbLength);
+                final3DPose[JointExtension.LHipIndex(poseType)] = lHipPos;
+            }
+            else
+            {
+                lHipPos = rHipPos + Vector3.Normalize(lHipPos - rHipPos) *
+                    (isLead ? LeadShoulderHipArmLength : FollowShoulderHipArmLength);
+                final3DPose[JointExtension.LHipIndex(poseType)] = lHipPos;
+                lKneePos = lHipPos +
+                           Vector3.Normalize(lKneePos - lHipPos) * (isLead ? LeadLegLimbLength : FollowLegLimbLength);
+                final3DPose[JointExtension.LKneeIndex(poseType)] = lKneePos;
+                lAnklePos = lKneePos + Vector3.Normalize(lAnklePos - lKneePos) * (isLead
+                    ? LeadLegLimbLength
+                    : FollowLegLimbLength);
+                final3DPose[JointExtension.LAnkleIndex(poseType)] = lAnklePos;
+            }
+        }
+        else
+        {
+            final3DPose[JointExtension.LAnkleIndex(poseType)] = lAnklePos;
+            lKneePos = lAnklePos + Vector3.Normalize(lKneePos - lAnklePos) * (isLead
+                ? LeadLegLimbLength
+                : FollowLegLimbLength);
+            final3DPose[JointExtension.LKneeIndex(poseType)] = lKneePos;
+            lHipPos = lKneePos +
+                      Vector3.Normalize(lHipPos - lKneePos) * (isLead ? LeadLegLimbLength : FollowLegLimbLength);
+            final3DPose[JointExtension.LHipIndex(poseType)] = lHipPos;
+
+            if (frameNumber == 0)
+            {
+                final3DPose[JointExtension.RAnkleIndex(poseType)] = rAnklePos with { Y = 0 };
+                rKneePos = rAnklePos + Vector3.Normalize(rKneePos - rAnklePos) *
+                    (isLead ? LeadLegLimbLength : FollowLegLimbLength);
+                final3DPose[JointExtension.RKneeIndex(poseType)] = rKneePos;
+                rHipPos = rKneePos + Vector3.Normalize(rHipPos - rKneePos) *
+                    (isLead ? LeadLegLimbLength : FollowLegLimbLength);
+                final3DPose[JointExtension.RHipIndex(poseType)] = rHipPos;
+            }
+            else
+            {
+                rHipPos = lHipPos + Vector3.Normalize(rHipPos - lHipPos) *
+                    (isLead ? LeadShoulderHipArmLength : FollowShoulderHipArmLength);
+                final3DPose[JointExtension.RHipIndex(poseType)] = rHipPos;
+                rKneePos = rHipPos +
+                           Vector3.Normalize(rKneePos - rHipPos) * (isLead ? LeadLegLimbLength : FollowLegLimbLength);
+                final3DPose[JointExtension.RKneeIndex(poseType)] = rKneePos;
+                rAnklePos = rKneePos + Vector3.Normalize(rAnklePos - rKneePos) * (isLead
+                    ? LeadLegLimbLength
+                    : FollowLegLimbLength);
+                final3DPose[JointExtension.RAnkleIndex(poseType)] = rAnklePos;
             }
         }
 
-        return frameWithHighestConfidence;
+        // ANCHOR ARMS
+        Vector3 rShoulderPos = scatterPose[JointExtension.RShoulderIndex(poseType)];
+        Vector3 lShoulderPos = scatterPose[JointExtension.LShoulderIndex(poseType)];
+
+        Vector3 rElbowPos = scatterPose[JointExtension.RElbowIndex(poseType)];
+        Vector3 lElbowPos = scatterPose[JointExtension.LElbowIndex(poseType)];
+
+        Vector3 rWristPos = scatterPose[JointExtension.RWristIndex(poseType)];
+        Vector3 lWristPos = scatterPose[JointExtension.LWristIndex(poseType)];
+
+        final3DPose[JointExtension.RShoulderIndex(poseType)] = rShoulderPos;
+        rElbowPos = rShoulderPos + Vector3.Normalize(rElbowPos - rShoulderPos) *
+            (isLead ? LeadShoulderHipArmLength : FollowShoulderHipArmLength);
+        final3DPose[JointExtension.RElbowIndex(poseType)] = rElbowPos;
+        rWristPos = rElbowPos + Vector3.Normalize(rWristPos - rElbowPos) *
+            (isLead ? LeadShoulderHipArmLength : FollowShoulderHipArmLength);
+        final3DPose[JointExtension.RWristIndex(poseType)] = rWristPos;
+
+        final3DPose[JointExtension.LShoulderIndex(poseType)] = lShoulderPos;
+        lElbowPos = lShoulderPos + Vector3.Normalize(lElbowPos - lShoulderPos) *
+            (isLead ? LeadShoulderHipArmLength : FollowShoulderHipArmLength);
+        final3DPose[JointExtension.LElbowIndex(poseType)] = lElbowPos;
+        lWristPos = lElbowPos + Vector3.Normalize(lWristPos - lElbowPos) *
+            (isLead ? LeadShoulderHipArmLength : FollowShoulderHipArmLength);
+        final3DPose[JointExtension.LWristIndex(poseType)] = lWristPos;
+
+        final3DPose[JointExtension.NoseIndex(poseType)] = scatterPose[JointExtension.NoseIndex(poseType)];
+        final3DPose[JointExtension.LEarIndex(poseType)] = scatterPose[JointExtension.LEarIndex(poseType)];
+        final3DPose[JointExtension.REarIndex(poseType)] = scatterPose[JointExtension.REarIndex(poseType)];
+        final3DPose[JointExtension.LEyeIndex(poseType)] = scatterPose[JointExtension.LEyeIndex(poseType)];
+        final3DPose[JointExtension.REyeIndex(poseType)] = scatterPose[JointExtension.REyeIndex(poseType)];
+
+        return final3DPose;
     }
 
-    static float Confidence(IEnumerable<Vector3> lead, IEnumerable<Vector3> follow)
+    #region USER MARKUP
+
+    /// <summary>
+    /// For the selected camera, attempt to select the figure from the closes joint
+    /// </summary>
+    /// <returns>The index of the dancer and the index of the joint</returns>
+    public Tuple<PoseBoundingBox, int> MarkDancerAtCam(string camName, Vector2 click, string selectedButton)
     {
-        return lead.Sum(vector3 => vector3.Z) + follow.Sum(vector3 => vector3.Z);
+        Tuple<PoseBoundingBox, int> selectionAndJoint = cameras[camName].MarkDancer(click, frameNumber, selectedButton);
+        switch (selectedButton)
+        {
+            case "Lead":
+            case "Follow":
+                cameras[camName].CalculateCameraWall(frameNumber);
+                break;
+        }
+
+        return selectionAndJoint;
     }
 
-    public bool AnyPointsBelowGround() => merged3DPoseLeadPerFrame[frameNumber].Any(vec => vec.Y < -.1f) ||
-                                          merged3DPoseFollowPerFrame[frameNumber].Any(vec => vec.Y < -.1f);
-
-    public bool LowestLeadAnkleIsMoreThan10CMAboveZero()
+    public void MoveKeypointAtCam(string camName, Vector2 click, Tuple<PoseBoundingBox?, int> selectedPoseAndKeypoint)
     {
-        float lowestLeadAnkle = Math.Min(
-            merged3DPoseLeadPerFrame[frameNumber][(int)Halpe.LAnkle].Y,
-            merged3DPoseLeadPerFrame[frameNumber][(int)Halpe.RAnkle].Y);
-        return lowestLeadAnkle > 0.1f; // 10cm above ground
+        cameras[camName].MoveKeypoint(click, frameNumber, selectedPoseAndKeypoint);
     }
 
-    public bool AnyPointsHigherThan2pt5Meters()
+    #endregion
+
+    #region ITERATORS
+
+    public void HomeAllCameras()
     {
-        return merged3DPoseLeadPerFrame[frameNumber].Any(vec => vec.Y > 2.5) ||
-               merged3DPoseFollowPerFrame[frameNumber].Any(vec => vec.Y > 2.5);
+        if (frameNumber > 0) return;
+        foreach (CameraSetup cam in cameras.Values)
+        {
+            cam.Home();
+        }
     }
 
-    public int GetFrameNumber() => frameNumber;
-    public int GetTotalFrameCount() => totalFrameCount;
+    void TryHomeCamera(string camName)
+    {
+        if (frameNumber > 0) return;
+        cameras[camName].Home();
+    }
+
+    public void SetCamR()
+    {
+        List<Tuple<float, float>> cameraWall = OrderedAndSmoothedCameraWall();
+        foreach (CameraSetup camerasValue in cameras.Values)
+        {
+            camerasValue.SetRadiusFromCameraWall(cameraWall);
+        }
+    }
+
+    #endregion
+
+    #region DRAWING
+
+    public List<PoseBoundingBox> GetPosesAtFrameAtCamera(string camName)
+    {
+        return cameras[camName].GetPosesPerDancerAtFrame(frameNumber);
+    }
+
+    public List<Vector2> ReverseProjectionOfPoseAtCamera(string camName, bool isLead)
+    {
+        if (isLead)
+        {
+            if (merged3DPoseLeadPerFrame.Count <= frameNumber) return [];
+
+            List<Vector2> reverseLeadProjection = merged3DPoseLeadPerFrame[frameNumber]
+                .Select(vec => cameras[camName].ReverseProjectPoint(vec, frameNumber)).ToList();
+
+            return reverseLeadProjection;
+        }
+
+        if (merged3DPoseFollowPerFrame.Count <= frameNumber) return [];
+
+        List<Vector2> reverseFollowProjection = merged3DPoseFollowPerFrame[frameNumber]
+            .Select(vec => cameras[camName].ReverseProjectPoint(vec, frameNumber)).ToList();
+
+        return reverseFollowProjection;
+    }
+
+    public List<Vector2> ReverseProjectOriginCrossAtCamera(string camName)
+    {
+        return originCross.Select(vec => cameras[camName]
+            .ReverseProjectPoint(vec, frameNumber)).ToList();
+    }
+
+    public List<Vector2> ReverseProjectCameraPositionsAtCameraAndManualPair(string camName)
+    {
+        List<Vector2> pointPairs = [];
+        foreach ((string otherCamName, Vector3 camPos) in cameraPositions)
+        {
+            if (camName == otherCamName) continue;
+
+            Vector2 point = cameras[camName].ReverseProjectPoint(camPos, frameNumber);
+            pointPairs.Add(point);
+        }
+
+        return pointPairs;
+    }
+
+    #endregion
+
+    #region REFERENCE
+
+    public bool AreLeadAndFollowAssignedForFrame()
+    {
+        List<Tuple<PoseBoundingBox?, PoseBoundingBox?>> leadAndFollowIndices = cameras.Values
+            .Select(x => x.GetLeadAndFollowPoseForFrame(frameNumber)).ToList();
+        return !leadAndFollowIndices.Any(x => x.Item1 == null || x.Item2 == null);
+    }
+
+    List<Tuple<float, float>> OrderedAndSmoothedCameraWall()
+    {
+        List<Tuple<float, float>> ordered = cameras.Values
+            .SelectMany(cam => cam.CameraWall).OrderBy(x => x.Item1).ToList();
+        List<Vector3> allPoints = [];
+        foreach (Tuple<float, float> tuple in ordered)
+        {
+            Vector3 point = new(tuple.Item2 * MathF.Sin(tuple.Item1), 0, tuple.Item2 * MathF.Cos(tuple.Item1));
+            allPoints.Add(point);
+        }
+
+        allPoints = Transform.MovingAverageSmoothing(allPoints, 4);
+
+        List<Tuple<float, float>> final = [];
+        for (int i = 0; i < allPoints.Count; i++)
+        {
+            Vector3 point = allPoints[i];
+            float rad = Vector3.Distance(Vector3.Zero, point);
+            final.Add(new Tuple<float, float>(ordered[i].Item1, rad));
+        }
+
+        return final;
+    }
+
+    #endregion
+
+    public void SaveData(string folder)
+    {
+        string jsonMerged3DPose = JsonConvert.SerializeObject(merged3DPoseLeadPerFrame, Formatting.Indented);
+        File.WriteAllText(Path.Combine(folder, "figure1.json"), jsonMerged3DPose);
+
+        string jsonMerged3DPoseFollow = JsonConvert.SerializeObject(merged3DPoseFollowPerFrame, Formatting.Indented);
+        File.WriteAllText(Path.Combine(folder, "figure2.json"), jsonMerged3DPoseFollow);
+
+        Console.WriteLine($"wrote 3d poses to {folder}");
+    }
 }
