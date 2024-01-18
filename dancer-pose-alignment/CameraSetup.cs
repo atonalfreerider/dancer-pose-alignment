@@ -323,11 +323,10 @@ public class CameraSetup(
         // take each right ankle, find the alpha angle from the 3D lead forward, and calculate the radius based on the
         // height of the pose
         CameraWall.Clear();
-
-        int count = 0;
+        
         foreach (PoseBoundingBox pose in allPosesAndConfidencesPerFrame[frameNumber])
         {
-            if (pose.Class.Id == count)
+            if (pose.Class.Id is 0 or 1)
             {
                 continue;
             }
@@ -351,8 +350,6 @@ public class CameraSetup(
             float poseRadius = Math.Abs(TorsoHeight / MathF.Tan(poseAlphaFromGround)) / 2; // arbitrary divide by 2
 
             CameraWall.Add(new Tuple<float, float>(alpha, poseRadius));
-
-            count++;
         }
     }
 

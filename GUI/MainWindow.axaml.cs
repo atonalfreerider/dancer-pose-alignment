@@ -35,8 +35,6 @@ public partial class MainWindow : Window
     double timeFromStart = 0;
     double highestPositiveOffsetSeconds = 0;
 
-    string dbPath;
-
     public MainWindow()
     {
         // clip alignment
@@ -54,7 +52,6 @@ public partial class MainWindow : Window
     void LoadVideosButton_Click(object sender, RoutedEventArgs e)
     {
         string videoDirectory = VideoDirectory();
-        dbPath = Path.Combine(videoDirectory, "larissa-kadu-recap.db");
 
         if (string.IsNullOrEmpty(videoDirectory) || !Directory.Exists(videoDirectory)) return;
 
@@ -137,7 +134,7 @@ public partial class MainWindow : Window
     void LoadVideos(Dictionary<string, double> videoFilePathsAndOffsets)
     {
         string videoDirectory = VideoDirectory();
-        string dbPath = Path.Combine(videoDirectory, "larissa-kadu-recap.db");
+        string dbPath = Directory.EnumerateFiles(videoDirectory, "*.db").First();
         string affineDirectory = Path.Combine(videoDirectory, "affine/");
         
         cameraPoseSolver = new CameraPoseSolver(PoseType.Coco);
@@ -146,6 +143,7 @@ public partial class MainWindow : Window
         frameImages.Clear();
         graphicsImages.Clear();
         CanvasContainer.Items.Clear();
+        indexToVideoFilePath.Clear();
 
         highestPositiveOffsetSeconds = videoFilePathsAndOffsets.Max(kvp => kvp.Value);
 
@@ -255,8 +253,8 @@ public partial class MainWindow : Window
         }
         
         cameraPoseSolver.HomeAllCameras();
-        //cameraPoseSolver.SetCamR();
-        //cameraPoseSolver.HomeAllCameras();
+        cameraPoseSolver.SetCamR();
+        cameraPoseSolver.HomeAllCameras();
         RecalculateAndRedraw();
     }
 
