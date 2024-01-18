@@ -817,26 +817,26 @@ public class CameraSetup(
     static int FindBestBoxFit(
         List<PoseBoundingBox> detections,
         Rectangle tracker,
-        double iouThreshold)
+        float iouThreshold)
     {
         int detectionIndex = -1;
-        double highestIou = iouThreshold;
-        double errorCheckIou = 0;
+        float highestIou = iouThreshold;
+        float errorCheckIou = 0;
         int count = 0;
         foreach (PoseBoundingBox detection in detections)
         {
             // find smallest intersection box
-            double xx1 = Math.Max(detection.Bounds.Left, tracker.Left);
-            double yy1 = Math.Max(detection.Bounds.Top, tracker.Top);
-            double xx2 = Math.Min(detection.Bounds.Right, tracker.Right);
-            double yy2 = Math.Min(detection.Bounds.Bottom, tracker.Bottom);
-            double w = Math.Max(0.0, xx2 - xx1);
-            double h = Math.Max(0.0, yy2 - yy1);
-            double intersection = w * h;
-            double detArea = detection.Bounds.Width * detection.Bounds.Height;
-            double trkArea = tracker.Width * tracker.Height;
-            double union = detArea + trkArea - intersection;
-            double iou = intersection / union;
+            int xx1 = Math.Max(detection.Bounds.Left, tracker.Left);
+            int yy1 = Math.Max(detection.Bounds.Top, tracker.Top);
+            int xx2 = Math.Min(detection.Bounds.Right, tracker.Right);
+            int yy2 = Math.Min(detection.Bounds.Bottom, tracker.Bottom);
+            int w = Math.Max(0, xx2 - xx1);
+            int h = Math.Max(0, yy2 - yy1);
+            int intersection = w * h;
+            int detArea = detection.Bounds.Width * detection.Bounds.Height;
+            int trkArea = tracker.Width * tracker.Height;
+            int union = detArea + trkArea - intersection;
+            float iou = intersection /(float) union;
             if (iou > highestIou)
             {
                 highestIou = iou;

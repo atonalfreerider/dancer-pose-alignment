@@ -30,6 +30,23 @@ static class Program
             List<List<PoseBoundingBox>> posesByFrame = JsonConvert.DeserializeObject<List<List<PoseBoundingBox>>>(
                 File.ReadAllText(posePath));
 
+            foreach (List<PoseBoundingBox> poseBoundingBoxes in posesByFrame)
+            {
+                foreach (PoseBoundingBox poseBoundingBox in poseBoundingBoxes)
+                {
+                    foreach (Keypoint keypoint in poseBoundingBox.Keypoints)
+                    {
+                        if (keypoint.Point.X < 1 && keypoint.Point.Y < 1)
+                        {
+                            // set undetected keypoints to 0 confidence
+                            // for some reason, these types are output by the python ultralytics library
+                            // the yolonet library moves the keypoints to the closest joint
+                            keypoint.Confidence = 0;
+                        }
+                    }
+                }
+            }
+
             sqliteOutput.Serialize(Path.GetFileNameWithoutExtension(posePath), posesByFrame);
         }
         

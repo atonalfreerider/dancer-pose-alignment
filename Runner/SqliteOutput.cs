@@ -21,7 +21,8 @@ public class SqliteOutput(string dbPath)
                                  id INTEGER PRIMARY KEY ASC,
                                  frame INTEGER NOT NULL,
                                  keypoints TEXT NOT NULL,
-                                 bounds TEXT NOT NULL);
+                                 bounds TEXT NOT NULL,
+                                 track_id INTEGER NOT NULL);
                                CREATE INDEX idx_frame_{filePrefix} ON table_{filePrefix}(frame);
                                """;
 
@@ -47,16 +48,19 @@ public class SqliteOutput(string dbPath)
                      INSERT INTO table_{filePrefix}(
                          frame,
                          keypoints,
-                         bounds
+                         bounds,
+                         track_id
                      ) VALUES (
                          @Frame,
                          @Keypoints,
-                         @Bounds)
+                         @Bounds,
+                         @TrackId)
                      """;
 
                 cmd.AddParameter(DbType.Int32, "@Frame", frameNumber);
                 cmd.AddParameter(DbType.String, "@Keypoints", JsonConvert.SerializeObject(poseBoundingBox.Keypoints));
                 cmd.AddParameter(DbType.String, "@Bounds", JsonConvert.SerializeObject(poseBoundingBox.Bounds));
+                cmd.AddParameter(DbType.Int32, "@TrackId", -1);
                 cmd.ExecuteNonQuery();
             }
 

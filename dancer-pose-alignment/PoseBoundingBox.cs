@@ -15,10 +15,10 @@ public class Keypoint
     public float Confidence;
 }
 
-public class Point(float x, float y)
+public class Point(int x, int y)
 {
-    public float X = x;
-    public float Y = y;
+    public int X = x;
+    public int Y = y;
     public bool IsEmpty;
 }
 
@@ -30,14 +30,14 @@ public class Class
 
 public class Rectangle
 {
-    public float X;
-    public float Y;
-    public float Width;
-    public float Height;
+    public int X;
+    public int Y;
+    public int Width;
+    public int Height;
     public bool IsEmpty;
     public Point Location;
-    public float Left;
-    public float Top;
-    public float Right;
-    public float Bottom;
+    public int Left;
+    public int Top;
+    public int Right;
+    public int Bottom;
 }

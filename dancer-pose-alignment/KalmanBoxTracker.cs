@@ -70,34 +70,34 @@ public class KalmanBoxTracker
     {
         Mat prediction = kf.Predict();
         float[] vec = ToVec(prediction);
-        return ConvertXToBbox(new BoxRatio(vec[0], vec[1], vec[2], vec[3]));
+        return ConvertXToBbox(new BoxRatio(Rnd(vec[0]), Rnd(vec[1]), Rnd(vec[2]), vec[3]));
     }
 
     // REFERENCE
     static BoxRatio ConvertBboxToZ(PoseBoundingBox bbox)
     {
-        float area = bbox.Bounds.Width * bbox.Bounds.Height;
-        float ratio = bbox.Bounds.Width / bbox.Bounds.Height;
+        int area = bbox.Bounds.Width * bbox.Bounds.Height;
+        float ratio = bbox.Bounds.Width / (float) bbox.Bounds.Height;
 
         return new BoxRatio(bbox.Bounds.X, bbox.Bounds.Y, area, ratio);
     }
 
-    struct BoxRatio(float x, float y, float area, float ratio)
+    struct BoxRatio(int x, int y, int area, float ratio)
     {
-        public readonly float X = x;
-        public readonly float Y = y;
-        public readonly float Area = area;
+        public readonly int X = x;
+        public readonly int Y = y;
+        public readonly int Area = area;
         public readonly float Ratio = ratio;
     }
 
     static Rectangle ConvertXToBbox(BoxRatio boxRatio)
     {
-        float w = MathF.Sqrt(boxRatio.Area * boxRatio.Ratio); // w * h * (w / h) = w * w
-        float h = boxRatio.Area / w; // w * h / w = h
-        float x1 = boxRatio.X;
-        float y1 = boxRatio.Y;
-        float x2 = boxRatio.X + w;
-        float y2 = boxRatio.Y + h;
+        int w = Rnd(MathF.Sqrt(boxRatio.Area * boxRatio.Ratio)); // w * h * (w / h) = w * w
+        int h = Rnd(boxRatio.Area / (float)w); // w * h / w = h
+        int x1 = boxRatio.X;
+        int y1 = boxRatio.Y;
+        int x2 = boxRatio.X + w;
+        int y2 = boxRatio.Y + h;
 
         Rectangle rectangle = new()
         {
@@ -150,5 +150,10 @@ public class KalmanBoxTracker
         }
 
         return vector;
+    }
+
+    static int Rnd(float f)
+    {
+        return (int)Math.Round(f);
     }
 }
