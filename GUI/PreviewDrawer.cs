@@ -12,8 +12,6 @@ public static class PreviewDrawer
     public static DrawingGroup DrawGeometry(
         List<PoseBoundingBox> poses,
         Size imgSize,
-        int currentLeadIndex,
-        int currentFollowIndex,
         PoseType poseType,
         List<Vector2> originCross,
         List<Vector2> leadProjectionsAtFrame,
@@ -23,8 +21,6 @@ public static class PreviewDrawer
         DrawingGroup drawingGroup = DrawPoses(
             poses,
             imgSize,
-            currentLeadIndex,
-            currentFollowIndex,
             poseType);
 
         drawingGroup = DrawOriginCross(drawingGroup, originCross);
@@ -90,8 +86,6 @@ public static class PreviewDrawer
     static DrawingGroup DrawPoses(
         List<PoseBoundingBox> poses,
         Size imgSize,
-        int currentLeadIndex,
-        int currentFollowIndex,
         PoseType poseType)
     {
         DrawingGroup drawingGroup = new();
@@ -112,19 +106,9 @@ public static class PreviewDrawer
         int poseCount = 0;
         foreach (PoseBoundingBox pose in poses)
         {
-            int role = -1;
-            if (currentLeadIndex > -1 && poseCount == currentLeadIndex)
-            {
-                role = 0;
-            }
-            else if (currentFollowIndex > -1 && poseCount == currentFollowIndex)
-            {
-                role = 1;
-            }
-
             foreach (Keypoint joint in pose.Keypoints)
             {
-                SolidColorBrush brush = new(ColorForConfidence(joint.Confidence, role));
+                SolidColorBrush brush = new(ColorForConfidence(joint.Confidence, pose.Class.Id));
                 Pen pen = new(brush)
                 {
                     Thickness = 4
@@ -135,8 +119,8 @@ public static class PreviewDrawer
 
             drawingGroup = poseType switch
             {
-                PoseType.Coco => DrawCoco(drawingGroup, PoseToPose(pose), role),
-                PoseType.Halpe => DrawHalpe(drawingGroup, PoseToPose(pose), role)
+                PoseType.Coco => DrawCoco(drawingGroup, PoseToPose(pose), pose.Class.Id),
+                PoseType.Halpe => DrawHalpe(drawingGroup, PoseToPose(pose), pose.Class.Id)
             };
 
             poseCount++;
@@ -295,11 +279,17 @@ public static class PreviewDrawer
 
     static GeometryDrawing DrawLine(Vector3 start, Vector3 end, int role)
     {
+        if (start.Z <= float.Epsilon || end.Z <= float.Epsilon)
+        {
+            return new GeometryDrawing();
+        }
+        
         LinearGradientBrush linearGradientBrush = new()
         {
             StartPoint = new RelativePoint(new Point(start.X, start.Y), RelativeUnit.Absolute),
             EndPoint = new RelativePoint(new Point(end.X, end.Y), RelativeUnit.Absolute)
         };
+        
         linearGradientBrush.GradientStops.Add(new GradientStop(ColorForConfidence(start.Z, role), 0));
         linearGradientBrush.GradientStops.Add(new GradientStop(ColorForConfidence(end.Z, role), 1));
         Pen linePen = new(linearGradientBrush)

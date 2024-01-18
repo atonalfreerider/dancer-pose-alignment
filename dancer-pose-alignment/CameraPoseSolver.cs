@@ -33,18 +33,19 @@ public class CameraPoseSolver(PoseType poseType)
         Vector2 imageSize,
         int frameCount,
         int startingFrame,
-        int maxFrame)
+        int maxFrame,
+        string dbPath)
     {
-        CameraSetup camera = new(name, imageSize, frameCount, poseType, startingFrame, maxFrame);
+        CameraSetup camera = new(name, imageSize, frameCount, poseType, startingFrame, maxFrame, dbPath);
         cameras.Add(name, camera);
     }
 
     /// <summary> 
     /// Called when poses are calculated for every frame 
     /// </summary> 
-    public void SetPoseFromImage(string dbPath, string camName)
+    public void SetPoseFromImage(string camName)
     {
-        cameras[camName].SetAllPosesAtFrame(frameNumber, dbPath);
+        cameras[camName].SetAllPosesAtFrame(frameNumber);
 
         if (frameNumber == 0)
         {
@@ -69,7 +70,7 @@ public class CameraPoseSolver(PoseType poseType)
         foreach ((string videoFilePath, CameraSetup cameraSetup) in cameras)
         {
             cameraSetup.CopyRotationToNextFrame(frameNumber);
-            SetPoseFromImage(dbPath, videoFilePath);
+            SetPoseFromImage(videoFilePath);
             cameraSetup.Update(frameNumber);
         }
 
@@ -318,9 +319,9 @@ public class CameraPoseSolver(PoseType poseType)
     /// For the selected camera, attempt to select the figure from the closes joint
     /// </summary>
     /// <returns>The index of the dancer and the index of the joint</returns>
-    public Tuple<int, int> MarkDancerAtCam(string camName, Vector2 click, string selectedButton)
+    public Tuple<PoseBoundingBox, int> MarkDancerAtCam(string camName, Vector2 click, string selectedButton)
     {
-        Tuple<int, int> selectionAndJoint = cameras[camName].MarkDancer(click, frameNumber, selectedButton);
+        Tuple<PoseBoundingBox, int> selectionAndJoint = cameras[camName].MarkDancer(click, frameNumber, selectedButton);
         switch (selectedButton)
         {
             case "Lead":
@@ -332,23 +333,9 @@ public class CameraPoseSolver(PoseType poseType)
         return selectionAndJoint;
     }
 
-    public void MoveKeypointAtCam(string camName, Vector2 click, Tuple<int, int> selectedPoseAndKeypoint)
+    public void MoveKeypointAtCam(string camName, Vector2 click, Tuple<PoseBoundingBox?, int> selectedPoseAndKeypoint)
     {
         cameras[camName].MoveKeypoint(click, frameNumber, selectedPoseAndKeypoint);
-    }
-
-    public void UnassignEachIndexAndMatchToClosest()
-    {
-        CalculateLeadFollow3DPoses();
-        foreach (CameraSetup cameraSetup in cameras.Values)
-        {
-            cameraSetup.Unassign(0);
-            cameraSetup.Match3DPoseToPoses(
-                0,
-                merged3DPoseLeadPerFrame[0],
-                merged3DPoseFollowPerFrame[0],
-                3000);
-        }
     }
 
     #endregion
@@ -386,11 +373,6 @@ public class CameraPoseSolver(PoseType poseType)
     public List<PoseBoundingBox> GetPosesAtFrameAtCamera(string camName)
     {
         return cameras[camName].GetPosesPerDancerAtFrame(frameNumber);
-    }
-
-    public Tuple<int, int> GetLeadAndFollowIndicesAtCameraAtFrame(string camName)
-    {
-        return cameras[camName].GetLeadAndFollowIndexForFrame(frameNumber);
     }
 
     public List<Vector2> ReverseProjectionOfPoseAtCamera(string camName, bool isLead)
@@ -439,9 +421,9 @@ public class CameraPoseSolver(PoseType poseType)
 
     public bool AreLeadAndFollowAssignedForFrame()
     {
-        return !cameras.Values.Any(cam =>
-            cam.GetLeadAndFollowIndexForFrame(frameNumber).Item1 == -1 ||
-            cam.GetLeadAndFollowIndexForFrame(frameNumber).Item2 == -1);
+        List<Tuple<PoseBoundingBox?, PoseBoundingBox?>> leadAndFollowIndices = cameras.Values
+            .Select(x => x.GetLeadAndFollowPoseForFrame(frameNumber)).ToList();
+        return !leadAndFollowIndices.Any(x => x.Item1 == null || x.Item2 == null);
     }
 
     List<Tuple<float, float>> OrderedAndSmoothedCameraWall()

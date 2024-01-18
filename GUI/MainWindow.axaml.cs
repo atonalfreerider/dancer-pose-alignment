@@ -23,7 +23,7 @@ public partial class MainWindow : Window
 {
     CameraPoseSolver cameraPoseSolver;
     string selectedCamera = "";
-    Tuple<int, int> selectedPoseAndJointAtCamera = new(-1, -1);
+    Tuple<PoseBoundingBox?, int> selectedPoseAndJointAtCamera = new(null, -1);
 
     readonly Dictionary<string, VideoCapture> videoFiles = [];
     readonly Dictionary<string, double> videoFrameRates = [];
@@ -219,10 +219,11 @@ public partial class MainWindow : Window
                 new Vector2((float)size.Width, (float)size.Height),
                 framesAt30Fps,
                 startingFrame,
-                frameCount);
+                frameCount,
+                dbPath);
             
             string fileName = Path.GetFileNameWithoutExtension(videoFilePath);
-            cameraPoseSolver.SetPoseFromImage(dbPath, videoFilePath); 
+            cameraPoseSolver.SetPoseFromImage(videoFilePath); 
            
             string affinePath = Path.Combine(affineDirectory, fileName + ".mp4.json");
             // if pre-cached json, load it
@@ -251,12 +252,6 @@ public partial class MainWindow : Window
             CanvasContainer.Items.Add(canvas);
 
             camCount++;
-        }
-             
-        if (cameraPoseSolver.AreLeadAndFollowAssignedForFrame())
-        {
-            // make sure each matches to the closest, not just tallest
-            cameraPoseSolver.UnassignEachIndexAndMatchToClosest();
         }
         
         cameraPoseSolver.HomeAllCameras();
@@ -293,11 +288,8 @@ public partial class MainWindow : Window
             }
 
             frameImages[videoFilePath].Source = frame;
-            
-            if (cameraPoseSolver.AreLeadAndFollowAssignedForFrame())
-            {
-                cameraPoseSolver.CalculateLeadFollow3DPoses();
-            }
+
+            cameraPoseSolver.CalculateLeadFollow3DPoses();
 
             RedrawCamera(videoFilePath);
         }
@@ -326,10 +318,7 @@ public partial class MainWindow : Window
 
     void RecalculateAndRedraw()
     {
-        if (cameraPoseSolver.AreLeadAndFollowAssignedForFrame())
-        {
-            cameraPoseSolver.CalculateLeadFollow3DPoses();
-        }
+        cameraPoseSolver.CalculateLeadFollow3DPoses();
         
         foreach (string videoFilesKey in videoFiles.Keys)
         {
@@ -346,15 +335,17 @@ public partial class MainWindow : Window
 
         double x = point.Position.X;
         double y = point.Position.Y;
-        if (selectedPoseAndJointAtCamera.Item1 > -1 && selectedPoseAndJointAtCamera.Item2 > -1 &&
+        if (selectedPoseAndJointAtCamera.Item1 != null && selectedPoseAndJointAtCamera.Item2 > -1 &&
             GetSelectedButton() == "Move")
         {
-            cameraPoseSolver.MoveKeypointAtCam(selectedCamera, new Vector2((float)x, (float)y),
+            cameraPoseSolver.MoveKeypointAtCam(
+                selectedCamera,
+                new Vector2((float)x, (float)y),
                 selectedPoseAndJointAtCamera);
             RedrawCamera(selectedCamera);
         }
 
-        selectedPoseAndJointAtCamera = new Tuple<int, int>(-1, -1);
+        selectedPoseAndJointAtCamera = new Tuple<PoseBoundingBox?, int>(null, -1);
     }
 
     string GetSelectedButton()
@@ -381,8 +372,6 @@ public partial class MainWindow : Window
 
     void RedrawCamera(string camName)
     {
-        Tuple<int, int> leadAndFollowIndex = cameraPoseSolver.GetLeadAndFollowIndicesAtCameraAtFrame(camName);
-
         List<Vector2> originCross = cameraPoseSolver.ReverseProjectOriginCrossAtCamera(camName);
         List<Vector2> leadProjectionsAtFrame = cameraPoseSolver.ReverseProjectionOfPoseAtCamera(camName, true);
         List<Vector2> followProjectionsAtFrame = cameraPoseSolver.ReverseProjectionOfPoseAtCamera(camName, false);
@@ -393,8 +382,6 @@ public partial class MainWindow : Window
         DrawingGroup drawingGroup = PreviewDrawer.DrawGeometry(
             cameraPoseSolver.GetPosesAtFrameAtCamera(camName),
             new Size(graphicsImages[camName].Width, graphicsImages[camName].Height),
-            leadAndFollowIndex.Item1,
-            leadAndFollowIndex.Item2,
             PoseType.Coco,
             originCross,
             leadProjectionsAtFrame,

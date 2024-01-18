@@ -49,14 +49,14 @@ public class KalmanBoxTracker
     {
         // initialize state
         BoxRatio conv = ConvertBboxToZ(bbox); // X
-        kf.StatePre.Set(0, conv.X);
-        kf.StatePre.Set(1, conv.Y);
-        kf.StatePre.Set(2, conv.Area);
+        kf.StatePre.Set(0, (float)conv.X);
+        kf.StatePre.Set(1, (float)conv.Y);
+        kf.StatePre.Set(2, (float)conv.Area);
         kf.StatePre.Set(3, conv.Ratio);
 
-        kf.StatePost.Set(0, conv.X);
-        kf.StatePost.Set(1, conv.Y);
-        kf.StatePost.Set(2, conv.Area);
+        kf.StatePost.Set(0, (float)conv.X);
+        kf.StatePost.Set(1, (float)conv.Y);
+        kf.StatePost.Set(2, (float)conv.Area);
         kf.StatePost.Set(3, conv.Ratio);
     }
 
@@ -77,7 +77,7 @@ public class KalmanBoxTracker
     static BoxRatio ConvertBboxToZ(PoseBoundingBox bbox)
     {
         int area = bbox.Bounds.Width * bbox.Bounds.Height;
-        float ratio = bbox.Bounds.Width / (float) bbox.Bounds.Height;
+        float ratio = bbox.Bounds.Width / (float)bbox.Bounds.Height;
 
         return new BoxRatio(bbox.Bounds.X, bbox.Bounds.Y, area, ratio);
     }
@@ -132,9 +132,9 @@ public class KalmanBoxTracker
     static Mat ToMat(BoxRatio vector)
     {
         Mat mat = new(4, 1, MatType.CV_32FC1);
-        mat.Set(0, 0, vector.X);
-        mat.Set(1, 0, vector.Y);
-        mat.Set(2, 0, vector.Area);
+        mat.Set(0, 0, (float)vector.X);
+        mat.Set(1, 0, (float)vector.Y);
+        mat.Set(2, 0, (float)vector.Area);
         mat.Set(3, 0, vector.Ratio);
 
         return mat;
