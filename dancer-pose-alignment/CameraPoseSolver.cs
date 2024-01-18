@@ -186,7 +186,7 @@ public class CameraPoseSolver(PoseType poseType)
         const float FollowLegLimbLength = .4f;
         const float LeadShoulderHipArmLength = .3f;
         const float FollowShoulderHipArmLength = .28f;
-        
+
         List<Vector3> final3DPose = [];
         for (int i = 0; i < JointExtension.PoseCount(poseType); i++)
         {
@@ -359,11 +359,72 @@ public class CameraPoseSolver(PoseType poseType)
 
     public void SetCamR()
     {
+        if (frameNumber > 0) return;
+
         List<Tuple<float, float>> cameraWall = OrderedAndSmoothedCameraWall();
         foreach (CameraSetup camerasValue in cameras.Values)
         {
             camerasValue.SetRadiusFromCameraWall(cameraWall);
         }
+    }
+
+    public void IterationLoop()
+    {
+        int iterationCount = 0;
+        List<float> errorHistory = [];
+        while (iterationCount < 10000)
+        {
+            Dictionary<string, float> errorsByCamera = [];
+            foreach ((string cameraName, CameraSetup cameraSetup) in cameras)
+            {
+                float poseError = cameraSetup.PoseError(
+                                      merged3DPoseLeadPerFrame[frameNumber],
+                                      true,
+                                      frameNumber) +
+                                  cameraSetup.PoseError(
+                                      merged3DPoseFollowPerFrame[frameNumber],
+                                      false,
+                                      frameNumber);
+
+                errorsByCamera.Add(cameraName, poseError);
+            }
+
+            if (errorsByCamera.Values.Sum() <= float.Epsilon)
+            {
+                Console.WriteLine("PERFECT SOLUTION");
+                break;
+            }
+
+            List<CameraSetup> sortedCamerasByHighestError = errorsByCamera
+                .OrderByDescending(pair => pair.Value)
+                .Select(pair => cameras[pair.Key])
+                .ToList();
+
+            bool moved = sortedCamerasByHighestError.First().IterateOrientation(
+                frameNumber,
+                merged3DPoseLeadPerFrame[frameNumber],
+                merged3DPoseFollowPerFrame[frameNumber]);
+
+            if (!moved)
+            {
+                Console.WriteLine("Can't orient");
+                break;
+            }
+
+            CalculateLeadFollow3DPoses();
+            iterationCount++;
+
+            errorHistory.Insert(0, errorsByCamera.Values.Sum());
+
+            if (errorHistory.Count > 10)
+            {
+                errorHistory.RemoveAt(errorHistory.Count - 1);
+            }
+
+            Console.WriteLine(errorHistory.Average());
+        }
+
+        CalculateLeadFollow3DPoses();
     }
 
     #endregion
@@ -449,6 +510,8 @@ public class CameraPoseSolver(PoseType poseType)
 
         return final;
     }
+    
+    public int CurrentFrame => frameNumber;
 
     #endregion
 
