@@ -394,7 +394,7 @@ public partial class MainWindow : Window
 
     void SolverNextFrameButton_Click(object sender, RoutedEventArgs e)
     {
-        if (!cameraPoseSolver.Advance(dbPath)) return;
+        if (!cameraPoseSolver.Advance()) return;
 
         timeFromStart += 1d / 30d;
         
@@ -412,7 +412,7 @@ public partial class MainWindow : Window
 
     void RunUntilEnd_Click(object sender, RoutedEventArgs e)
     {
-        while (cameraPoseSolver.Advance(dbPath))
+        while (cameraPoseSolver.Advance())
         {
             timeFromStart += 1d / 30d;
             cameraPoseSolver.CalculateLeadFollow3DPoses();

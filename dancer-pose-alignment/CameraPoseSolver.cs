@@ -62,7 +62,7 @@ public class CameraPoseSolver(PoseType poseType)
         cameras[camName].SetAllAffine(affine);
     }
 
-    public bool Advance(string dbPath)
+    public bool Advance()
     {
         if (frameNumber >= MaximumFrameCount - 1) return false;
 

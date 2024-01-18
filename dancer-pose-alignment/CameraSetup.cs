@@ -87,11 +87,19 @@ public class CameraSetup(
             leadTracker = new KalmanBoxTracker();
             leadTracker.Init(leadPose);
         }
+        else if (leadTracker != null && leadPose != null)
+        {
+            leadTracker.Correct(leadPose);
+        }
         
         if (followTracker == null && followPose != null)
         {
             followTracker = new KalmanBoxTracker();
             followTracker.Init(followPose);
+        }
+        else if (followTracker != null && followPose != null)
+        {
+            followTracker.Correct(followPose);
         }
     }
 
@@ -296,11 +304,9 @@ public class CameraSetup(
         
         UpdateTrackIds(frameNumber);
 
-        leadTracker = new KalmanBoxTracker();
-        leadTracker.Init(LeadPose(frameNumber)!);
+        leadTracker.Correct(LeadPose(frameNumber)!);
 
-        followTracker = new KalmanBoxTracker();
-        followTracker.Init(FollowPose(frameNumber)!);
+        followTracker.Correct(FollowPose(frameNumber)!);
     }
 
     /// <summary>
@@ -368,8 +374,7 @@ public class CameraSetup(
                 }
                 closestPose.Class.Id = 0;
                 UpdateTrackIds(frameNumber);
-                leadTracker = new KalmanBoxTracker();
-                leadTracker.Init(closestPose);
+                leadTracker.Correct(closestPose);
                 break;
             case "Follow":
                 foreach (PoseBoundingBox poseBoundingBox in allPosesAndConfidencesPerFrame[frameNumber])
@@ -381,8 +386,7 @@ public class CameraSetup(
                 }
                 closestPose.Class.Id = 1;
                 UpdateTrackIds(frameNumber);
-                followTracker = new KalmanBoxTracker();
-                followTracker.Init(closestPose);
+                followTracker.Correct(closestPose);
                 break;
             case "Move":
                 // TODO create
@@ -799,10 +803,6 @@ public class CameraSetup(
             leadDetection.Class.Id = 0;
             leadTracker.Correct(leadDetection);
         }
-        else
-        {
-            leadTracker = null;
-        }
 
         PoseBoundingBox? followDetection = FindBestBoxFit(
             detections,
@@ -826,10 +826,6 @@ public class CameraSetup(
             }
             followDetection.Class.Id = 1;
             followTracker.Correct(followDetection);
-        }
-        else
-        {
-            followTracker = null;
         }
         
         UpdateTrackIds(frameNumber);
