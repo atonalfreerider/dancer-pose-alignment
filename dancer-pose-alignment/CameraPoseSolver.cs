@@ -67,10 +67,15 @@ public class CameraPoseSolver(PoseType poseType)
         {
             cameraSetup.CopyRotationToNextFrame(frameNumber);
             SetPoseFromImage(videoFilePath);
-            cameraSetup.Update(frameNumber);
+            cameraSetup.UpdateKalman(frameNumber);
         }
 
         return true;
+    }
+
+    public void SetFrame(int frame)
+    {
+        frameNumber = frame;
     }
 
     public bool Rewind()
@@ -317,16 +322,7 @@ public class CameraPoseSolver(PoseType poseType)
     /// <returns>The index of the dancer and the index of the joint</returns>
     public Tuple<PoseBoundingBox, int> MarkDancerAtCam(string camName, Vector2 click, string selectedButton)
     {
-        Tuple<PoseBoundingBox, int> selectionAndJoint = cameras[camName].MarkDancer(click, frameNumber, selectedButton);
-        switch (selectedButton)
-        {
-            case "Lead":
-            case "Follow":
-                cameras[camName].CalculateCameraWall(frameNumber);
-                break;
-        }
-
-        return selectionAndJoint;
+        return cameras[camName].MarkDancer(click, frameNumber, selectedButton);
     }
 
     public void MoveKeypointAtCam(string camName, Vector2 click, Tuple<PoseBoundingBox?, int> selectedPoseAndKeypoint)

@@ -434,6 +434,17 @@ public partial class MainWindow : Window
         SetPreviewsToFrame();
     }
     
+    void SetFrameButton_Click(object sender, RoutedEventArgs e)
+    {
+        if (!int.TryParse(FrameIndicator.Text, out int frame)) return;
+        cameraPoseSolver.SetFrame(frame);
+        timeFromStart = frame / 30d;
+        cameraPoseSolver.CalculateLeadFollow3DPoses();
+        cameraPoseSolver.IterationLoop();
+        
+        SetPreviewsToFrame();
+    }
+    
     #endregion
 
     #region REFERENCE

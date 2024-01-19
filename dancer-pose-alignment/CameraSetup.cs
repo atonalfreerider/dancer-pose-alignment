@@ -315,7 +315,7 @@ public class CameraSetup(
     /// infer the radius of each pose, and also the alpha of each pose based on the img pt projection. Once this wall
     /// is established, by reassigning the radii, an even more accurate wall can be established, and so on.
     /// </summary>
-    public void CalculateCameraWall(int frameNumber)
+    void CalculateCameraWall(int frameNumber)
     {
         PoseBoundingBox? leadPose = LeadPose(frameNumber);
         if (leadPose == null) return;
@@ -362,6 +362,13 @@ public class CameraSetup(
         switch (selectedButton)
         {
             case "Lead":
+                if (closestPose.Class.Id == 0)
+                {
+                    // deselect
+                    closestPose.Class.Id = -1;
+                    UpdateTrackIds(frameNumber);
+                    break;
+                }
                 foreach (PoseBoundingBox poseBoundingBox in allPosesAndConfidencesPerFrame[frameNumber])
                 {
                     if (poseBoundingBox.Class.Id == 0)
@@ -374,6 +381,13 @@ public class CameraSetup(
                 leadTracker.Correct(closestPose);
                 break;
             case "Follow":
+                if (closestPose.Class.Id == 1)
+                {
+                    // deselect
+                    closestPose.Class.Id = -1;
+                    UpdateTrackIds(frameNumber);
+                    break;
+                }
                 foreach (PoseBoundingBox poseBoundingBox in allPosesAndConfidencesPerFrame[frameNumber])
                 {
                     if (poseBoundingBox.Class.Id == 1)
@@ -389,6 +403,11 @@ public class CameraSetup(
                 // TODO create
 
                 break;
+        }
+
+        if (frameNumber == 0)
+        {
+            CalculateCameraWall(0);
         }
 
         return new Tuple<PoseBoundingBox, int>(closestPose, jointSelected);
@@ -937,7 +956,7 @@ public class CameraSetup(
 
     #region KALMAN
 
-    public void Update(int frameNumber)
+    public void UpdateKalman(int frameNumber)
     {
         if (leadTracker == null || followTracker == null) return;
 

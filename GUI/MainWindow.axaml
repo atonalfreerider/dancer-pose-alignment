@@ -34,6 +34,8 @@
                         <TextBox Name="FrameIndicator" Text="0" Height="30" Margin="5" />
                         <Button Name="NextFrameButton" Content="Next" Height="30" Margin="5"
                                 Click="NextFrameButton_Click" />
+                        <Button Name="SetFrameButton" Content="Set" Height="30" Margin="5"
+                                Click="SetFrameButton_Click" />
                         <Button Name="RunUntilConditionButton" Content="Run Until Condition" Height="30" Margin="5"
                                 Click="RunUntilCondition_Click" />
                         <CheckBox Name="ShowVideoCheckbox" IsChecked="True"/>
