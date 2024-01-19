@@ -326,37 +326,44 @@ public partial class MainWindow : Window
         FrameIndicator.Text = cameraPoseSolver.CurrentFrame.ToString();
         foreach ((string videoFilePath, VideoCapture videoCapture) in videoFiles)
         {
-            videoCapture.Set(
-                VideoCaptureProperties.PosFrames,
-                (int)((highestPositiveOffsetSeconds - videoOffsets[videoFilePath] + timeFromStart)
-                      * videoFrameRates[videoFilePath]));
-
-            OutputArray outputArray = new Mat();
-            videoCapture.Read(outputArray);
-
-            Mat frameMat = outputArray.GetMat();
-
-            // render frame
-            Bitmap frame;
-            try
-            {
-                frame = Bitmap.DecodeToWidth(frameMat.ToMemoryStream(), frameMat.Width);
-            }
-            catch (OpenCVException openCvException)
-            {
-                // end of video
-                Console.WriteLine(openCvException.Message);
-                continue;
-            }
-
-            frameImages[videoFilePath].Source = frame;
-
+            SetFrameAtCamera(videoCapture, videoFilePath);
             cameraPoseSolver.CalculateLeadFollow3DPoses();
-
             RedrawCamera(videoFilePath);
         }
     }
+
+    void SetFrameAtCamera(VideoCapture videoCapture, string videoFilePath)
+    {
+        if (ShowVideoCheckbox.IsChecked == false)
+        {
+            frameImages[videoFilePath].Source = null;
+            return;
+        }
+        
+        videoCapture.Set(
+            VideoCaptureProperties.PosFrames,
+            (int)((highestPositiveOffsetSeconds - videoOffsets[videoFilePath] + timeFromStart)
+                  * videoFrameRates[videoFilePath]));
+
+        OutputArray outputArray = new Mat();
+        videoCapture.Read(outputArray);
+
+        Mat frameMat = outputArray.GetMat();
+
+        // render frame
+        try
+        {
+            Bitmap frame = Bitmap.DecodeToWidth(frameMat.ToMemoryStream(), frameMat.Width);
+            frameImages[videoFilePath].Source = frame;
+        }
+        catch (OpenCVException openCvException)
+        {
+            // end of video
+            Console.WriteLine(openCvException.Message);
+        }
+    }
     
+
     void RecalculateAndRedrawAllCameras()
     {
         cameraPoseSolver.CalculateLeadFollow3DPoses();

@@ -36,6 +36,7 @@
                                 Click="NextFrameButton_Click" />
                         <Button Name="RunUntilConditionButton" Content="Run Until Condition" Height="30" Margin="5"
                                 Click="RunUntilCondition_Click" />
+                        <CheckBox Name="ShowVideoCheckbox" IsChecked="True"/>
                         <Button Content="Save" Margin="5" Click="Save3D_Click" />
                     </StackPanel>
                 </StackPanel>
