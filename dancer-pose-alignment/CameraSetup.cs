@@ -62,22 +62,27 @@ public class CameraSetup(
     /// </summary> 
     public void SetAllPosesAtFrame(int frameNumber)
     {
-        int sampleFrame = SampleFrame(frameNumber);
-        List<PoseBoundingBox> posesAtFrame = PosesAtFrameFromDb(dbPath, FilePrefix(), sampleFrame);
-
-        foreach (PoseBoundingBox poseBoundingBox in posesAtFrame)
+        if (allPosesAndConfidencesPerFrame[frameNumber] == null ||
+            allPosesAndConfidencesPerFrame[frameNumber].Count == 0)
         {
-            poseBoundingBox.RecenterdKeypoints =  poseBoundingBox.Keypoints.Select(keypoint =>new Vector3(
-                (keypoint.Point.X - size.X / 2) * PixelToMeter,
-                -(keypoint.Point.Y - size.Y / 2) * PixelToMeter, // flip 
-                keypoint.Confidence)).ToList(); // keep the confidence; 
+            int sampleFrame = SampleFrame(frameNumber);
+            List<PoseBoundingBox> posesAtFrame = PosesAtFrameFromDb(dbPath, FilePrefix(), sampleFrame);
+
+            foreach (PoseBoundingBox poseBoundingBox in posesAtFrame)
+            {
+                poseBoundingBox.RecenterdKeypoints = poseBoundingBox.Keypoints.Select(keypoint => new Vector3(
+                    (keypoint.Point.X - size.X / 2) * PixelToMeter,
+                    -(keypoint.Point.Y - size.Y / 2) * PixelToMeter, // flip 
+                    keypoint.Confidence)).ToList(); // keep the confidence; 
+            }
+
+            allPosesAndConfidencesPerFrame[frameNumber] = posesAtFrame;
         }
-        
-        allPosesAndConfidencesPerFrame[frameNumber] = posesAtFrame;
-        
+
         if (frameNumber == 0)
         {
-            FrameZeroLeadFollowFinderAndCamHeight(posesAtFrame);
+            FrameZeroLeadFollowFinderAndCamHeight(allPosesAndConfidencesPerFrame[frameNumber]);
+            Home();
         }
         
         PoseBoundingBox? leadPose = LeadPose(frameNumber);
@@ -958,6 +963,7 @@ public class CameraSetup(
 
     public void UpdateKalman(int frameNumber)
     {
+        // TODO create a new kalman filter and feed the previous 10 frames into it
         if (leadTracker == null || followTracker == null) return;
 
         const float IouThreshold = .6f;

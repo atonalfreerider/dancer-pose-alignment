@@ -38,19 +38,7 @@ public class CameraPoseSolver(PoseType poseType)
     {
         CameraSetup camera = new(name, imageSize, frameCount, poseType, startingFrame, maxFrame, dbPath);
         cameras.Add(name, camera);
-    }
-
-    /// <summary> 
-    /// Called when poses are calculated for every frame 
-    /// </summary> 
-    public void SetPoseFromImage(string camName)
-    {
-        cameras[camName].SetAllPosesAtFrame(frameNumber);
-
-        if (frameNumber == 0)
-        {
-            TryHomeCamera(camName);
-        }
+        camera.SetAllPosesAtFrame(0);
     }
 
     public void SetAllAffine(List<Vector3> affine, string camName)
@@ -66,7 +54,7 @@ public class CameraPoseSolver(PoseType poseType)
         foreach ((string videoFilePath, CameraSetup cameraSetup) in cameras)
         {
             cameraSetup.CopyRotationToNextFrame(frameNumber);
-            SetPoseFromImage(videoFilePath);
+            cameras[videoFilePath].SetAllPosesAtFrame(frameNumber);
             cameraSetup.UpdateKalman(frameNumber);
         }
 

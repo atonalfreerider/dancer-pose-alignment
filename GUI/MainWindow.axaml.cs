@@ -221,8 +221,6 @@ public partial class MainWindow : Window
                 dbPath);
             
             string fileName = Path.GetFileNameWithoutExtension(videoFilePath);
-            cameraPoseSolver.SetPoseFromImage(videoFilePath); 
-           
             string affinePath = Path.Combine(affineDirectory, fileName + ".mp4.json");
             // if pre-cached json, load it
             if (File.Exists(affinePath))
