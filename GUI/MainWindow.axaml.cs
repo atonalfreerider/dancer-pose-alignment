@@ -252,10 +252,10 @@ public partial class MainWindow : Window
             camCount++;
         }
 
-        Loop();
+        HomingLoop();
     }
 
-    void Loop()
+    void HomingLoop()
     {
         cameraPoseSolver.HomeAllCameras();
         cameraPoseSolver.SetCamR();
@@ -263,9 +263,64 @@ public partial class MainWindow : Window
 
         cameraPoseSolver.CalculateLeadFollow3DPoses();
         cameraPoseSolver.IterationLoop(); 
-        RecalculateAndRedraw();
+        RecalculateAndRedrawAllCameras();
     }
 
+    #region INTERACTION BUTTONS
+    
+    void Canvas_PointerPressed(object sender, PointerPressedEventArgs args)
+    {
+        // Mark this canvas as selected
+        selectedCamera = indexToVideoFilePath[CanvasContainer.Items.IndexOf(sender as Canvas)];
+
+        PointerPoint point = args.GetCurrentPoint(sender as Control);
+
+        double x = point.Position.X;
+        double y = point.Position.Y;
+
+        if (point.Properties.IsLeftButtonPressed)
+        {
+            SetDancer(new Vector2((float)x, (float)y), selectedCamera);
+        }
+        
+        HomingLoop();
+    }
+
+    void Canvas_PointerReleased(object sender, PointerReleasedEventArgs args)
+    {
+        // Mark this canvas as selected
+        selectedCamera = indexToVideoFilePath[CanvasContainer.Items.IndexOf(sender as Canvas)];
+
+        PointerPoint point = args.GetCurrentPoint(sender as Control);
+
+        double x = point.Position.X;
+        double y = point.Position.Y;
+        if (selectedPoseAndJointAtCamera.Item1 != null && selectedPoseAndJointAtCamera.Item2 > -1 &&
+            GetSelectedButton() == "Move")
+        {
+            cameraPoseSolver.MoveKeypointAtCam(
+                selectedCamera,
+                new Vector2((float)x, (float)y),
+                selectedPoseAndJointAtCamera);
+            RedrawCamera(selectedCamera);
+        }
+
+        selectedPoseAndJointAtCamera = new Tuple<PoseBoundingBox?, int>(null, -1);
+    }
+
+    void SetDancer(Vector2 position, string camName)
+    {
+        string selectedButton = GetSelectedButton();
+        selectedPoseAndJointAtCamera = cameraPoseSolver.MarkDancerAtCam(
+            camName,
+            position,
+            selectedButton);
+    }
+
+    #endregion
+    
+    #region DRAWING
+    
     void SetPreviewsToFrame()
     {
         FrameIndicator.Text = cameraPoseSolver.CurrentFrame.ToString();
@@ -301,26 +356,8 @@ public partial class MainWindow : Window
             RedrawCamera(videoFilePath);
         }
     }
-
-    void Canvas_PointerPressed(object sender, PointerPressedEventArgs args)
-    {
-        // Mark this canvas as selected
-        selectedCamera = indexToVideoFilePath[CanvasContainer.Items.IndexOf(sender as Canvas)];
-
-        PointerPoint point = args.GetCurrentPoint(sender as Control);
-
-        double x = point.Position.X;
-        double y = point.Position.Y;
-
-        if (point.Properties.IsLeftButtonPressed)
-        {
-            SetDancer(new Vector2((float)x, (float)y), selectedCamera);
-        }
-        
-        Loop();
-    }
-
-    void RecalculateAndRedraw()
+    
+    void RecalculateAndRedrawAllCameras()
     {
         cameraPoseSolver.CalculateLeadFollow3DPoses();
         
@@ -329,51 +366,7 @@ public partial class MainWindow : Window
             RedrawCamera(videoFilesKey);
         }
     }
-
-    void Canvas_PointerReleased(object sender, PointerReleasedEventArgs args)
-    {
-        // Mark this canvas as selected
-        selectedCamera = indexToVideoFilePath[CanvasContainer.Items.IndexOf(sender as Canvas)];
-
-        PointerPoint point = args.GetCurrentPoint(sender as Control);
-
-        double x = point.Position.X;
-        double y = point.Position.Y;
-        if (selectedPoseAndJointAtCamera.Item1 != null && selectedPoseAndJointAtCamera.Item2 > -1 &&
-            GetSelectedButton() == "Move")
-        {
-            cameraPoseSolver.MoveKeypointAtCam(
-                selectedCamera,
-                new Vector2((float)x, (float)y),
-                selectedPoseAndJointAtCamera);
-            RedrawCamera(selectedCamera);
-        }
-
-        selectedPoseAndJointAtCamera = new Tuple<PoseBoundingBox?, int>(null, -1);
-    }
-
-    string GetSelectedButton()
-    {
-        foreach (Control? child in DynamicRadioButtonsPanel.Children)
-        {
-            if (child is RadioButton { IsChecked: true } radioButton)
-            {
-                return radioButton.Name.ToString();
-            }
-        }
-
-        return "0";
-    }
-
-    void SetDancer(Vector2 position, string camName)
-    {
-        string selectedButton = GetSelectedButton();
-        selectedPoseAndJointAtCamera = cameraPoseSolver.MarkDancerAtCam(
-            camName,
-            position,
-            selectedButton);
-    }
-
+    
     void RedrawCamera(string camName)
     {
         List<Vector2> originCross = cameraPoseSolver.ReverseProjectOriginCrossAtCamera(camName);
@@ -395,8 +388,12 @@ public partial class MainWindow : Window
 
         graphicsImages[camName].Source = drawingImage;
     }
+    
+    #endregion
 
-    void SolverNextFrameButton_Click(object sender, RoutedEventArgs e)
+    #region CONTROL BUTTONS
+    
+    void NextFrameButton_Click(object sender, RoutedEventArgs e)
     {
         if (!cameraPoseSolver.Advance()) return;
         timeFromStart += 1d / 30d;
@@ -406,7 +403,7 @@ public partial class MainWindow : Window
         SetPreviewsToFrame();
     }
 
-    void SolverPreviousFrameButton_Click(object sender, RoutedEventArgs e)
+    void PreviousFrameButton_Click(object sender, RoutedEventArgs e)
     {
         if (!cameraPoseSolver.Rewind()) return;
 
@@ -416,25 +413,40 @@ public partial class MainWindow : Window
         SetPreviewsToFrame();
     }
 
-    void RunUntilEnd_Click(object sender, RoutedEventArgs e)
+    void RunUntilCondition_Click(object sender, RoutedEventArgs e)
     {
+        int breaker = 0;
         while (cameraPoseSolver.Advance())
         {
             timeFromStart += 1d / 30d;
             cameraPoseSolver.CalculateLeadFollow3DPoses();
-            cameraPoseSolver.IterationLoop(); 
-
-            if (!cameraPoseSolver.AreLeadAndFollowAssignedForFrame())
-            {
-                break;
-            }
+            cameraPoseSolver.IterationLoop();
+            breaker++;
+            if(breaker > 180) break;
         }
         SetPreviewsToFrame();
     }
+    
+    #endregion
+
+    #region REFERENCE
 
     void Save3D_Click(object sender, RoutedEventArgs e)
     {
         cameraPoseSolver.SaveData(VideoInputPath.Text);
+    }
+    
+    string GetSelectedButton()
+    {
+        foreach (Control? child in DynamicRadioButtonsPanel.Children)
+        {
+            if (child is RadioButton { IsChecked: true } radioButton)
+            {
+                return radioButton.Name.ToString();
+            }
+        }
+
+        return "0";
     }
 
     string VideoDirectory()
@@ -448,4 +460,6 @@ public partial class MainWindow : Window
 
         return videoDirectory;
     }
+    
+    #endregion
 }

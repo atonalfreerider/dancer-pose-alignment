@@ -51,10 +51,6 @@ public class CameraPoseSolver(PoseType poseType)
         {
             TryHomeCamera(camName);
         }
-        else
-        {
-            // TODO 
-        }
     }
 
     public void SetAllAffine(List<Vector3> affine, string camName)

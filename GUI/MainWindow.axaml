@@ -30,12 +30,12 @@
                     </StackPanel>
                     <StackPanel Orientation="Horizontal" HorizontalAlignment="Center">
                         <!-- IMAGE DISPLAY -->
-                        <Button Name="BackButton" Content="Back" Height="30" Margin="5" Click="SolverPreviousFrameButton_Click" />
-                        <TextBox Name="FrameIndicator" Text="0"/>
+                        <Button Name="BackButton" Content="Back" Height="30" Margin="5" Click="PreviousFrameButton_Click" />
+                        <TextBox Name="FrameIndicator" Text="0" Height="30" Margin="5" />
                         <Button Name="NextFrameButton" Content="Next" Height="30" Margin="5"
-                                Click="SolverNextFrameButton_Click" />
-                        <Button Name="RunUntilNext" Content="Run Until Next Discontinuity" Height="30" Margin="5"
-                                Click="RunUntilEnd_Click" />
+                                Click="NextFrameButton_Click" />
+                        <Button Name="RunUntilConditionButton" Content="Run Until Condition" Height="30" Margin="5"
+                                Click="RunUntilCondition_Click" />
                         <Button Content="Save" Margin="5" Click="Save3D_Click" />
                     </StackPanel>
                 </StackPanel>
