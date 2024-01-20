@@ -314,6 +314,19 @@ public class CameraSetup(
         followTracker.Correct(FollowPose(frameNumber)!);
     }
 
+    public void ClearAfterFrame(int frameNumber)
+    {
+        int sampleFrame = SampleFrame(frameNumber);
+        using SQLiteConnection conn = new($"URI=file:{dbPath}");
+        conn.Open();
+        
+        using SQLiteCommand command = conn.CreateCommand();
+        command.CommandText = $"UPDATE table_{FilePrefix()} SET track_id = -1 WHERE frame > @frameNumber;";
+        command.Parameters.AddWithValue("@frameNumber", sampleFrame);
+
+        command.ExecuteNonQuery();
+    }
+
     /// <summary>
     /// This technique is a middle ground. Knowing that the initial camera radii are set to 3.5m, having the height
     /// calculated, and the alpha calculated, then the zoom, it is possible to see the other side of the circle and

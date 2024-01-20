@@ -40,6 +40,7 @@
                                 Click="RunUntilCondition_Click" />
                         <CheckBox Name="ShowVideoCheckbox" IsChecked="True"/>
                         <Button Content="Save" Margin="5" Click="Save3D_Click" />
+                        <Button Name="ClearAfterFrame" Content="Clear" Height="30" Margin="5" Click="ClearAfterFrame_Click" />
                     </StackPanel>
                 </StackPanel>
                 <ScrollViewer HorizontalScrollBarVisibility="Auto" VerticalScrollBarVisibility="Auto">

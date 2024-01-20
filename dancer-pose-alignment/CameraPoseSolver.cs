@@ -495,6 +495,14 @@ public class CameraPoseSolver(PoseType poseType)
 
     #endregion
 
+    public void ClearAfterFrame(int frameToClearAfter)
+    {
+        foreach (CameraSetup cameraSetup in cameras.Values)
+        {
+            cameraSetup.ClearAfterFrame(frameToClearAfter);
+        }
+    }
+
     public void SaveData(string folder)
     {
         string jsonMerged3DPose = JsonConvert.SerializeObject(merged3DPoseLeadPerFrame, Formatting.Indented);

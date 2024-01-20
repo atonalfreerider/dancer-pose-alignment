@@ -477,4 +477,14 @@ public partial class MainWindow : Window
     }
     
     #endregion
+
+    void ClearAfterFrame_Click(object? sender, RoutedEventArgs e)
+    {
+        if (!int.TryParse(FrameIndicator.Text, out int frame)) return;
+        cameraPoseSolver.ClearAfterFrame(frame);
+        cameraPoseSolver.CalculateLeadFollow3DPoses();
+        cameraPoseSolver.IterationLoop();
+        
+        SetPreviewsToFrame();
+    }
 }
