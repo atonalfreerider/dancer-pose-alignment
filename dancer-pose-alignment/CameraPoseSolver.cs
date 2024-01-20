@@ -10,10 +10,10 @@ public class CameraPoseSolver(PoseType poseType)
     // these are the 3D pose values that will be output
     readonly List<List<Vector3>> merged3DPoseLeadPerFrame = [];
     readonly List<List<Vector3>> merged3DPoseFollowPerFrame = [];
-
+    
     readonly Dictionary<string, CameraSetup> cameras = [];
     int frameNumber = 0;
-    public int MaximumFrameCount = int.MaxValue;
+    public int MaximumFrameCount = int.MaxValue; 
 
     // drawing variables
     Dictionary<string, Vector3> cameraPositions => cameras.ToDictionary(

@@ -641,7 +641,7 @@ public class CameraSetup(
             Quaternion.Identity,
             Position);
 
-        HipLock();
+        HipLock(Vector3.Zero, 0, true);
 
         CalculateCameraWall(0);
     }
@@ -659,24 +659,28 @@ public class CameraSetup(
         return new Tuple<bool, float>(isFacingLead, leadPoseAnkleSlope);
     }
 
-    void HipLock()
+    void HipLock(Vector3 anchorPt, int frameNumber, bool isRight)
     {
-        PoseBoundingBox? leadPose = LeadPose(0);
+        PoseBoundingBox? leadPose = LeadPose(frameNumber);
         if (leadPose == null) return;
-        
-        Vector2 leadRightAnkle = new(
-            leadPose.Keypoints[JointExtension.RAnkleIndex(poseType)].Point.X,
-            leadPose.Keypoints[JointExtension.RAnkleIndex(poseType)].Point.Y);
+
+        Vector2 leadRightAnkle = isRight
+            ? new Vector2(
+                leadPose.Keypoints[JointExtension.RAnkleIndex(poseType)].Point.X,
+                leadPose.Keypoints[JointExtension.RAnkleIndex(poseType)].Point.Y)
+            : new Vector2(
+                leadPose.Keypoints[JointExtension.LAnkleIndex(poseType)].Point.X,
+                leadPose.Keypoints[JointExtension.LAnkleIndex(poseType)].Point.Y);
 
         const float hipHeight = .8f;
         float leadHipY = leadPose.Keypoints[JointExtension.RHipIndex(poseType)].Point.Y;
 
         CenterRoll();
-        CenterRightLeadAnkleOnOrigin(leadRightAnkle);
+        CenterRightLeadAnkleOnOrigin(leadRightAnkle, anchorPt, frameNumber);
         CenterRoll();
-        CenterRightLeadAnkleOnOrigin(leadRightAnkle);
+        CenterRightLeadAnkleOnOrigin(leadRightAnkle, anchorPt, frameNumber);
 
-        float opticalHipHeight = ReverseProjectPoint(new Vector3(0, hipHeight, 0), 0, true).Y;
+        float opticalHipHeight = ReverseProjectPoint(anchorPt with { Y = hipHeight }, frameNumber, true).Y;
 
         int breaker = 0;
         while (Math.Abs(leadHipY - opticalHipHeight) > 1)
@@ -685,20 +689,20 @@ public class CameraSetup(
             {
                 focalLength += .001f;
                 CenterRoll();
-                CenterRightLeadAnkleOnOrigin(leadRightAnkle);
+                CenterRightLeadAnkleOnOrigin(leadRightAnkle, anchorPt, frameNumber);
                 CenterRoll();
-                CenterRightLeadAnkleOnOrigin(leadRightAnkle);
+                CenterRightLeadAnkleOnOrigin(leadRightAnkle, anchorPt, frameNumber);
             }
             else
             {
                 focalLength -= .001f;
                 CenterRoll();
-                CenterRightLeadAnkleOnOrigin(leadRightAnkle);
+                CenterRightLeadAnkleOnOrigin(leadRightAnkle, anchorPt, frameNumber);
                 CenterRoll();
-                CenterRightLeadAnkleOnOrigin(leadRightAnkle);
+                CenterRightLeadAnkleOnOrigin(leadRightAnkle, anchorPt, frameNumber);
             }
 
-            opticalHipHeight = ReverseProjectPoint(new Vector3(0, hipHeight, 0), 0, true).Y;
+            opticalHipHeight = ReverseProjectPoint(anchorPt with { Y = hipHeight }, frameNumber, true).Y;
             breaker++;
             if (breaker > 1000)
             {
@@ -707,35 +711,35 @@ public class CameraSetup(
         }
     }
 
-    void CenterRightLeadAnkleOnOrigin(Vector2 leadRightAnkle)
+    void CenterRightLeadAnkleOnOrigin(Vector2 leadRightAnkle, Vector3 anchorPt, int frameNumber)
     {
         // yaw and pitch the camera until the origin is centered at the lead right ankle
-        Vector2 origin = ReverseProjectPoint(Vector3.Zero, 0, true);
+        Vector2 origin = ReverseProjectPoint(anchorPt, frameNumber, true);
 
         int breaker = 0;
         while (Vector2.Distance(leadRightAnkle, origin) > 1)
         {
             if (leadRightAnkle.X < origin.X)
             {
-                rotationsPerFrame[0] *= Quaternion.CreateFromAxisAngle(Vector3.UnitY, .001f);
+                rotationsPerFrame[frameNumber] *= Quaternion.CreateFromAxisAngle(Vector3.UnitY, .001f);
             }
             else
             {
-                rotationsPerFrame[0] *= Quaternion.CreateFromAxisAngle(Vector3.UnitY, -.001f);
+                rotationsPerFrame[frameNumber] *= Quaternion.CreateFromAxisAngle(Vector3.UnitY, -.001f);
             }
 
             if (leadRightAnkle.Y > origin.Y)
             {
                 // pitch up 
-                rotationsPerFrame[0] *= Quaternion.CreateFromAxisAngle(Vector3.UnitX, -.001f);
+                rotationsPerFrame[frameNumber] *= Quaternion.CreateFromAxisAngle(Vector3.UnitX, -.001f);
             }
             else
             {
                 // pitch down 
-                rotationsPerFrame[0] *= Quaternion.CreateFromAxisAngle(Vector3.UnitX, .001f);
+                rotationsPerFrame[frameNumber] *= Quaternion.CreateFromAxisAngle(Vector3.UnitX, .001f);
             }
 
-            origin = ReverseProjectPoint(Vector3.Zero, 0, true);
+            origin = ReverseProjectPoint(anchorPt, frameNumber, true);
             breaker++;
             if (breaker > 1000)
             {
@@ -810,83 +814,20 @@ public class CameraSetup(
         }
     }
 
+    public void CenterOnPinnedLeadAnkle(bool isRight, Vector3 lastPinned, int frameNumber)
+    {
+        PoseBoundingBox? leadPose = LeadPose(frameNumber);
+        if (leadPose == null) return;
+        
+        
+    }
+
     public bool IterateOrientation(int frameNumber, List<Vector3> leadPose3D, List<Vector3> followPose3D)
     {
-        bool yawed = IterateYaw(0.01f, frameNumber, leadPose3D, followPose3D);
-        bool pitched = IteratePitch(0.01f, frameNumber, leadPose3D, followPose3D);
         bool zoomed = IterateZoom(0.01f, frameNumber, leadPose3D, followPose3D);
         bool rolled = IterateRoll(0.01f, frameNumber, leadPose3D, followPose3D);
 
-        return yawed || pitched || zoomed || rolled;
-    }
-
-    bool IterateYaw(float yawStepSize, int frameNumber, List<Vector3> leadPose3D, List<Vector3> followPose3D)
-    {
-        float currentError = CurrentError(frameNumber, leadPose3D, followPose3D);
-
-        // yaw camera left and right 
-        Quaternion originalRotation = rotationsPerFrame[frameNumber];
-
-        Quaternion leftYawRotation = originalRotation *
-                                     Quaternion.CreateFromAxisAngle(Up(frameNumber), yawStepSize);
-        Quaternion rightYawRotation = originalRotation *
-                                      Quaternion.CreateFromAxisAngle(Up(frameNumber), -yawStepSize);
-
-        rotationsPerFrame[frameNumber] = leftYawRotation;
-        float leftYawError = CurrentError(frameNumber, leadPose3D, followPose3D);
-
-        rotationsPerFrame[frameNumber] = rightYawRotation;
-        float rightYawError = CurrentError(frameNumber, leadPose3D, followPose3D);
-
-        if (leftYawError < rightYawError && leftYawError < currentError)
-        {
-            rotationsPerFrame[frameNumber] = leftYawRotation;
-            return true;
-        }
-
-        if (rightYawError < leftYawError && rightYawError < currentError)
-        {
-            rotationsPerFrame[frameNumber] = rightYawRotation;
-            return true;
-        }
-
-        // reset 
-        rotationsPerFrame[frameNumber] = originalRotation;
-        return false;
-    }
-
-    bool IteratePitch(float pitchStepSize, int frameNumber, List<Vector3> leadPose3D, List<Vector3> followPose3D)
-    {
-        float currentError = CurrentError(frameNumber, leadPose3D, followPose3D);
-
-        // pitch camera up and down 
-        Quaternion originalRotation = rotationsPerFrame[frameNumber];
-        Quaternion upPitchRotation = originalRotation *
-                                     Quaternion.CreateFromAxisAngle(Right(frameNumber), -pitchStepSize);
-        Quaternion downPitchRotation = originalRotation *
-                                       Quaternion.CreateFromAxisAngle(Right(frameNumber), pitchStepSize);
-
-        rotationsPerFrame[frameNumber] = upPitchRotation;
-        float upPitchError = CurrentError(frameNumber, leadPose3D, followPose3D);
-
-        rotationsPerFrame[frameNumber] = downPitchRotation;
-        float downPitchError = CurrentError(frameNumber, leadPose3D, followPose3D);
-
-        if (upPitchError < downPitchError && upPitchError < currentError)
-        {
-            rotationsPerFrame[frameNumber] = upPitchRotation;
-            return true;
-        }
-
-        if (downPitchError < upPitchError && downPitchError < currentError)
-        {
-            rotationsPerFrame[frameNumber] = downPitchRotation;
-            return true;
-        }
-
-        // reset 
-        rotationsPerFrame[frameNumber] = originalRotation;
-        return false;
+        return zoomed || rolled;
     }
     
     bool IterateZoom(float zoomStepSize, int frameNumber, List<Vector3> leadPose3D, List<Vector3> followPose3D)
@@ -1214,7 +1155,7 @@ public class CameraSetup(
 
     int SampleFrame(int frameNumber)
     {
-        return (int)Math.Round(startingFrame + frameNumber * (maxFrame / (float)totalFrameCountAt30Fps));
+        return (int)Math.Round(startingFrame + (frameNumber) * (maxFrame / (float)totalFrameCountAt30Fps));
     }
     
     void UpdateTrackIds(int frameNumber)
