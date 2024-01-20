@@ -420,14 +420,13 @@ public partial class MainWindow : Window
 
     void RunUntilCondition_Click(object sender, RoutedEventArgs e)
     {
-        int breaker = 0;
+        if (!int.TryParse(FrameIndicator.Text, out int frame)) return;
         while (cameraPoseSolver.Advance())
         {
             timeFromStart += 1d / 30d;
             cameraPoseSolver.CalculateLeadFollow3DPoses();
             cameraPoseSolver.IterationLoop();
-            breaker++;
-            if(breaker > 180) break;
+            if(cameraPoseSolver.CurrentFrame == frame) break;
         }
         SetPreviewsToFrame();
     }

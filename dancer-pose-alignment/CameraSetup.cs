@@ -963,15 +963,44 @@ public class CameraSetup(
 
     public void UpdateKalman(int frameNumber)
     {
-        // TODO create a new kalman filter and feed the previous 10 frames into it
-        if (leadTracker == null || followTracker == null) return;
-
         const float IouThreshold = .6f;
         List<PoseBoundingBox> detections = allPosesAndConfidencesPerFrame[frameNumber];
-        PoseBoundingBox? leadDetection = FindBestBoxFit(
-            detections,
-            leadTracker.Predict(),
-            IouThreshold);
+
+        bool anyChanged = false;
+        PoseBoundingBox? leadDetection = LeadPose(frameNumber);
+        float leadConfidence = 1;
+        if (leadDetection == null)
+        {
+            (leadDetection, leadConfidence) = FindBestBoxFit(
+                detections,
+                leadTracker.Predict(),
+                IouThreshold);
+        }
+
+        PoseBoundingBox? followDetection = FollowPose(frameNumber);
+        float followConfidence = 1;
+        if (followDetection == null)
+        {
+            (followDetection, followConfidence) = FindBestBoxFit(
+                detections,
+                followTracker.Predict(),
+                IouThreshold);
+        }
+        
+        if (leadDetection != null && followDetection != null &&
+            followDetection.DbId == leadDetection.DbId)
+        {
+            if (leadConfidence > followConfidence)
+            {
+                followDetection = null;
+            }
+            else
+            {
+                leadDetection = null;
+            }
+
+            anyChanged = true;
+        }
         
         if (leadDetection != null)
         {
@@ -982,41 +1011,37 @@ public class CameraSetup(
                     poseBoundingBox.Class.Id = -1;
                 }
             }
+
             leadDetection.Class.Id = 0;
             leadTracker.Correct(leadDetection);
+            anyChanged = true;
         }
-
-        PoseBoundingBox? followDetection = FindBestBoxFit(
-            detections,
-            followTracker.Predict(),
-            IouThreshold);
-
-        if (leadDetection != null && followDetection != null && followDetection.DbId == leadDetection.DbId)
-        {
-            followDetection = null;
-        }
-        
         
         if (followDetection != null)
         {
             foreach (PoseBoundingBox poseBoundingBox in detections)
             {
-                if(poseBoundingBox.Class.Id == 1)
+                if (poseBoundingBox.Class.Id == 1)
                 {
                     poseBoundingBox.Class.Id = -1;
                 }
             }
+
             followDetection.Class.Id = 1;
             followTracker.Correct(followDetection);
+            anyChanged = true;
         }
-        
-        UpdateTrackIds(frameNumber);
+
+        if (anyChanged)
+        {
+            UpdateTrackIds(frameNumber);
+        }
     }
 
     /// <summary>
     /// Inverse over Union to find overlap between prediction and observation.
     /// </summary>
-    static PoseBoundingBox? FindBestBoxFit(
+    static Tuple<PoseBoundingBox?, float> FindBestBoxFit(
         List<PoseBoundingBox> detections,
         Rectangle tracker,
         float iouThreshold)
@@ -1055,7 +1080,7 @@ public class CameraSetup(
             Console.WriteLine($"Detection threshold failed. Highest detection: {errorCheckIou}");
         }
 
-        return bestDetection;
+        return new Tuple<PoseBoundingBox?, float>(bestDetection, errorCheckIou);
     }
 
     #endregion
