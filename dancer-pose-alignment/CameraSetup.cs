@@ -659,7 +659,7 @@ public class CameraSetup(
         return new Tuple<bool, float>(isFacingLead, leadPoseAnkleSlope);
     }
 
-    void HipLock(Vector3 anchorPt, int frameNumber, bool isRight)
+    public void HipLock(Vector3 anchorPt, int frameNumber, bool isRight)
     {
         PoseBoundingBox? leadPose = LeadPose(frameNumber);
         if (leadPose == null) return;

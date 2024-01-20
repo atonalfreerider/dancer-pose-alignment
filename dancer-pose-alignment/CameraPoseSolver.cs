@@ -14,6 +14,8 @@ public class CameraPoseSolver(PoseType poseType)
     readonly Dictionary<string, CameraSetup> cameras = [];
     int frameNumber = 0;
     public int MaximumFrameCount = int.MaxValue; 
+    
+    bool leadRightAnklePinned = true; // if false, left is pinned 
 
     // drawing variables
     Dictionary<string, Vector3> cameraPositions => cameras.ToDictionary(
@@ -97,6 +99,20 @@ public class CameraPoseSolver(PoseType poseType)
 
         List<Vector3> merged3DPoseLead = Calculate3DPose(true);
         List<Vector3> merged3DPoseFollow = Calculate3DPose(false);
+
+        if (frameNumber > 0)
+        {
+            Vector3 leadRAnkleLast = merged3DPoseLeadPerFrame[frameNumber - 1][JointExtension.RAnkleIndex(poseType)];
+            Vector3 leadLAnkleLast = merged3DPoseLeadPerFrame[frameNumber - 1][JointExtension.LAnkleIndex(poseType)];
+            if (leadRightAnklePinned)
+            {
+                merged3DPoseLead[JointExtension.RAnkleIndex(poseType)] = leadRAnkleLast;
+            }
+            else
+            {
+                merged3DPoseLead[JointExtension.LAnkleIndex(poseType)] = leadLAnkleLast;
+            }
+        }
 
         merged3DPoseLeadPerFrame[frameNumber] = merged3DPoseLead;
         merged3DPoseFollowPerFrame[frameNumber] = merged3DPoseFollow;
@@ -350,6 +366,19 @@ public class CameraPoseSolver(PoseType poseType)
 
     public void IterationLoop()
     {
+        if (frameNumber > 0)
+        {
+            Vector3 leadRAnkleLast = merged3DPoseLeadPerFrame[frameNumber - 1][JointExtension.RAnkleIndex(poseType)];
+            Vector3 leadLAnkleLast = merged3DPoseLeadPerFrame[frameNumber - 1][JointExtension.LAnkleIndex(poseType)];
+            leadRightAnklePinned = leadRAnkleLast.Y < leadLAnkleLast.Y;
+
+            foreach (CameraSetup camera in cameras.Values)
+            {
+                camera.HipLock(leadRightAnklePinned ? leadRAnkleLast : leadLAnkleLast, frameNumber,
+                    leadRightAnklePinned);
+            }
+        }
+        
         int iterationCount = 0;
         List<float> errorHistory = [];
         while (iterationCount < 10000)
