@@ -248,72 +248,6 @@ public class CameraSetup(
         height = standCount > sitCount ? 1.4f : .8f;
     }
 
-    public void Match3DPoseToPoses(
-        int frameNumber,
-        List<Vector3> lead3D,
-        List<Vector3> follow3D,
-        int distanceLimit = 500)
-    {
-        // take the last 3d pose on this camera and match the profile to the closest pose here, within a threshold
-        float lowestLeadError = float.MaxValue;
-        PoseBoundingBox matchLeadPose = allPosesAndConfidencesPerFrame[frameNumber].First();
-
-        float lowestFollowError = float.MaxValue;
-        PoseBoundingBox matchFollowPose = allPosesAndConfidencesPerFrame[frameNumber].Last();
-
-        float secondLowestFollowError = float.MaxValue;
-        PoseBoundingBox? matchSecondFollowPose = null;
-        
-        foreach (PoseBoundingBox pose in allPosesAndConfidencesPerFrame[frameNumber])
-        {
-            float leadPoseError = PoseError(pose, lead3D, frameNumber);
-
-            float followPoseError = PoseError(pose, follow3D, frameNumber);
-
-            if (leadPoseError < lowestLeadError)
-            {
-                matchLeadPose = pose;
-                lowestLeadError = leadPoseError;
-            }
-
-            if (followPoseError < lowestFollowError)
-            {
-                matchSecondFollowPose = matchFollowPose;
-                secondLowestFollowError = lowestFollowError;
-                matchFollowPose = pose;
-                lowestFollowError = followPoseError;
-            }
-            else if (followPoseError < secondLowestFollowError)
-            {
-                matchSecondFollowPose = pose;
-                secondLowestFollowError = followPoseError;
-            }
-        }
-
-        if (matchLeadPose.DbId == matchFollowPose.DbId && matchSecondFollowPose != null)
-        {
-            matchFollowPose = matchSecondFollowPose;
-        }
-
-        PoseBoundingBox? leadPose = LeadPose(frameNumber);
-        if (leadPose == null && lowestLeadError < distanceLimit)
-        {
-            matchLeadPose.Class.Id = 0;
-        }
-
-        PoseBoundingBox? followPose = FollowPose(frameNumber);
-        if (followPose == null && lowestFollowError < distanceLimit)
-        {
-            matchFollowPose.Class.Id = 1;
-        }
-        
-        UpdateTrackIds(frameNumber);
-
-        leadTracker.Correct(LeadPose(frameNumber)!);
-
-        followTracker.Correct(FollowPose(frameNumber)!);
-    }
-
     public void ClearAfterFrame(int frameNumber)
     {
         int sampleFrame = SampleFrame(frameNumber);
@@ -459,15 +393,6 @@ public class CameraSetup(
     public void MoveKeypoint(Vector2 click, int frameNumber, Tuple<PoseBoundingBox?, int> closestIndexAndJointSelected)
     {
         // TODO create
-    }
-
-    public void Unassign(int frameNumber)
-    {
-        foreach (PoseBoundingBox poseBoundingBox in allPosesAndConfidencesPerFrame[frameNumber])
-        {
-            poseBoundingBox.Class.Id = -1;
-        }
-        UpdateTrackIds(frameNumber);
     }
 
     #endregion
@@ -814,103 +739,6 @@ public class CameraSetup(
         }
     }
 
-    public void CenterOnPinnedLeadAnkle(bool isRight, Vector3 lastPinned, int frameNumber)
-    {
-        PoseBoundingBox? leadPose = LeadPose(frameNumber);
-        if (leadPose == null) return;
-        
-        
-    }
-
-    public bool IterateOrientation(int frameNumber, List<Vector3> leadPose3D, List<Vector3> followPose3D)
-    {
-        bool zoomed = IterateZoom(0.01f, frameNumber, leadPose3D, followPose3D);
-        bool rolled = IterateRoll(0.01f, frameNumber, leadPose3D, followPose3D);
-
-        return zoomed || rolled;
-    }
-    
-    bool IterateZoom(float zoomStepSize, int frameNumber, List<Vector3> leadPose3D, List<Vector3> followPose3D)
-    {
-        float currentError = CurrentError(frameNumber, leadPose3D, followPose3D);
-
-        // zoom camera in and out 
-        float originalFocalLength = focalLength;
-        float zoomInFocalLength = originalFocalLength + zoomStepSize;
-        float zoomOutFocalLength = originalFocalLength - zoomStepSize;
-        focalLength = zoomInFocalLength;
-        float zoomInError = CurrentError(frameNumber, leadPose3D, followPose3D);
-
-        focalLength = zoomOutFocalLength;
-        float zoomOutError = CurrentError(frameNumber, leadPose3D, followPose3D);
-
-        if (zoomInError < zoomOutError && zoomInError < currentError)
-        {
-            focalLength = zoomInFocalLength;
-            return true;
-        }
-
-        if (zoomOutError < zoomInError && zoomOutError < currentError)
-        {
-            focalLength = zoomOutFocalLength;
-            return true;
-        }
-
-        // reset 
-        focalLength = originalFocalLength;
-        return false;
-    }
-
-    bool IterateRoll(float rollStepSize, int frameNumber, List<Vector3> leadPose3D, List<Vector3> followPose3D)
-    {
-        float currentError = CurrentError(frameNumber, leadPose3D, followPose3D);
-        // roll camera left and right 
-        Quaternion originalRotation = rotationsPerFrame[frameNumber];
-        Quaternion leftRollRotation = originalRotation *
-                                      Quaternion.CreateFromAxisAngle(Forward(frameNumber), rollStepSize);
-        Quaternion rightRollRotation = originalRotation *
-                                       Quaternion.CreateFromAxisAngle(Forward(frameNumber), -rollStepSize);
-
-        rotationsPerFrame[frameNumber] = leftRollRotation;
-        float leftRollError = CurrentError(frameNumber, leadPose3D, followPose3D);
-
-        rotationsPerFrame[frameNumber] = rightRollRotation;
-        float rightRollError = CurrentError(frameNumber, leadPose3D, followPose3D);
-
-        if (leftRollError < rightRollError && leftRollError < currentError)
-        {
-            rotationsPerFrame[frameNumber] = leftRollRotation;
-            return true;
-        }
-
-        if (rightRollError < leftRollError && rightRollError < currentError)
-        {
-            rotationsPerFrame[frameNumber] = rightRollRotation;
-            return true;
-        }
-
-        // reset 
-        rotationsPerFrame[frameNumber] = originalRotation;
-        return false;
-    }
-
-    public float PoseError(IEnumerable<Vector3> pose3D, bool isLead, int frameNumber)
-    {
-        PoseBoundingBox? pose = isLead ? LeadPose(frameNumber) : FollowPose(frameNumber);
-        if (pose == null) return 0;
-
-        return pose3D.Select(vec => ReverseProjectPoint(vec, frameNumber, true))
-            .Select((target, i) => Vector2.Distance(
-                target,
-                new Vector2(pose.Keypoints[i].Point.X, pose.Keypoints[i].Point.Y)) * pose.Keypoints[i].Confidence).Sum();
-    }
-
-    float CurrentError(int frameNumber, List<Vector3> leadPose3D, List<Vector3> followPose3D)
-    {
-        return PoseError(leadPose3D, true, frameNumber) +
-               PoseError(followPose3D, false, frameNumber);
-    }
-
     #endregion
 
     #region KALMAN
@@ -1099,17 +927,6 @@ public class CameraSetup(
                                          Quaternion.CreateFromAxisAngle(Up(frameNumber - 1), -yawAlpha) *
                                          //Quaternion.CreateFromAxisAngle(Forward(frameNumber - 1), lastAffine.Z) * // roll
                                          rotationsPerFrame[frameNumber - 1];
-    }
-
-    float PoseError(PoseBoundingBox pose, IEnumerable<Vector3> pose3D, int frameNumber)
-    {
-        List<Vector2> reverseProjectedLead =
-            pose3D.Select(vec => ReverseProjectPoint(vec, frameNumber, true)).ToList();
-
-        return reverseProjectedLead.Select((target, i) => Vector2.Distance(
-                target,
-                new Vector2(pose.Keypoints[i].Point.X, pose.Keypoints[i].Point.Y)) * pose.Keypoints[i].Confidence)
-            .Sum(); // multiply by confidence -> high confidence is high error
     }
 
     float TorsoHeightPixels(PoseBoundingBox pose)

@@ -331,12 +331,6 @@ public class CameraPoseSolver(PoseType poseType)
         }
     }
 
-    void TryHomeCamera(string camName)
-    {
-        if (frameNumber > 0) return;
-        cameras[camName].Home();
-    }
-
     public void SetCamR()
     {
         if (frameNumber > 0) return;
@@ -346,65 +340,6 @@ public class CameraPoseSolver(PoseType poseType)
         {
             camerasValue.SetRadiusFromCameraWall(cameraWall);
         }
-    }
-
-    public void IterationLoop()
-    {
-        int iterationCount = 0;
-        List<float> errorHistory = [];
-        while (iterationCount < 10000)
-        {
-            Dictionary<string, float> errorsByCamera = [];
-            foreach ((string cameraName, CameraSetup cameraSetup) in cameras)
-            {
-                float poseError = cameraSetup.PoseError(
-                                      merged3DPoseLeadPerFrame[frameNumber],
-                                      true,
-                                      frameNumber) +
-                                  cameraSetup.PoseError(
-                                      merged3DPoseFollowPerFrame[frameNumber],
-                                      false,
-                                      frameNumber);
-
-                errorsByCamera.Add(cameraName, poseError);
-            }
-
-            if (errorsByCamera.Values.Sum() <= float.Epsilon)
-            {
-                Console.WriteLine("PERFECT SOLUTION");
-                break;
-            }
-
-            List<CameraSetup> sortedCamerasByHighestError = errorsByCamera
-                .OrderByDescending(pair => pair.Value)
-                .Select(pair => cameras[pair.Key])
-                .ToList();
-
-            bool moved = sortedCamerasByHighestError.First().IterateOrientation(
-                frameNumber,
-                merged3DPoseLeadPerFrame[frameNumber],
-                merged3DPoseFollowPerFrame[frameNumber]);
-
-            if (!moved)
-            {
-                Console.WriteLine("Can't orient");
-                break;
-            }
-
-            CalculateLeadFollow3DPoses();
-            iterationCount++;
-
-            errorHistory.Insert(0, errorsByCamera.Values.Sum());
-
-            if (errorHistory.Count > 10)
-            {
-                errorHistory.RemoveAt(errorHistory.Count - 1);
-            }
-
-            Console.WriteLine(errorHistory.Average());
-        }
-
-        CalculateLeadFollow3DPoses();
     }
 
     #endregion
@@ -459,13 +394,6 @@ public class CameraPoseSolver(PoseType poseType)
     #endregion
 
     #region REFERENCE
-
-    public bool AreLeadAndFollowAssignedForFrame()
-    {
-        List<Tuple<PoseBoundingBox?, PoseBoundingBox?>> leadAndFollowIndices = cameras.Values
-            .Select(x => x.GetLeadAndFollowPoseForFrame(frameNumber)).ToList();
-        return !leadAndFollowIndices.Any(x => x.Item1 == null || x.Item2 == null);
-    }
 
     List<Tuple<float, float>> OrderedAndSmoothedCameraWall()
     {

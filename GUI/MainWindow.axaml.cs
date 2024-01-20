@@ -260,7 +260,6 @@ public partial class MainWindow : Window
         cameraPoseSolver.HomeAllCameras();
 
         cameraPoseSolver.CalculateLeadFollow3DPoses();
-        cameraPoseSolver.IterationLoop(); 
         RecalculateAndRedrawAllCameras();
     }
 
@@ -403,7 +402,6 @@ public partial class MainWindow : Window
         if (!cameraPoseSolver.Advance()) return;
         timeFromStart += 1d / 30d;
         cameraPoseSolver.CalculateLeadFollow3DPoses();
-        cameraPoseSolver.IterationLoop(); 
         
         SetPreviewsToFrame();
     }
@@ -425,7 +423,6 @@ public partial class MainWindow : Window
         {
             timeFromStart += 1d / 30d;
             cameraPoseSolver.CalculateLeadFollow3DPoses();
-            cameraPoseSolver.IterationLoop();
             if(cameraPoseSolver.CurrentFrame == frame) break;
         }
         SetPreviewsToFrame();
@@ -437,7 +434,6 @@ public partial class MainWindow : Window
         cameraPoseSolver.SetFrame(frame);
         timeFromStart = frame / 30d;
         cameraPoseSolver.CalculateLeadFollow3DPoses();
-        cameraPoseSolver.IterationLoop();
         
         SetPreviewsToFrame();
     }
@@ -483,7 +479,6 @@ public partial class MainWindow : Window
         if (!int.TryParse(FrameIndicator.Text, out int frame)) return;
         cameraPoseSolver.ClearAfterFrame(frame);
         cameraPoseSolver.CalculateLeadFollow3DPoses();
-        cameraPoseSolver.IterationLoop();
         
         SetPreviewsToFrame();
     }
