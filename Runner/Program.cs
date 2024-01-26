@@ -1,4 +1,6 @@
-﻿using System.Numerics;
+﻿using System.CommandLine;
+using System.CommandLine.NamingConventionBinder;
+using System.Numerics;
 using dancer_pose_alignment;
 using Newtonsoft.Json;
 using OpenCvSharp;
@@ -9,8 +11,30 @@ static class Program
 {
     static void Main(string[] args)
     {
-        string rootFolder = args[0];
-        SaveYoloJsonToSqlite(rootFolder);
+        RootCommand rootCommand = new("CLI for dancer pose alignment preparation. Run affine, or yolo")
+        {
+            new Argument<string>("rootFolder", "root folder containing videos and poses")
+        };
+        
+        Command affineCommand = new("affine", "affine transform videos to align poses")
+        {
+            rootCommand.Arguments[0]
+        };
+        
+        affineCommand.Handler = CommandHandler.Create<string>(Affine);
+        
+        rootCommand.AddCommand(affineCommand);
+        
+        Command yoloCommand = new("yolo", "convert yolo json to sqlite")
+        {
+            rootCommand.Arguments[0]
+        };
+        
+        yoloCommand.Handler = CommandHandler.Create<string>(SaveYoloJsonToSqlite);
+        
+        rootCommand.AddCommand(yoloCommand);
+
+        rootCommand.Invoke(args);
     }
 
     static void SaveYoloJsonToSqlite(string poseFolder)

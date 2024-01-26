@@ -51,6 +51,7 @@ public class CameraPoseSolver(PoseType poseType)
         if (frameNumber >= MaximumFrameCount - 1) return false;
 
         frameNumber++;
+        Console.WriteLine(frameNumber);
         foreach ((string videoFilePath, CameraSetup cameraSetup) in cameras)
         {
             cameraSetup.CopyRotationToNextFrame(frameNumber);
