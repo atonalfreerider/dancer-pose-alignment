@@ -9,15 +9,15 @@
     </PropertyGroup>
     
   <ItemGroup>
-    <PackageReference Include="Aurio" Version="4.1.0" />
-    <PackageReference Include="Aurio.FFmpeg" Version="4.1.0" />
-    <PackageReference Include="Aurio.PFFFT" Version="4.1.0" />
-    <PackageReference Include="Aurio.Soxr" Version="4.1.0" />
-    <PackageReference Include="Avalonia" Version="11.0.7" />
-    <PackageReference Include="Avalonia.Desktop" Version="11.0.7" />
-    <PackageReference Include="Avalonia.ReactiveUI" Version="11.0.7" />
-    <PackageReference Include="Avalonia.Themes.Simple" Version="11.0.7" />
-    <PackageReference Include="OpenCvSharp4.Windows" Version="4.9.0.20240103" />
+    <PackageReference Include="Aurio" Version="4.2.1" />
+    <PackageReference Include="Aurio.FFmpeg" Version="4.2.1" />
+    <PackageReference Include="Aurio.PFFFT" Version="4.2.1" />
+    <PackageReference Include="Aurio.Soxr" Version="4.2.1" />
+    <PackageReference Include="Avalonia" Version="11.2.0-rc1" />
+    <PackageReference Include="Avalonia.Desktop" Version="11.2.0-rc1" />
+    <PackageReference Include="Avalonia.ReactiveUI" Version="11.2.0-rc1" />
+    <PackageReference Include="Avalonia.Themes.Simple" Version="11.2.0-rc1" />
+    <PackageReference Include="OpenCvSharp4.Windows" Version="4.10.0.20240616" />
   </ItemGroup>
   
     <ItemGroup>
