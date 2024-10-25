@@ -429,9 +429,7 @@ public class CameraPoseSolver(PoseType poseType)
             forearmLength)).ToList();
 
         // smooth
-        int jointCount = poseType == PoseType.Coco
-            ? Enum.GetNames<CocoJoint>().Length
-            : Enum.GetNames<HalpeJoint>().Length;
+        int jointCount = JointExtension.PoseCount(poseType);
         for (int i = 0; i < jointCount; i++)
         {
             List<Vector3> jointTimeline = clone.Select(pose => pose[i]).ToList();

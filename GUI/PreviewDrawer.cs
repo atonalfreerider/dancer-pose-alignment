@@ -56,6 +56,8 @@ public static class PreviewDrawer
                 leadProjectionsAtFrame.Select(x => new Vector3(x.X, x.Y, 1f)).ToList(), -1),
             PoseType.Halpe => DrawHalpe(drawingGroup,
                 leadProjectionsAtFrame.Select(x => new Vector3(x.X, x.Y, 1f)).ToList(), -1),
+            PoseType.Smpl => DrawSmpl(drawingGroup,
+                leadProjectionsAtFrame.Select(x => new Vector3(x.X, x.Y, 1f)).ToList(), -1),
             _ => throw new ArgumentOutOfRangeException(nameof(poseType), poseType, null)
         };
 
@@ -76,9 +78,10 @@ public static class PreviewDrawer
                 followProjectionsAtFrame.Select(x => new Vector3(x.X, x.Y, 1f)).ToList(), -1),
             PoseType.Halpe => DrawHalpe(drawingGroup,
                 followProjectionsAtFrame.Select(x => new Vector3(x.X, x.Y, 1f)).ToList(), -1),
+            PoseType.Smpl => DrawSmpl(drawingGroup,
+                followProjectionsAtFrame.Select(x => new Vector3(x.X, x.Y, 1f)).ToList(), -1),
             _ => throw new ArgumentOutOfRangeException(nameof(poseType), poseType, null)
         };
-
 
         return drawingGroup;
     }
@@ -120,7 +123,8 @@ public static class PreviewDrawer
             drawingGroup = poseType switch
             {
                 PoseType.Coco => DrawCoco(drawingGroup, PoseToPose(pose), pose.Class.Id),
-                PoseType.Halpe => DrawHalpe(drawingGroup, PoseToPose(pose), pose.Class.Id)
+                PoseType.Halpe => DrawHalpe(drawingGroup, PoseToPose(pose), pose.Class.Id),
+                PoseType.Smpl => DrawSmpl(drawingGroup, PoseToPose(pose), pose.Class.Id)
             };
 
             poseCount++;
@@ -136,35 +140,24 @@ public static class PreviewDrawer
 
     static DrawingGroup DrawCoco(DrawingGroup drawingGroup, List<Vector3> pose, int role)
     {
-        GeometryDrawing leftCalf = DrawLine(pose[(int)CocoJoint.L_Ankle], pose[(int)CocoJoint.L_Knee], role);
-        drawingGroup.Children.Add(leftCalf);
+        foreach (CocoLimbs limb in Enum.GetValues(typeof(CocoLimbs)))
+        {
+            uint[] pair = Szudzik.uintSzudzik2tupleReverse((uint)limb);
+            GeometryDrawing leftCalf = DrawLine(pose[(int)pair[0]], pose[(int)pair[1]], role);
+            drawingGroup.Children.Add(leftCalf);
+        }
 
-        GeometryDrawing leftThigh = DrawLine(pose[(int)CocoJoint.L_Knee], pose[(int)CocoJoint.L_Hip], role);
-        drawingGroup.Children.Add(leftThigh);
-
-        GeometryDrawing rightCalf = DrawLine(pose[(int)CocoJoint.R_Ankle], pose[(int)CocoJoint.R_Knee], role);
-        drawingGroup.Children.Add(rightCalf);
-
-        GeometryDrawing rightThigh = DrawLine(pose[(int)CocoJoint.R_Knee], pose[(int)CocoJoint.R_Hip], role);
-        drawingGroup.Children.Add(rightThigh);
-
-        GeometryDrawing leftUpperArm = DrawLine(pose[(int)CocoJoint.L_Shoulder], pose[(int)CocoJoint.L_Elbow], role);
-        drawingGroup.Children.Add(leftUpperArm);
-
-        GeometryDrawing leftForearm = DrawLine(pose[(int)CocoJoint.L_Elbow], pose[(int)CocoJoint.L_Wrist], role);
-        drawingGroup.Children.Add(leftForearm);
-
-        GeometryDrawing rightUpperArm = DrawLine(pose[(int)CocoJoint.R_Shoulder], pose[(int)CocoJoint.R_Elbow], role);
-        drawingGroup.Children.Add(rightUpperArm);
-
-        GeometryDrawing rightForearm = DrawLine(pose[(int)CocoJoint.R_Elbow], pose[(int)CocoJoint.R_Wrist], role);
-        drawingGroup.Children.Add(rightForearm);
-
-        GeometryDrawing hip = DrawLine(pose[(int)CocoJoint.L_Hip], pose[(int)CocoJoint.R_Hip], role);
-        drawingGroup.Children.Add(hip);
-
-        GeometryDrawing shoulders = DrawLine(pose[(int)CocoJoint.L_Shoulder], pose[(int)CocoJoint.R_Shoulder], role);
-        drawingGroup.Children.Add(shoulders);
+        return drawingGroup;
+    }
+    
+    static DrawingGroup DrawSmpl(DrawingGroup drawingGroup, List<Vector3> pose, int role)
+    {
+        foreach (SmplLimbs limb in Enum.GetValues(typeof(SmplLimbs)))
+        {
+            uint[] pair = Szudzik.uintSzudzik2tupleReverse((uint)limb);
+            GeometryDrawing leftCalf = DrawLine(pose[(int)pair[0]], pose[(int)pair[1]], role);
+            drawingGroup.Children.Add(leftCalf);
+        }
 
         return drawingGroup;
     }
