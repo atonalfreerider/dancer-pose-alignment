@@ -12,7 +12,8 @@ public static class PreviewDrawer
     public static DrawingGroup DrawGeometry(
         List<PoseBoundingBox> poses,
         Size imgSize,
-        PoseType poseType,
+        PoseType poseType2D,
+        PoseType poseType3D,
         List<Vector2> originCross,
         List<Vector2> leadProjectionsAtFrame,
         List<Vector2> followProjectionsAtFrame,
@@ -21,7 +22,7 @@ public static class PreviewDrawer
         DrawingGroup drawingGroup = DrawPoses(
             poses,
             imgSize,
-            poseType);
+            poseType2D);
 
         drawingGroup = DrawOriginCross(drawingGroup, originCross);
 
@@ -50,7 +51,7 @@ public static class PreviewDrawer
             drawingGroup.Children.Add(poseGeometry);
         }
 
-        drawingGroup = poseType switch
+        drawingGroup = poseType3D switch
         {
             PoseType.Coco => DrawCoco(drawingGroup,
                 leadProjectionsAtFrame.Select(x => new Vector3(x.X, x.Y, 1f)).ToList(), -1),
@@ -58,7 +59,7 @@ public static class PreviewDrawer
                 leadProjectionsAtFrame.Select(x => new Vector3(x.X, x.Y, 1f)).ToList(), -1),
             PoseType.Smpl => DrawSmpl(drawingGroup,
                 leadProjectionsAtFrame.Select(x => new Vector3(x.X, x.Y, 1f)).ToList(), -1),
-            _ => throw new ArgumentOutOfRangeException(nameof(poseType), poseType, null)
+            _ => throw new ArgumentOutOfRangeException(nameof(poseType2D), poseType2D, null)
         };
 
         SolidColorBrush followBrush = new(Colors.DarkMagenta);
@@ -72,7 +73,7 @@ public static class PreviewDrawer
             drawingGroup.Children.Add(poseGeometry);
         }
 
-        drawingGroup = poseType switch
+        drawingGroup = poseType3D switch
         {
             PoseType.Coco => DrawCoco(drawingGroup,
                 followProjectionsAtFrame.Select(x => new Vector3(x.X, x.Y, 1f)).ToList(), -1),
@@ -80,7 +81,7 @@ public static class PreviewDrawer
                 followProjectionsAtFrame.Select(x => new Vector3(x.X, x.Y, 1f)).ToList(), -1),
             PoseType.Smpl => DrawSmpl(drawingGroup,
                 followProjectionsAtFrame.Select(x => new Vector3(x.X, x.Y, 1f)).ToList(), -1),
-            _ => throw new ArgumentOutOfRangeException(nameof(poseType), poseType, null)
+            _ => throw new ArgumentOutOfRangeException(nameof(poseType2D), poseType2D, null)
         };
 
         return drawingGroup;

@@ -55,6 +55,15 @@ public partial class MainWindow : Window
 
         if (string.IsNullOrEmpty(videoDirectory) || !Directory.Exists(videoDirectory)) return;
 
+        if (Directory.EnumerateFiles(videoDirectory, "*.mp4").Count() == 1)
+        {
+            string singleVideo = Directory.EnumerateFiles(videoDirectory, "*.mp4").First();
+            videoOffsets = new Dictionary<string, double> {{singleVideo, 0d}};
+            LoadVideos(videoOffsets);
+            
+            return;
+        }
+
         if (File.Exists(Path.Combine(videoDirectory, "camera-time-offsets.json")))
         {
             videoOffsets = JsonConvert.DeserializeObject<Dictionary<string, double>>(
@@ -134,9 +143,6 @@ public partial class MainWindow : Window
     void LoadVideos(Dictionary<string, double> videoFilePathsAndOffsets)
     {
         string videoDirectory = VideoDirectory();
-        string dbPath = Directory.EnumerateFiles(videoDirectory, "*.db").First();
-        string affineDirectory = Path.Combine(videoDirectory, "affine/");
-        
         cameraPoseSolver = new CameraPoseSolver(PoseType.Coco);
 
         videoFiles.Clear();
@@ -217,17 +223,16 @@ public partial class MainWindow : Window
                 new Vector2((float)size.Width, (float)size.Height),
                 framesAt30Fps,
                 startingFrame,
-                frameCount,
-                dbPath);
+                frameCount);
             
-            string fileName = Path.GetFileNameWithoutExtension(videoFilePath);
-            string affinePath = Path.Combine(affineDirectory, fileName + ".mp4.json");
+            string slamPath = Directory.EnumerateFiles(Directory.GetParent(videoFilePath).FullName, "*.slam").First();
+           
             // if pre-cached json, load it
-            if (File.Exists(affinePath))
+            if (File.Exists(slamPath))
             {
-                List<Vector3> affineTransform = JsonConvert.DeserializeObject<List<Vector3>>(
-                    File.ReadAllText(affinePath));
-                cameraPoseSolver.SetAllAffine(affineTransform, videoFilePath);
+                Dictionary<int, Slam> slam = JsonConvert.DeserializeObject<Dictionary<int, Slam>>(File.ReadAllText(slamPath));
+
+                cameraPoseSolver.SetAllSlam(slam, videoFilePath);
             }
             else
             {
@@ -255,11 +260,7 @@ public partial class MainWindow : Window
 
     void HomingLoop()
     {
-        cameraPoseSolver.HomeAllCameras();
-        cameraPoseSolver.SetCamR();
-        cameraPoseSolver.HomeAllCameras();
-
-        cameraPoseSolver.CalculateLeadFollow3DPoses();
+        //cameraPoseSolver.CalculateLeadFollow3DPoses();
         RecalculateAndRedrawAllCameras();
     }
 
@@ -383,6 +384,7 @@ public partial class MainWindow : Window
             cameraPoseSolver.GetPosesAtFrameAtCamera(camName),
             new Size(graphicsImages[camName].Width, graphicsImages[camName].Height),
             PoseType.Coco,
+            PoseType.Smpl,
             originCross,
             leadProjectionsAtFrame,
             followProjectionsAtFrame,
@@ -476,7 +478,6 @@ public partial class MainWindow : Window
     void ClearAfterFrame_Click(object? sender, RoutedEventArgs e)
     {
         if (!int.TryParse(FrameIndicator.Text, out int frame)) return;
-        cameraPoseSolver.ClearAfterFrame(frame);
         cameraPoseSolver.CalculateLeadFollow3DPoses();
         
         SetPreviewsToFrame();

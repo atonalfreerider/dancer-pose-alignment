@@ -29,21 +29,67 @@ public class CameraPoseSolver(PoseType poseType)
     ];
 
     public void CreateCamera(
-        string name,
+        string videoFilePath,
         Vector2 imageSize,
         int frameCount,
         int startingFrame,
-        int maxFrame,
-        string dbPath)
+        int maxFrame)
     {
-        CameraSetup camera = new(name, imageSize, frameCount, poseType, startingFrame, maxFrame, dbPath);
-        cameras.Add(name, camera);
+        string parentDir = Directory.GetParent(videoFilePath).FullName;
+        Dictionary<int, PoseBoundingBox> leadPoses =
+            JsonConvert.DeserializeObject<Dictionary<int, PoseBoundingBox>>(
+                File.ReadAllText(Path.Combine(parentDir, "lead.json")));
+
+        foreach (PoseBoundingBox leadPosesValue in leadPoses.Values)
+        {
+            leadPosesValue.Class = new Class(0, "lead");
+        }
+        
+        Dictionary<int, PoseBoundingBox> followPoses =
+            JsonConvert.DeserializeObject<Dictionary<int, PoseBoundingBox>>(
+                File.ReadAllText(Path.Combine(parentDir, "follow.json")));
+        
+        foreach (PoseBoundingBox followPoseValue in followPoses.Values)
+        {
+            followPoseValue.Class = new Class(1, "follow");
+        }
+        
+        List<Dictionary<int, PoseBoundingBox>> leadFollow2D = [leadPoses, followPoses];
+        
+        List<List<Vector3>> lead3d = JsonConvert.DeserializeObject<List<List<Vector3>>>(
+            File.ReadAllText(Path.Combine(parentDir, "lead3d.json")));
+
+        List<List<Vector3>> reversedLead = lead3d
+            .Select(lead3dValue => lead3dValue
+                .Select(vector3 => vector3 with { X = -vector3.X })
+                .ToList())
+            .ToList();
+
+        List<List<Vector3>> follow3d = JsonConvert.DeserializeObject<List<List<Vector3>>>(
+            File.ReadAllText(Path.Combine(parentDir, "follow3d.json")));
+        
+        List<List<Vector3>> reversedFollow = follow3d
+            .Select(lead3dValue => lead3dValue
+                .Select(vector3 => vector3 with { X = -vector3.X })
+                .ToList())
+            .ToList();
+            
+        
+        CameraSetup camera = new(
+            imageSize, 
+            frameCount, 
+            startingFrame, 
+            maxFrame,
+            leadFollow2D, 
+            [reversedLead, reversedFollow]);
+        
+        cameras.Add(videoFilePath, camera);
         camera.SetAllPosesAtFrame(0);
     }
 
-    public void SetAllAffine(List<Vector3> affine, string camName)
+    public void SetAllSlam(Dictionary<int, Slam> slam, string camName)
     {
-        cameras[camName].SetAllAffine(affine);
+        cameras[camName].SetAllSlam(slam);
     }
 
     public bool Advance()
@@ -54,9 +100,7 @@ public class CameraPoseSolver(PoseType poseType)
         Console.WriteLine(frameNumber);
         foreach ((string videoFilePath, CameraSetup cameraSetup) in cameras)
         {
-            cameraSetup.CopyRotationToNextFrame(frameNumber);
             cameras[videoFilePath].SetAllPosesAtFrame(frameNumber);
-            cameraSetup.UpdateKalman(frameNumber);
         }
 
         return true;
@@ -77,11 +121,6 @@ public class CameraPoseSolver(PoseType poseType)
 
     public void CalculateLeadFollow3DPoses()
     {
-        foreach (CameraSetup cameraSetup in cameras.Values)
-        {
-            cameraSetup.Project(frameNumber);
-        }
-
         while (merged3DPoseLeadPerFrame.Count <= frameNumber)
         {
             // add a new frame
@@ -272,30 +311,6 @@ public class CameraPoseSolver(PoseType poseType)
 
     #endregion
 
-    #region ITERATORS
-
-    public void HomeAllCameras()
-    {
-        if (frameNumber > 0) return;
-        foreach (CameraSetup cam in cameras.Values)
-        {
-            cam.Home();
-        }
-    }
-
-    public void SetCamR()
-    {
-        if (frameNumber > 0) return;
-
-        List<Tuple<float, float>> cameraWall = OrderedAndSmoothedCameraWall();
-        foreach (CameraSetup camerasValue in cameras.Values)
-        {
-            camerasValue.SetRadiusFromCameraWall(cameraWall);
-        }
-    }
-
-    #endregion
-
     #region DRAWING
 
     public List<PoseBoundingBox> GetPosesAtFrameAtCamera(string camName)
@@ -305,22 +320,7 @@ public class CameraPoseSolver(PoseType poseType)
 
     public List<Vector2> ReverseProjectionOfPoseAtCamera(string camName, bool isLead)
     {
-        if (isLead)
-        {
-            if (merged3DPoseLeadPerFrame.Count <= frameNumber) return [];
-
-            List<Vector2> reverseLeadProjection = merged3DPoseLeadPerFrame[frameNumber]
-                .Select(vec => cameras[camName].ReverseProjectPoint(vec, frameNumber)).ToList();
-
-            return reverseLeadProjection;
-        }
-
-        if (merged3DPoseFollowPerFrame.Count <= frameNumber) return [];
-
-        List<Vector2> reverseFollowProjection = merged3DPoseFollowPerFrame[frameNumber]
-            .Select(vec => cameras[camName].ReverseProjectPoint(vec, frameNumber)).ToList();
-
-        return reverseFollowProjection;
+        return cameras[camName].ReverseProjectPose3D(isLead, frameNumber);
     }
 
     public List<Vector2> ReverseProjectOriginCrossAtCamera(string camName)
@@ -346,31 +346,7 @@ public class CameraPoseSolver(PoseType poseType)
     #endregion
 
     #region REFERENCE
-
-    List<Tuple<float, float>> OrderedAndSmoothedCameraWall()
-    {
-        List<Tuple<float, float>> ordered = cameras.Values
-            .SelectMany(cam => cam.CameraWall).OrderBy(x => x.Item1).ToList();
-        List<Vector3> allPoints = [];
-        foreach (Tuple<float, float> tuple in ordered)
-        {
-            Vector3 point = new(tuple.Item2 * MathF.Sin(tuple.Item1), 0, tuple.Item2 * MathF.Cos(tuple.Item1));
-            allPoints.Add(point);
-        }
-
-        allPoints = Transform.MovingAverageSmoothing(allPoints, 4);
-
-        List<Tuple<float, float>> final = [];
-        for (int i = 0; i < allPoints.Count; i++)
-        {
-            Vector3 point = allPoints[i];
-            float rad = Vector3.Distance(Vector3.Zero, point);
-            final.Add(new Tuple<float, float>(ordered[i].Item1, rad));
-        }
-
-        return final;
-    }
-
+    
     public int CurrentFrame => frameNumber;
 
     static float MedianBoneLength(IEnumerable<Vector3> jointSet1, IReadOnlyList<Vector3> jointSet2)
@@ -383,15 +359,7 @@ public class CameraPoseSolver(PoseType poseType)
     }
 
     #endregion
-
-    public void ClearAfterFrame(int frameToClearAfter)
-    {
-        foreach (CameraSetup cameraSetup in cameras.Values)
-        {
-            cameraSetup.ClearAfterFrame(frameToClearAfter);
-        }
-    }
-
+    
     List<List<Vector3>> AnchorAndSmooth(IReadOnlyCollection<List<Vector3>> list)
     {
         // body limb constants so that 3D pose is constrained
